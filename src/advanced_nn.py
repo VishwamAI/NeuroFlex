@@ -1,32 +1,28 @@
 import jax
 import jax.numpy as jnp
-from jax import grad, jit, vmap, random
+from jax import jit, random
 import flax.linen as nn
 from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable, Any, Dict, Union, List
+from typing import Sequence, Callable
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
-from jax.example_libraries import stax
-from jax.example_libraries.stax import Conv, Dense, MaxPool, Relu, Flatten, BatchNorm, Dropout
-from jax.example_libraries import optimizers
-import Bio.SeqIO
-import Bio.PDB
 import hmmer
 from alphafold.common import residue_constants
 from alphafold.data.tools import hhsearch
 from alphafold.data import templates
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import scipy.signal as signal
 import pywt
-from functools import partial
-import einops
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
 
 class neuroflexNN(nn.Module):
     features: Sequence[int]
@@ -45,17 +41,20 @@ class neuroflexNN(nn.Module):
     use_bci: bool = False  # Parameter for BCI functionality
     bci_channels: int = 64  # Number of BCI input channels
     bci_sampling_rate: int = 1000  # Sampling rate of BCI input in Hz
-    wireless_latency: float = 0.01  # Simulated wireless transmission latency in seconds
-    bci_signal_processing: str = 'fft'  # BCI signal processing method ('fft' or 'wavelet')
+    wireless_latency: float = 0.01  # Simulated wireless transmission latency
+    bci_signal_processing: str = 'fft'  # BCI signal processing method
     bci_noise_reduction: bool = False  # Apply noise reduction to BCI signals
     use_n1_implant: bool = False  # Parameter for N1 implant functionality
     n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
     ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
 
     @nn.compact
-    def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
-        original_shape = x.shape
-
+    def __call__(
+        self,
+        x,
+        training: bool = False,
+        sensitive_attribute: jnp.ndarray = None
+    ):
         # BCI and N1 implant signal processing
         if self.use_bci:
             x = self.bci_signal_processing(x)
@@ -109,13 +108,13 @@ class neuroflexNN(nn.Module):
         return x
 
     def cnn_block(self, x):
-        Conv = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        ConvLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
         kernel_size = (3, 3) if self.conv_dim == 2 else (3, 3, 3)
         padding = 'SAME' if self.conv_dim == 2 else ((1, 1, 1), (1, 1, 1))
 
-        x = Conv(features=32, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvLayer(features=32, kernel_size=kernel_size, padding=padding)(x)
         x = self.activation(x)
-        x = Conv(features=64, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvLayer(features=64, kernel_size=kernel_size, padding=padding)(x)
         x = self.activation(x)
         x = x.reshape((x.shape[0], -1))  # Flatten
         return x
@@ -136,22 +135,28 @@ class neuroflexNN(nn.Module):
 
         # Ensure input is 3D: (batch_size, seq_len, input_dim)
         if len(x.shape) == 2:
-            x = x.reshape(x.shape[0], 1, -1)  # Assume single time step if 2D input
+            # Assume single time step if 2D input
+            x = x.reshape(x.shape[0], 1, -1)
 
         batch_size, seq_len, input_dim = x.shape
-        print(f"Input shape: batch_size={batch_size}, seq_len={seq_len}, input_dim={input_dim}")
+        print(f"Input shape: batch_size={batch_size}, "
+              f"seq_len={seq_len}, input_dim={input_dim}")
 
         # Initialize LSTM state
         lstm_cell = nn.LSTMCell(self.lstm_hidden_size)
-        initial_carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,))
-        print("Initial carry shape:", jax.tree_map(lambda x: x.shape, initial_carry))
+        initial_carry = lstm_cell.initialize_carry(
+            jax.random.PRNGKey(0), (batch_size,))
+        print("Initial carry shape:",
+              jax.tree.map(lambda x: x.shape, initial_carry))
 
         # Define the scan function
         def scan_fn(carry, x):
             lstm_wrapper = LSTMCellWrapper(features=self.lstm_hidden_size)
             new_carry, output = lstm_wrapper(carry, x)
             print(f"scan_fn - input x shape: {x.shape}")
-            print(f"scan_fn - output shapes: carry={jax.tree_map(lambda x: x.shape, new_carry)}, output={output.shape}")
+            print(f"scan_fn - output shapes: "
+                  f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
+                  f"output={output.shape}")
             return new_carry, output
 
         # Use nn.scan to iterate over the sequence
@@ -164,7 +169,8 @@ class neuroflexNN(nn.Module):
         )(initial_carry, x)
 
         print("Outputs shape:", outputs.shape)
-        print("Final carry shape:", jax.tree_map(lambda x: x.shape, final_carry))
+        print("Final carry shape:",
+              jax.tree.map(lambda x: x.shape, final_carry))
 
         return outputs
 
