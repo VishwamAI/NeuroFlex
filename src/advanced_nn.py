@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax import jit, random
+from jax import jit
 import flax.linen as nn
 from flax.training import train_state
 import optax
@@ -15,7 +15,7 @@ from alphafold.common import residue_constants
 from alphafold.data.tools import hhsearch
 from alphafold.data import templates
 import logging
-import scipy.signal as signal
+import scipy.signal
 import pywt
 
 logging.basicConfig(
@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 
 
-class neuroflexNN(nn.Module):
+class NeuroFlexNN(nn.Module):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -33,20 +33,20 @@ class neuroflexNN(nn.Module):
     use_rnn: bool = False
     use_lstm: bool = False
     use_gan: bool = False
-    conv_dim: int = 2  # Parameter to specify 2D or 3D convolutions
-    use_rl: bool = False  # Parameter for reinforcement learning
-    output_dim: int = None  # For RL output dimension
+    conv_dim: int = 2  # 2D or 3D convolutions
+    use_rl: bool = False  # Reinforcement learning
+    output_dim: int = None  # RL output dimension
     rnn_hidden_size: int = 64
     lstm_hidden_size: int = 64
-    use_bci: bool = False  # Parameter for BCI functionality
-    bci_channels: int = 64  # Number of BCI input channels
-    bci_sampling_rate: int = 1000  # Sampling rate of BCI input in Hz
-    wireless_latency: float = 0.01  # Simulated wireless transmission latency
-    bci_signal_processing: str = 'fft'  # BCI signal processing method
-    bci_noise_reduction: bool = False  # Apply noise reduction to BCI signals
-    use_n1_implant: bool = False  # Parameter for N1 implant functionality
-    n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
-    ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
+    use_bci: bool = False  # BCI functionality
+    bci_channels: int = 64
+    bci_sampling_rate: int = 1000  # Hz
+    wireless_latency: float = 0.01  # Simulated latency
+    bci_signal_processing: str = 'fft'
+    bci_noise_reduction: bool = False
+    use_n1_implant: bool = False  # N1 implant
+    n1_electrode_count: int = 1024
+    ui_feedback_delay: float = 0.05  # Simulated delay
 
     @nn.compact
     def __call__(
@@ -55,21 +55,14 @@ class neuroflexNN(nn.Module):
         training: bool = False,
         sensitive_attribute: jnp.ndarray = None
     ):
-        # BCI and N1 implant signal processing
         if self.use_bci:
             x = self.bci_signal_processing(x)
 
         if self.use_cnn:
             x = self.cnn_block(x)
 
-        # Ensure input is 3D for RNN/LSTM: (batch_size, sequence_length, features)
         if self.use_rnn or self.use_lstm:
-            if len(x.shape) == 2:
-                # Reshape 2D input to 3D: (batch_size, 1, features)
-                x = x.reshape(x.shape[0], 1, -1)
-            elif len(x.shape) > 3:
-                # Reshape higher dimensional input to 3D
-                x = x.reshape(x.shape[0], -1, x.shape[-1])
+            x = self._reshape_input_for_rnn(x)
 
         if self.use_rnn:
             x = self.rnn_block(x)
@@ -77,44 +70,57 @@ class neuroflexNN(nn.Module):
         if self.use_lstm:
             x = self.lstm_block(x)
 
-        # Flatten the output if it's not already 2D
-        if len(x.shape) > 2:
-            x = x.reshape(x.shape[0], -1)
+        x = self._flatten_if_needed(x)
 
         for feat in self.features[:-1]:
-            x = nn.Dense(feat)(x)
-            x = self.activation(x)
-            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+            x = self._apply_dense_layer(x, feat, training)
 
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
 
-        if self.use_rl and self.output_dim is not None:
-            x = nn.Dense(self.output_dim)(x)
-        else:
-            x = nn.Dense(self.features[-1])(x)
+        x = self._apply_final_layer(x)
 
         if self.use_gan:
             x = self.gan_block(x)
 
-        # Wireless data transmission simulation
-        if self.use_wireless:
+        if getattr(self, 'use_wireless', False):
             x = self.wireless_transmission(x)
 
-        # User interface interaction simulation
-        if self.use_ui:
+        if getattr(self, 'use_ui', False):
             x = self.ui_interaction(x)
 
         return x
 
+    def _reshape_input_for_rnn(self, x):
+        if len(x.shape) == 2:
+            return x.reshape(x.shape[0], 1, -1)
+        elif len(x.shape) > 3:
+            return x.reshape(x.shape[0], -1, x.shape[-1])
+        return x
+
+    def _flatten_if_needed(self, x):
+        if len(x.shape) > 2:
+            return x.reshape(x.shape[0], -1)
+        return x
+
+    def _apply_dense_layer(self, x, feat, training):
+        x = nn.Dense(feat)(x)
+        x = self.activation(x)
+        return nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+
+    def _apply_final_layer(self, x):
+        if self.use_rl and self.output_dim is not None:
+            return nn.Dense(self.output_dim)(x)
+        return nn.Dense(self.features[-1])(x)
+
     def cnn_block(self, x):
-        ConvLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        ConvolutionLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
         kernel_size = (3, 3) if self.conv_dim == 2 else (3, 3, 3)
         padding = 'SAME' if self.conv_dim == 2 else ((1, 1, 1), (1, 1, 1))
 
-        x = ConvLayer(features=32, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvolutionLayer(features=32, kernel_size=kernel_size, padding=padding)(x)
         x = self.activation(x)
-        x = ConvLayer(features=64, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvolutionLayer(features=64, kernel_size=kernel_size, padding=padding)(x)
         x = self.activation(x)
         x = x.reshape((x.shape[0], -1))  # Flatten
         return x
@@ -133,33 +139,35 @@ class neuroflexNN(nn.Module):
                 new_carry, output = lstm_cell(carry, x)
                 return new_carry, output
 
-        # Ensure input is 3D: (batch_size, seq_len, input_dim)
         if len(x.shape) == 2:
-            # Assume single time step if 2D input
             x = x.reshape(x.shape[0], 1, -1)
 
         batch_size, seq_len, input_dim = x.shape
-        print(f"Input shape: batch_size={batch_size}, "
-              f"seq_len={seq_len}, input_dim={input_dim}")
+        print(
+            f"Input shape: batch_size={batch_size}, seq_len={seq_len}, "
+            f"input_dim={input_dim}"
+        )
 
-        # Initialize LSTM state
         lstm_cell = nn.LSTMCell(self.lstm_hidden_size)
         initial_carry = lstm_cell.initialize_carry(
-            jax.random.PRNGKey(0), (batch_size,))
-        print("Initial carry shape:",
-              jax.tree.map(lambda x: x.shape, initial_carry))
+            jax.random.PRNGKey(0), (batch_size,)
+        )
+        print(
+            "Initial carry shape:",
+            jax.tree.map(lambda x: x.shape, initial_carry)
+        )
 
-        # Define the scan function
         def scan_fn(carry, x):
             lstm_wrapper = LSTMCellWrapper(features=self.lstm_hidden_size)
             new_carry, output = lstm_wrapper(carry, x)
             print(f"scan_fn - input x shape: {x.shape}")
-            print(f"scan_fn - output shapes: "
-                  f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
-                  f"output={output.shape}")
+            print(
+                f"scan_fn - output shapes: "
+                f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
+                f"output={output.shape}"
+            )
             return new_carry, output
 
-        # Use nn.scan to iterate over the sequence
         final_carry, outputs = nn.scan(
             scan_fn,
             variable_broadcast="params",
@@ -169,13 +177,14 @@ class neuroflexNN(nn.Module):
         )(initial_carry, x)
 
         print("Outputs shape:", outputs.shape)
-        print("Final carry shape:",
-              jax.tree.map(lambda x: x.shape, final_carry))
+        print(
+            "Final carry shape:",
+            jax.tree.map(lambda x: x.shape, final_carry)
+        )
 
         return outputs
 
     def gan_block(self, x):
-        # Advanced GAN implementation with style mixing and improved stability
         latent_dim = 100
         style_dim = 64
         num_iterations = 1000
@@ -188,11 +197,10 @@ class neuroflexNN(nn.Module):
                 x = nn.relu(x)
                 x = nn.Dense(512)(x)
                 x = nn.relu(x)
-                # Style mixing
                 style = nn.Dense(style_dim)(style)
                 x = x * style[:, None]
                 x = nn.Dense(x.shape[-1])(x)
-                return nn.tanh(x)  # Ensure output is in [-1, 1]
+                return nn.tanh(x)
 
         class Discriminator(nn.Module):
             @nn.compact
@@ -218,17 +226,26 @@ class neuroflexNN(nn.Module):
             real_logits = discriminator.apply({'params': d_params}, x)
             return jnp.mean(fake_logits) - jnp.mean(real_logits)
 
-        # Improved GAN training loop with gradient penalty
         def gradient_penalty(d_params, real_data, fake_data):
             alpha = jax.random.uniform(self.make_rng('gan'), (batch_size, 1))
             interpolated = real_data * alpha + fake_data * (1 - alpha)
-            grad = jax.grad(lambda x: jnp.sum(discriminator.apply({'params': d_params}, x)))(interpolated)
+            def disc_output(x):
+                return jnp.sum(discriminator.apply({'params': d_params}, x))
+            grad_fn = jax.grad(disc_output)
+            grad = grad_fn(interpolated)
             return jnp.mean((jnp.linalg.norm(grad, axis=-1) - 1) ** 2)
 
         g_optimizer = optax.adam(learning_rate=1e-4, b1=0.5, b2=0.9)
         d_optimizer = optax.adam(learning_rate=1e-4, b1=0.5, b2=0.9)
-        g_opt_state = g_optimizer.init(generator.init(self.make_rng('gan'), jnp.ones((1, latent_dim)), jnp.ones((1, style_dim))))
-        d_opt_state = d_optimizer.init(discriminator.init(self.make_rng('gan'), jnp.ones((1, x.shape[-1]))))
+        g_opt_state = g_optimizer.init(generator.init(
+            self.make_rng('gan'),
+            jnp.ones((1, latent_dim)),
+            jnp.ones((1, style_dim))
+        ))
+        d_opt_state = d_optimizer.init(discriminator.init(
+            self.make_rng('gan'),
+            jnp.ones((1, x.shape[-1]))
+        ))
 
         @jax.jit
         def train_step(g_params, d_params, g_opt_state, d_opt_state, z, style, x):
@@ -237,7 +254,11 @@ class neuroflexNN(nn.Module):
 
             def d_loss_fn(d_params):
                 loss = discriminator_loss(d_params, g_params, z, style, x)
-                gp = gradient_penalty(d_params, x, generator.apply({'params': g_params}, z, style))
+                gp = gradient_penalty(
+                    d_params,
+                    x,
+                    generator.apply({'params': g_params}, z, style)
+                )
                 return loss + 10 * gp  # Lambda = 10 for gradient penalty
 
             g_loss, g_grads = jax.value_and_grad(g_loss_fn)(g_params)
@@ -249,23 +270,26 @@ class neuroflexNN(nn.Module):
             g_params = optax.apply_updates(g_params, g_updates)
             d_params = optax.apply_updates(d_params, d_updates)
 
-            return g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss
+            return (g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss)
 
         for _ in range(num_iterations):
             z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
             style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
-            g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss = train_step(
-                generator.params, discriminator.params, g_opt_state, d_opt_state, z, style, x
+            (g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss) = (
+                train_step(
+                    generator.params, discriminator.params, g_opt_state,
+                    d_opt_state, z, style, x
+                )
             )
             generator = generator.replace(params=g_params)
             discriminator = discriminator.replace(params=d_params)
 
-        # Generate fake data using the trained generator
         z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
         style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
         fake_data = generator.apply({'params': generator.params}, z, style)
 
         return fake_data
+
 
     def feature_importance(self, x):
         activations = []
@@ -275,11 +299,18 @@ class neuroflexNN(nn.Module):
             activations.append(x)
         return activations
 
+
     def apply_fairness_constraint(self, x, sensitive_attribute):
         group_means = jnp.mean(x, axis=0, keepdims=True)
         overall_mean = jnp.mean(group_means, axis=1, keepdims=True)
-        adjusted_x = x + self.fairness_constraint * (overall_mean - group_means[sensitive_attribute])
+        adjustment = self.fairness_constraint * (
+            overall_mean - group_means[sensitive_attribute]
+        )
+        adjusted_x = x + adjustment
         return adjusted_x
+
+
+
 
 @jax.jit
 def create_train_state(rng, model_class, model_params, input_shape, learning_rate):
@@ -290,23 +321,32 @@ def create_train_state(rng, model_class, model_params, input_shape, learning_rat
     return train_state.TrainState.create(
         apply_fn=model.apply, params=params, tx=tx), model, rng
 
+
 @jit
 def train_step(state, batch):
     def loss_fn(params):
         # Handle different input types (image, sequence, etc.)
         if 'image' in batch:
-            logits = state.apply_fn({'params': params}, batch['image'], method=state.apply_fn.cnn_forward)
+            logits = state.apply_fn(
+                {'params': params}, batch['image'], method=state.apply_fn.cnn_forward
+            )
         elif 'sequence' in batch:
-            logits = state.apply_fn({'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward)
+            logits = state.apply_fn(
+                {'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward
+            )
         else:
             logits = state.apply_fn({'params': params}, batch['input'])
 
         # Compute loss for main task
-        main_loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch['label']).mean()
+        main_loss = optax.softmax_cross_entropy_with_integer_labels(
+            logits, batch['label']
+        ).mean()
 
         # Compute GAN loss if applicable
         if hasattr(state.apply_fn, 'gan_loss'):
-            gan_loss = state.apply_fn({'params': params}, batch['input'], method=state.apply_fn.gan_loss)
+            gan_loss = state.apply_fn(
+                {'params': params}, batch['input'], method=state.apply_fn.gan_loss
+            )
             total_loss = main_loss + gan_loss
         else:
             total_loss = main_loss
@@ -358,7 +398,8 @@ def adversarial_training(model, params, input_data, epsilon):
     return {'image': perturbed_input, 'label': input_data['label']}
 
 # Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
-def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size, learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):
+def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size,
+                learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):
     rng = jax.random.PRNGKey(0)
 
     if env is None:  # Standard supervised learning
@@ -382,7 +423,9 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
     # Initialize fairness metrics if applicable
     if 'sensitive_attr' in train_data:
         fairness_metric = BinaryLabelDatasetMetric(
-            train_data, label_name='label', protected_attribute_names=['sensitive_attr']
+            train_data,
+            label_name='label',
+            protected_attribute_names=['sensitive_attr']
         )
         initial_disparate_impact = fairness_metric.disparate_impact()
 
@@ -397,8 +440,10 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
 
                 # Apply bias mitigation if applicable
                 if 'sensitive_attr' in batch:
-                    reweighing = Reweighing(unprivileged_groups=[{'sensitive_attr': 0}],
-                                            privileged_groups=[{'sensitive_attr': 1}])
+                    reweighing = Reweighing(
+                        unprivileged_groups=[{'sensitive_attr': 0}],
+                        privileged_groups=[{'sensitive_attr': 1}]
+                    )
                     mitigated_batch = reweighing.fit_transform(BinaryLabelDataset(
                         df=adv_batch,
                         label_names=['label'],
@@ -552,7 +597,7 @@ def get_batches(data, batch_size):
 # Example usage
 if __name__ == "__main__":
     # Define model architecture class
-    class ModelArchitecture(neuroflexNN):
+    class ModelArchitecture(NeuroFlexNN):
         features = [64, 32, 10]
         activation = nn.relu
         dropout_rate = 0.5
@@ -831,33 +876,43 @@ class DataPipeline:
             'sequence': sequence,
         }
 
-    def process_bci_signal(self, signal):
+    def process_bci_signal(self, bci_signal):
         # Simulate advanced BCI signal processing
         # Apply bandpass filter
-        sos = signal.butter(10, [1, 50], btype='band', fs=self.bci_sampling_rate, output='sos')
-        filtered_signal = signal.sosfilt(sos, signal)
+        sos = scipy.signal.butter(
+            10, [1, 50], btype='band',
+            fs=self.bci_sampling_rate, output='sos'
+        )
+        filtered_signal = scipy.signal.sosfilt(sos, bci_signal)
 
         # Perform wavelet transform
         coeffs = pywt.wavedec(filtered_signal, 'db4', level=5)
 
         # Feature extraction (using wavelet coefficients)
-        features = jnp.concatenate([jnp.mean(jnp.abs(c)) for c in coeffs])
+        features = jnp.concatenate([
+            jnp.mean(jnp.abs(c)) for c in coeffs
+        ])
 
         return features
 
     def wireless_transmission(self, data):
-        # Simulate wireless data transmission with latency and packet loss
-        latency = jnp.random.normal(self.wireless_latency, 0.002)  # Random latency
+        # Simulate wireless data transmission with packet loss
         noise = jnp.random.normal(0, 0.01, data.shape)
-        packet_loss = jnp.random.choice([0, 1], p=[0.99, 0.01], size=data.shape)  # 1% packet loss
+        packet_loss = jnp.random.choice(
+            [0, 1], p=[0.99, 0.01], size=data.shape
+        )
 
         transmitted_data = (data + noise) * packet_loss
-        return jax.lax.stop_gradient(jnp.where(jnp.isnan(transmitted_data), 0, transmitted_data))
+        return jax.lax.stop_gradient(
+            jnp.where(jnp.isnan(transmitted_data), 0, transmitted_data)
+        )
 
     def user_interface_interaction(self, input_data):
         # Simulate more complex user interface interaction
-        # Apply non-linear transformation and add some randomness to simulate user behavior
-        ui_response = jnp.tanh(input_data) + jnp.random.normal(0, 0.1, input_data.shape)
+        # Apply non-linear transformation and add randomness
+        ui_response = jnp.tanh(input_data) + jnp.random.normal(
+            0, 0.1, input_data.shape
+        )
         # Simulate button press threshold
         button_press = jnp.where(ui_response > 0.5, 1, 0)
         return button_press
