@@ -70,7 +70,7 @@ To use NeuroFlex, follow these steps:
 
 1. Import the necessary modules:
    ```python
-   from advanced_nn import AdvancedNN, train_model, evaluate_fairness, interpret_model, data_augmentation
+   from NeuroFlexNN import AdvancedNN, train_model, evaluate_fairness, interpret_model, data_augmentation
    ```
 
 2. Define your model architecture:
