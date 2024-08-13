@@ -128,9 +128,16 @@ class NeuroFlexNN(nn.Module):
         return nn.Dense(self.features[-1])(x)
 
     def cnn_block(self, x):
-        ConvLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
-        k_size = (3, 3) if self.conv_dim == 2 else (3, 3, 3)
-        pad = 'SAME' if self.conv_dim == 2 else ((1, 1, 1), (1, 1, 1))
+        if self.conv_dim == 2:
+            k_size = (3, 3)
+            pad = 'SAME'
+        elif self.conv_dim == 3:
+            k_size = (3, 3, 3)
+            pad = ((1, 1, 1), (1, 1, 1))
+        else:
+            raise ValueError(f"Unsupported conv_dim: {self.conv_dim}")
+
+        ConvLayer = nn.Conv
 
         x = ConvLayer(features=32, kernel_size=k_size, padding=pad)(x)
         x = self.activation(x)

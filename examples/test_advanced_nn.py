@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import jit
 import flax.linen as nn
 import gym
-from advanced_nn import data_augmentation, NeuroFlexNN, create_train_state, select_action
+from training.advanced_nn import data_augmentation, NeuroFlexNN, create_train_state, select_action
 
 
 class TestDataAugmentation(unittest.TestCase):
@@ -89,12 +89,14 @@ class TestConvolutionLayers(unittest.TestCase):
         params = model.init(self.rng, jnp.ones(self.input_shape_2d))['params']
         output = model.apply({'params': params}, jnp.ones(self.input_shape_2d))
         self.assertEqual(output.shape, (1, 10))
+        self.assertIsInstance(model.cnn_block.layers[0], nn.Conv)
 
     def test_3d_convolution(self):
         model = NeuroFlexNN(features=[32, 10], use_cnn=True, conv_dim=3)
         params = model.init(self.rng, jnp.ones(self.input_shape_3d))['params']
         output = model.apply({'params': params}, jnp.ones(self.input_shape_3d))
         self.assertEqual(output.shape, (1, 10))
+        self.assertIsInstance(model.cnn_block.layers[0], nn.Conv)
 
 
 class TestReinforcementLearning(unittest.TestCase):
@@ -102,7 +104,7 @@ class TestReinforcementLearning(unittest.TestCase):
         self.env = gym.make('CartPole-v1')
         self.input_shape = self.env.observation_space.shape
         self.action_space = self.env.action_space.n
-        self.model = NeuroFlexNN(features=[64, 32, self.action_space], use_rl=True)
+        self.model = NeuroFlexNN(features=[64, 32, self.action_space], use_rl=True, output_dim=self.action_space)
 
     def test_rl_model_initialization(self):
         rng = jax.random.PRNGKey(0)
@@ -114,8 +116,9 @@ class TestReinforcementLearning(unittest.TestCase):
         state, _, _ = create_train_state(rng, self.model, self.input_shape, 1e-3)
         observation = self.env.reset()
         action = select_action(observation, self.model, state.params)
-        self.assertIsInstance(action, int)
-        self.assertTrue(0 <= action < self.action_space)
+        self.assertIsInstance(action, jax.numpy.ndarray)
+        self.assertEqual(action.shape, ())
+        self.assertTrue(0 <= int(action) < self.action_space)
 
 
 if __name__ == '__main__':
