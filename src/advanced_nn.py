@@ -24,7 +24,9 @@ logging.basicConfig(
 )
 
 
+
 class NeuroFlexNN(nn.Module):
+    """Advanced neural network with various capabilities."""
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -54,41 +56,53 @@ class NeuroFlexNN(nn.Module):
         x,
         training: bool = False,
         sensitive_attribute: jnp.ndarray = None
-    ):
+    ) -> jnp.ndarray:
+        """Process input through the neural network.
+
+        Args:
+            x: Input data.
+            training: Whether in training mode.
+            sensitive_attribute: Attribute for fairness constraints.
+
+        Returns:
+            Processed output.
+        """
+        x = self._process_input(x)
+        x = self._apply_neural_layers(x, training)
+        x = self._apply_constraints(x, sensitive_attribute)
+        return self._apply_final_processing(x)
+
+    def _process_input(self, x):
         if self.use_bci:
             x = self.bci_signal_processing(x)
-
         if self.use_cnn:
             x = self.cnn_block(x)
-
         if self.use_rnn or self.use_lstm:
             x = self._reshape_input_for_rnn(x)
+        return x
 
+    def _apply_neural_layers(self, x, training):
         if self.use_rnn:
             x = self.rnn_block(x)
-
         if self.use_lstm:
             x = self.lstm_block(x)
-
         x = self._flatten_if_needed(x)
-
         for feat in self.features[:-1]:
             x = self._apply_dense_layer(x, feat, training)
+        return x
 
+    def _apply_constraints(self, x, sensitive_attribute):
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
+        return self._apply_final_layer(x)
 
-        x = self._apply_final_layer(x)
-
+    def _apply_final_processing(self, x):
         if self.use_gan:
             x = self.gan_block(x)
-
         if getattr(self, 'use_wireless', False):
             x = self.wireless_transmission(x)
-
         if getattr(self, 'use_ui', False):
             x = self.ui_interaction(x)
-
         return x
 
     def _reshape_input_for_rnn(self, x):
@@ -114,13 +128,13 @@ class NeuroFlexNN(nn.Module):
         return nn.Dense(self.features[-1])(x)
 
     def cnn_block(self, x):
-        ConvolutionLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
-        kernel_size = (3, 3) if self.conv_dim == 2 else (3, 3, 3)
-        padding = 'SAME' if self.conv_dim == 2 else ((1, 1, 1), (1, 1, 1))
+        ConvLayer = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        k_size = (3, 3) if self.conv_dim == 2 else (3, 3, 3)
+        pad = 'SAME' if self.conv_dim == 2 else ((1, 1, 1), (1, 1, 1))
 
-        x = ConvolutionLayer(features=32, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvLayer(features=32, kernel_size=k_size, padding=pad)(x)
         x = self.activation(x)
-        x = ConvolutionLayer(features=64, kernel_size=kernel_size, padding=padding)(x)
+        x = ConvLayer(features=64, kernel_size=k_size, padding=pad)(x)
         x = self.activation(x)
         x = x.reshape((x.shape[0], -1))  # Flatten
         return x
@@ -136,36 +150,29 @@ class NeuroFlexNN(nn.Module):
             @nn.compact
             def __call__(self, carry, x):
                 lstm_cell = nn.LSTMCell(self.features)
-                new_carry, output = lstm_cell(carry, x)
-                return new_carry, output
+                return lstm_cell(carry, x)
 
         if len(x.shape) == 2:
             x = x.reshape(x.shape[0], 1, -1)
 
         batch_size, seq_len, input_dim = x.shape
-        print(
-            f"Input shape: batch_size={batch_size}, seq_len={seq_len}, "
-            f"input_dim={input_dim}"
-        )
+        print(f"Input shape: batch_size={batch_size}, seq_len={seq_len}, "
+              f"input_dim={input_dim}")
 
         lstm_cell = nn.LSTMCell(self.lstm_hidden_size)
         initial_carry = lstm_cell.initialize_carry(
             jax.random.PRNGKey(0), (batch_size,)
         )
-        print(
-            "Initial carry shape:",
-            jax.tree.map(lambda x: x.shape, initial_carry)
-        )
+        print("Initial carry shape:",
+              jax.tree.map(lambda x: x.shape, initial_carry))
 
         def scan_fn(carry, x):
             lstm_wrapper = LSTMCellWrapper(features=self.lstm_hidden_size)
             new_carry, output = lstm_wrapper(carry, x)
             print(f"scan_fn - input x shape: {x.shape}")
-            print(
-                f"scan_fn - output shapes: "
-                f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
-                f"output={output.shape}"
-            )
+            print("scan_fn - output shapes: "
+                  f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
+                  f"output={output.shape}")
             return new_carry, output
 
         final_carry, outputs = nn.scan(
@@ -177,18 +184,14 @@ class NeuroFlexNN(nn.Module):
         )(initial_carry, x)
 
         print("Outputs shape:", outputs.shape)
-        print(
-            "Final carry shape:",
-            jax.tree.map(lambda x: x.shape, final_carry)
-        )
+        print("Final carry shape:",
+              jax.tree.map(lambda x: x.shape, final_carry))
 
         return outputs
 
     def gan_block(self, x):
-        latent_dim = 100
-        style_dim = 64
-        num_iterations = 1000
-        batch_size = x.shape[0]
+        latent_dim, style_dim = 100, 64
+        num_iterations, batch_size = 1000, x.shape[0]
 
         class Generator(nn.Module):
             @nn.compact
@@ -199,8 +202,7 @@ class NeuroFlexNN(nn.Module):
                 x = nn.relu(x)
                 style = nn.Dense(style_dim)(style)
                 x = x * style[:, None]
-                x = nn.Dense(x.shape[-1])(x)
-                return nn.tanh(x)
+                return nn.tanh(nn.Dense(x.shape[-1])(x))
 
         class Discriminator(nn.Module):
             @nn.compact
@@ -209,11 +211,9 @@ class NeuroFlexNN(nn.Module):
                 x = nn.leaky_relu(x, 0.2)
                 x = nn.Dense(256)(x)
                 x = nn.leaky_relu(x, 0.2)
-                x = nn.Dense(1)(x)
-                return x
+                return nn.Dense(1)(x)
 
-        generator = Generator()
-        discriminator = Discriminator()
+        generator, discriminator = Generator(), Discriminator()
 
         def generator_loss(g_params, d_params, z, style, x):
             fake_data = generator.apply({'params': g_params}, z, style)
@@ -229,11 +229,11 @@ class NeuroFlexNN(nn.Module):
         def gradient_penalty(d_params, real_data, fake_data):
             alpha = jax.random.uniform(self.make_rng('gan'), (batch_size, 1))
             interpolated = real_data * alpha + fake_data * (1 - alpha)
-            def disc_output(x):
-                return jnp.sum(discriminator.apply({'params': d_params}, x))
-            grad_fn = jax.grad(disc_output)
-            grad = grad_fn(interpolated)
-            return jnp.mean((jnp.linalg.norm(grad, axis=-1) - 1) ** 2)
+            disc_output = lambda x: jnp.sum(
+                discriminator.apply({'params': d_params}, x)
+            )
+            gradient = jax.grad(disc_output)(interpolated)
+            return jnp.mean((jnp.linalg.norm(gradient, axis=-1) - 1) ** 2)
 
         g_optimizer = optax.adam(learning_rate=1e-4, b1=0.5, b2=0.9)
         d_optimizer = optax.adam(learning_rate=1e-4, b1=0.5, b2=0.9)
@@ -249,17 +249,13 @@ class NeuroFlexNN(nn.Module):
 
         @jax.jit
         def train_step(g_params, d_params, g_opt_state, d_opt_state, z, style, x):
-            def g_loss_fn(g_params):
-                return generator_loss(g_params, d_params, z, style, x)
-
-            def d_loss_fn(d_params):
-                loss = discriminator_loss(d_params, g_params, z, style, x)
-                gp = gradient_penalty(
-                    d_params,
-                    x,
-                    generator.apply({'params': g_params}, z, style)
+            g_loss_fn = lambda g_p: generator_loss(g_p, d_params, z, style, x)
+            d_loss_fn = lambda d_p: (
+                discriminator_loss(d_p, g_params, z, style, x) +
+                10 * gradient_penalty(
+                    d_p, x, generator.apply({'params': g_params}, z, style)
                 )
-                return loss + 10 * gp  # Lambda = 10 for gradient penalty
+            )
 
             g_loss, g_grads = jax.value_and_grad(g_loss_fn)(g_params)
             d_loss, d_grads = jax.value_and_grad(d_loss_fn)(d_params)
@@ -270,25 +266,21 @@ class NeuroFlexNN(nn.Module):
             g_params = optax.apply_updates(g_params, g_updates)
             d_params = optax.apply_updates(d_params, d_updates)
 
-            return (g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss)
+            return g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss
 
         for _ in range(num_iterations):
             z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
             style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
-            (g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss) = (
-                train_step(
-                    generator.params, discriminator.params, g_opt_state,
-                    d_opt_state, z, style, x
-                )
+            g_params, d_params, g_opt_state, d_opt_state, _, _ = train_step(
+                generator.params, discriminator.params, g_opt_state,
+                d_opt_state, z, style, x
             )
             generator = generator.replace(params=g_params)
             discriminator = discriminator.replace(params=d_params)
 
         z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
         style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
-        fake_data = generator.apply({'params': generator.params}, z, style)
-
-        return fake_data
+        return generator.apply({'params': generator.params}, z, style)
 
 
     def feature_importance(self, x):
@@ -306,20 +298,25 @@ class NeuroFlexNN(nn.Module):
         adjustment = self.fairness_constraint * (
             overall_mean - group_means[sensitive_attribute]
         )
-        adjusted_x = x + adjustment
-        return adjusted_x
+        return x + adjustment
+
+
+
+
 
 
 
 
 @jax.jit
 def create_train_state(rng, model_class, model_params, input_shape, learning_rate):
+    """Create and initialize the model and optimizer for training."""
     rng, init_rng = jax.random.split(rng)
     model = model_class(**model_params)
     params = model.init(init_rng, jnp.ones(input_shape))['params']
     tx = optax.adam(learning_rate)
-    return train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=tx), model, rng
+    state = train_state.TrainState.create(
+        apply_fn=model.apply, params=params, tx=tx)
+    return state, model, rng
 
 
 @jit
@@ -332,7 +329,8 @@ def train_step(state, batch):
             )
         elif 'sequence' in batch:
             logits = state.apply_fn(
-                {'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward
+                {'params': params}, batch['sequence'],
+                method=state.apply_fn.rnn_forward
             )
         else:
             logits = state.apply_fn({'params': params}, batch['input'])
@@ -343,13 +341,12 @@ def train_step(state, batch):
         ).mean()
 
         # Compute GAN loss if applicable
+        total_loss = main_loss
         if hasattr(state.apply_fn, 'gan_loss'):
             gan_loss = state.apply_fn(
                 {'params': params}, batch['input'], method=state.apply_fn.gan_loss
             )
-            total_loss = main_loss + gan_loss
-        else:
-            total_loss = main_loss
+            total_loss += gan_loss
 
         return total_loss, logits
 
@@ -397,25 +394,25 @@ def adversarial_training(model, params, input_data, epsilon):
     perturbed_input = fgsm_attack(params, input_data['image'], input_data['label'])
     return {'image': perturbed_input, 'label': input_data['label']}
 
-# Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
-def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size,
-                learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):
+def train_model(
+    model_class, model_params, train_data, val_data, num_epochs, batch_size,
+    learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None
+):
     rng = jax.random.PRNGKey(0)
 
+    def init_model(input_shape, output_dim=None):
+        model = model_class(**model_params, output_dim=output_dim)
+        dummy_input = jnp.ones((1,) + input_shape)
+        params = model.init(rng, dummy_input)['params']
+        tx = optax.adam(learning_rate)
+        return train_state.TrainState.create(
+            apply_fn=model.apply, params=params, tx=tx
+        ), model
+
     if env is None:  # Standard supervised learning
-        input_shape = train_data['image'].shape[1:]
-        model = model_class(**model_params)
-        dummy_input = jnp.ones((1,) + input_shape)  # Create a dummy input with batch dimension
-        params = model.init(rng, dummy_input)['params']
-        tx = optax.adam(learning_rate)
-        state = train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
+        state, model = init_model(train_data['image'].shape[1:])
     else:  # Reinforcement learning
-        input_shape = env.observation_space.shape
-        model = model_class(**model_params, output_dim=env.action_space.n)
-        dummy_input = jnp.ones((1,) + input_shape)  # Create a dummy input with batch dimension
-        params = model.init(rng, dummy_input)['params']
-        tx = optax.adam(learning_rate)
-        state = train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
+        state, model = init_model(env.observation_space.shape, env.action_space.n)
 
     best_val_performance = float('-inf')
     patience_counter = 0
@@ -423,84 +420,94 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
     # Initialize fairness metrics if applicable
     if 'sensitive_attr' in train_data:
         fairness_metric = BinaryLabelDatasetMetric(
-            train_data,
-            label_name='label',
+            train_data, label_name='label',
             protected_attribute_names=['sensitive_attr']
         )
         initial_disparate_impact = fairness_metric.disparate_impact()
 
     for epoch in range(num_epochs):
-        if env is None:  # Standard supervised learning
-            for batch in get_batches(train_data, batch_size):
-                # Data augmentation
-                batch['image'] = data_augmentation(batch['image'])
-
-                # Adversarial training
-                adv_batch = adversarial_training(model, state.params, batch, epsilon)
-
-                # Apply bias mitigation if applicable
-                if 'sensitive_attr' in batch:
-                    reweighing = Reweighing(
-                        unprivileged_groups=[{'sensitive_attr': 0}],
-                        privileged_groups=[{'sensitive_attr': 1}]
-                    )
-                    mitigated_batch = reweighing.fit_transform(BinaryLabelDataset(
-                        df=adv_batch,
-                        label_names=['label'],
-                        protected_attribute_names=['sensitive_attr']
-                    ))
-
-                    # Apply fairness constraint
-                    mitigated_batch['image'] = model.apply_fairness_constraint(
-                        mitigated_batch['image'],
-                        mitigated_batch['sensitive_attr']
-                    )
-                    state, loss = train_step(state, mitigated_batch)
-                else:
-                    state, loss = train_step(state, adv_batch)
-
-            # Validation
+        if env is None:
+            loss = train_supervised(state, model, train_data, batch_size, epsilon)
             val_performance = evaluate_model(state, val_data, batch_size)
-        else:  # Reinforcement learning
-            total_reward = 0
-            obs = env.reset()
-            done = False
-            while not done:
-                action = select_action(obs, model, state.params)
-                next_obs, reward, done, _ = env.step(action)
-                # Store experience in replay buffer (not implemented here)
-                # train_step_rl(state, experience)  # Update model using RL algorithms
-                total_reward += reward
-                obs = next_obs
-            loss = -total_reward  # Use negative reward as a proxy for loss
-            val_performance = total_reward
+        else:
+            loss, val_performance = train_reinforcement(state, model, env)
 
         # Compute fairness metrics if applicable
         if 'sensitive_attr' in val_data:
-            fairness_metric = BinaryLabelDatasetMetric(
-                val_data, label_name='label', protected_attribute_names=['sensitive_attr']
-            )
-            current_disparate_impact = fairness_metric.disparate_impact()
-            print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}, "
+            current_disparate_impact = compute_fairness_metrics(val_data)
+            print(f"Epoch {epoch}: loss = {loss:.3f}, "
+                  f"val_performance = {val_performance:.3f}, "
                   f"disparate_impact = {current_disparate_impact:.3f}")
         else:
-            print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}")
+            print(f"Epoch {epoch}: loss = {loss:.3f}, "
+                  f"val_performance = {val_performance:.3f}")
 
-        # Early stopping (considering both performance and fairness if applicable)
-        if val_performance > best_val_performance:
-            if 'sensitive_attr' not in val_data or current_disparate_impact > initial_disparate_impact:
-                best_val_performance = val_performance
-                patience_counter = 0
-            else:
-                patience_counter += 1
-        else:
+        # Early stopping
+        if should_stop_early(
+            val_performance, best_val_performance,
+            'sensitive_attr' in val_data,
+            current_disparate_impact, initial_disparate_impact
+        ):
             patience_counter += 1
+        else:
+            best_val_performance = val_performance
+            patience_counter = 0
 
         if patience_counter >= patience:
             print(f"Early stopping triggered at epoch {epoch}")
             break
 
     return state, model
+
+def train_supervised(state, model, train_data, batch_size, epsilon):
+    for batch in get_batches(train_data, batch_size):
+        batch['image'] = data_augmentation(batch['image'])
+        adv_batch = adversarial_training(model, state.params, batch, epsilon)
+
+        if 'sensitive_attr' in batch:
+            mitigated_batch = apply_bias_mitigation(adv_batch)
+            mitigated_batch['image'] = model.apply_fairness_constraint(
+                mitigated_batch['image'], mitigated_batch['sensitive_attr']
+            )
+            state, loss = train_step(state, mitigated_batch)
+        else:
+            state, loss = train_step(state, adv_batch)
+    return loss
+
+def train_reinforcement(state, model, env):
+    total_reward = 0
+    obs = env.reset()
+    done = False
+    while not done:
+        action = select_action(obs, model, state.params)
+        next_obs, reward, done, _ = env.step(action)
+        total_reward += reward
+        obs = next_obs
+    return -total_reward, total_reward  # loss and val_performance
+
+def compute_fairness_metrics(val_data):
+    fairness_metric = BinaryLabelDatasetMetric(
+        val_data, label_name='label', protected_attribute_names=['sensitive_attr']
+    )
+    return fairness_metric.disparate_impact()
+
+def should_stop_early(val_performance, best_val_performance, has_sensitive_attr,
+                      current_disparate_impact, initial_disparate_impact):
+    if val_performance <= best_val_performance:
+        return True
+    if has_sensitive_attr and current_disparate_impact <= initial_disparate_impact:
+        return True
+    return False
+
+def apply_bias_mitigation(batch):
+    reweighing = Reweighing(
+        unprivileged_groups=[{'sensitive_attr': 0}],
+        privileged_groups=[{'sensitive_attr': 1}]
+    )
+    return reweighing.fit_transform(BinaryLabelDataset(
+        df=batch, label_names=['label'],
+        protected_attribute_names=['sensitive_attr']
+    ))
 
 def evaluate_fairness(state, data):
     # Predict labels using the trained model
@@ -880,8 +887,7 @@ class DataPipeline:
         # Simulate advanced BCI signal processing
         # Apply bandpass filter
         sos = scipy.signal.butter(
-            10, [1, 50], btype='band',
-            fs=self.bci_sampling_rate, output='sos'
+            10, [1, 50], btype='band', fs=self.bci_sampling_rate, output='sos'
         )
         filtered_signal = scipy.signal.sosfilt(sos, bci_signal)
 
@@ -889,9 +895,7 @@ class DataPipeline:
         coeffs = pywt.wavedec(filtered_signal, 'db4', level=5)
 
         # Feature extraction (using wavelet coefficients)
-        features = jnp.concatenate([
-            jnp.mean(jnp.abs(c)) for c in coeffs
-        ])
+        features = jnp.concatenate([jnp.mean(jnp.abs(c)) for c in coeffs])
 
         return features
 
