@@ -1,34 +1,72 @@
 import jax
 import jax.numpy as jnp
-from jax import grad, jit, vmap
+from jax import grad, jit, vmap, random
 import flax.linen as nn
 from flax.training import train_state
 import optax
 import numpy as np
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Any, Dict
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
+from jax.example_libraries import stax
+from jax.example_libraries.stax import Conv, Dense, MaxPool, Relu, Flatten, BatchNorm, Dropout
+from jax.example_libraries import optimizers
 
 class AdvancedNN(nn.Module):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
-    fairness_constraint: float = 0.1  # New parameter for fairness constraint
+    fairness_constraint: float = 0.1
+    use_cnn: bool = False
+    use_rnn: bool = False
+    use_lstm: bool = False
+    use_gan: bool = False
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
+        if self.use_cnn:
+            x = self.cnn_block(x)
+
+        if self.use_rnn:
+            x = self.rnn_block(x)
+
+        if self.use_lstm:
+            x = self.lstm_block(x)
+
         for feat in self.features[:-1]:
             x = nn.Dense(feat)(x)
             x = self.activation(x)
             x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
 
-        # Apply fairness constraint
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
 
         x = nn.Dense(self.features[-1])(x)
+
+        if self.use_gan:
+            x = self.gan_block(x)
+
         return x
+
+    def cnn_block(self, x):
+        x = nn.Conv(features=32, kernel_size=(3, 3))(x)
+        x = self.activation(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3))(x)
+        x = self.activation(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        return x
+
+    def rnn_block(self, x):
+        return nn.RNN(features=64)(x)[0]
+
+    def lstm_block(self, x):
+        return nn.LSTM(features=64)(x)[0]
+
+    def gan_block(self, x):
+        # Simple GAN-like transformation
+        noise = jax.random.normal(self.make_rng('gan'), x.shape)
+        return x + 0.1 * noise
 
     def feature_importance(self, x):
         activations = []
@@ -38,26 +76,42 @@ class AdvancedNN(nn.Module):
             activations.append(x)
         return activations
 
-    def apply_fairness_constraint(self, x, sensitive_attribute, fairness_constraint):
-        # Implement a simple demographic parity constraint
+    def apply_fairness_constraint(self, x, sensitive_attribute):
         group_means = jnp.mean(x, axis=0, keepdims=True)
         overall_mean = jnp.mean(group_means, axis=1, keepdims=True)
-        adjusted_x = x + fairness_constraint * (overall_mean - group_means[sensitive_attribute])
+        adjusted_x = x + self.fairness_constraint * (overall_mean - group_means[sensitive_attribute])
         return adjusted_x
 
+@jax.jit
 def create_train_state(rng, model, input_shape, learning_rate):
-    params = model.init(rng, jnp.ones(input_shape))['params']
+    rng, init_rng = jax.random.split(rng)
+    params = model.init(init_rng, jnp.ones(input_shape))['params']
     tx = optax.adam(learning_rate)
     return train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=tx)
+        apply_fn=model.apply, params=params, tx=tx), rng
 
 @jit
 def train_step(state, batch):
     def loss_fn(params):
-        logits = state.apply_fn({'params': params}, batch['image'])
-        loss = optax.softmax_cross_entropy_with_integer_labels(
-            logits, batch['label']).mean()
-        return loss, logits
+        # Handle different input types (image, sequence, etc.)
+        if 'image' in batch:
+            logits = state.apply_fn({'params': params}, batch['image'], method=state.apply_fn.cnn_forward)
+        elif 'sequence' in batch:
+            logits = state.apply_fn({'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward)
+        else:
+            logits = state.apply_fn({'params': params}, batch['input'])
+
+        # Compute loss for main task
+        main_loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch['label']).mean()
+
+        # Compute GAN loss if applicable
+        if hasattr(state.apply_fn, 'gan_loss'):
+            gan_loss = state.apply_fn({'params': params}, batch['input'], method=state.apply_fn.gan_loss)
+            total_loss = main_loss + gan_loss
+        else:
+            total_loss = main_loss
+
+        return total_loss, logits
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
     (loss, logits), grads = grad_fn(state.params)
@@ -66,7 +120,7 @@ def train_step(state, batch):
 
 @jit
 def eval_step(state, batch):
-    logits = state.apply_fn({'params': state.params}, batch['image'])
+    logits = state.apply_fn({'params': state.params}, batch['image'], training=False)
     return jnp.mean(jnp.argmax(logits, axis=-1) == batch['label'])
 
 # Interpretability features using SHAP
@@ -183,24 +237,33 @@ def get_batches(data, batch_size):
 # Example usage
 if __name__ == "__main__":
     # Define model architecture
-    model = AdvancedNN([64, 32, 10])
+    model = AdvancedNN(
+        cnn_layers=[32, 64],
+        rnn_units=128,
+        lstm_units=64,
+        gan_latent_dim=100,
+        dense_layers=[64, 32, 10],
+        activation=nn.relu
+    )
 
     # Generate dummy data
     num_samples = 1000
-    input_dim = 784  # e.g., for MNIST
+    input_dim = (28, 28, 1)  # e.g., for MNIST
     num_classes = 10
-    rng = np.random.default_rng(0)
+    key = jax.random.PRNGKey(0)
 
     # Generate dummy data with sensitive attributes
+    key, subkey = jax.random.split(key)
     train_data = {
-        'image': rng.normal(size=(num_samples, input_dim)).astype(np.float32),
-        'label': rng.integers(0, num_classes, size=(num_samples,)),
-        'sensitive_attr': rng.integers(0, 2, size=(num_samples,))  # Binary sensitive attribute
+        'image': jax.random.normal(subkey, shape=(num_samples, *input_dim)),
+        'label': jax.random.randint(subkey, shape=(num_samples,), minval=0, maxval=num_classes),
+        'sensitive_attr': jax.random.randint(subkey, shape=(num_samples,), minval=0, maxval=2)
     }
+    key, subkey = jax.random.split(key)
     val_data = {
-        'image': rng.normal(size=(num_samples // 5, input_dim)).astype(np.float32),
-        'label': rng.integers(0, num_classes, size=(num_samples // 5,)),
-        'sensitive_attr': rng.integers(0, 2, size=(num_samples // 5,))
+        'image': jax.random.normal(subkey, shape=(num_samples // 5, *input_dim)),
+        'label': jax.random.randint(subkey, shape=(num_samples // 5,), minval=0, maxval=num_classes),
+        'sensitive_attr': jax.random.randint(subkey, shape=(num_samples // 5,), minval=0, maxval=2)
     }
 
     # Train the model with fairness constraints
