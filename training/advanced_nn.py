@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax import jit
+from jax import jit, grad, random
 import flax.linen as nn
 from flax.training import train_state
 import optax
@@ -10,20 +10,18 @@ from typing import Sequence, Callable
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
-import hmmer
-from alphafold.common import residue_constants
-from alphafold.data.tools import hhsearch
-from alphafold.data import templates
 import logging
 import scipy.signal
 import pywt
+from alphafold.data.tools import hhsearch
+from alphafold.data import templates
+import hmmer
+from alphafold.common import residue_constants
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
-
 
 class NeuroFlexNN(nn.Module):
     """Advanced neural network with various capabilities."""
@@ -234,11 +232,10 @@ class NeuroFlexNN(nn.Module):
             return jnp.mean(fake_logits) - jnp.mean(real_logits)
 
         def gradient_penalty(d_params, real_data, fake_data):
-            alpha = jax.random.uniform(self.make_rng('gan'), (batch_size, 1))
+            alpha = jax.random.uniform(self.make_rng('gan'), shape=(batch_size, 1))
             interpolated = real_data * alpha + fake_data * (1 - alpha)
-            disc_output = lambda x: jnp.sum(
-                discriminator.apply({'params': d_params}, x)
-            )
+            def disc_output(x):
+                return jnp.sum(discriminator.apply({'params': d_params}, x))
             gradient = jax.grad(disc_output)(interpolated)
             return jnp.mean((jnp.linalg.norm(gradient, axis=-1) - 1) ** 2)
 
@@ -254,7 +251,6 @@ class NeuroFlexNN(nn.Module):
             jnp.ones((1, x.shape[-1]))
         ))
 
-        @jax.jit
         def train_step(g_params, d_params, g_opt_state, d_opt_state, z, style, x):
             g_loss_fn = lambda g_p: generator_loss(g_p, d_params, z, style, x)
             d_loss_fn = lambda d_p: (
@@ -314,7 +310,7 @@ class NeuroFlexNN(nn.Module):
 
 
 
-@jax.jit
+@jit
 def create_train_state(rng, model_class, model_params, input_shape, learning_rate):
     """Create and initialize the model and optimizer for training."""
     rng, init_rng = jax.random.split(rng)
@@ -778,14 +774,9 @@ class DataPipeline:
             raise ValueError("Invalid sequence input. Must be a string of alphabetic characters.")
 
         try:
-            # Generate MSAs using Jackhmmer and HHblits
             jackhmmer_msa = self._run_jackhmmer(sequence, self.uniref90_database_path)
             hhblits_msa = self._run_hhblits(sequence, self.mgnify_database_path)
-
-            # Combine MSAs
             combined_msa = self._combine_msas(jackhmmer_msa, hhblits_msa)
-
-            # Search for templates
             templates = self.template_searcher.query(sequence)
 
             return {
@@ -799,14 +790,12 @@ class DataPipeline:
 
     def generate_features(self, processed_sequence):
         try:
-            # Generate features from MSA and templates
             msa_features = self._featurize_msa(processed_sequence['msa'])
             template_features = self.template_featurizer.get_templates(
                 processed_sequence['sequence'],
                 processed_sequence['templates']
             )
 
-            # Combine all features
             feature_dict = {
                 **msa_features,
                 **template_features,
@@ -834,9 +823,7 @@ class DataPipeline:
                 database_path=database
             )
             results = runner.query(sequence)
-
-            msa = [hit.alignment for hit in results.hits]
-            return msa
+            return [hit.alignment for hit in results.hits]
         except Exception as e:
             logging.error(f"Error in _run_jackhmmer: {str(e)}")
             raise
@@ -858,12 +845,10 @@ class DataPipeline:
     def _featurize_msa(self, msa):
         num_sequences = len(msa)
         sequence_length = len(msa[0])
-
         amino_acids = 'ACDEFGHIKLMNPQRSTVWY-'
         aa_to_index = {aa: i for i, aa in enumerate(amino_acids)}
 
         features = np.zeros((num_sequences, sequence_length, len(amino_acids)))
-
         for i, sequence in enumerate(msa):
             for j, aa in enumerate(sequence):
                 if aa in aa_to_index:
@@ -891,39 +876,21 @@ class DataPipeline:
         }
 
     def process_bci_signal(self, bci_signal):
-        # Simulate advanced BCI signal processing
-        # Apply bandpass filter
         sos = scipy.signal.butter(
             10, [1, 50], btype='band', fs=self.bci_sampling_rate, output='sos'
         )
         filtered_signal = scipy.signal.sosfilt(sos, bci_signal)
-
-        # Perform wavelet transform
         coeffs = pywt.wavedec(filtered_signal, 'db4', level=5)
-
-        # Feature extraction (using wavelet coefficients)
         features = jnp.concatenate([jnp.mean(jnp.abs(c)) for c in coeffs])
-
         return features
 
     def wireless_transmission(self, data):
-        # Simulate wireless data transmission with packet loss
         noise = jnp.random.normal(0, 0.01, data.shape)
-        packet_loss = jnp.random.choice(
-            [0, 1], p=[0.99, 0.01], size=data.shape
-        )
-
+        packet_loss = jnp.random.choice([0, 1], p=[0.99, 0.01], size=data.shape)
         transmitted_data = (data + noise) * packet_loss
-        return jax.lax.stop_gradient(
-            jnp.where(jnp.isnan(transmitted_data), 0, transmitted_data)
-        )
+        return jax.lax.stop_gradient(jnp.where(jnp.isnan(transmitted_data), 0, transmitted_data))
 
     def user_interface_interaction(self, input_data):
-        # Simulate more complex user interface interaction
-        # Apply non-linear transformation and add randomness
-        ui_response = jnp.tanh(input_data) + jnp.random.normal(
-            0, 0.1, input_data.shape
-        )
-        # Simulate button press threshold
+        ui_response = jnp.tanh(input_data) + jnp.random.normal(0, 0.1, input_data.shape)
         button_press = jnp.where(ui_response > 0.5, 1, 0)
         return button_press
