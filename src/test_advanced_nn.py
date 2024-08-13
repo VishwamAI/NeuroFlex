@@ -3,12 +3,16 @@ import jax
 import jax.numpy as jnp
 from advanced_nn import data_augmentation
 
+
 class TestDataAugmentation(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.image_shape = (32, 32, 3)
         self.batch_size = 4
-        self.images = jax.random.uniform(self.rng, (self.batch_size,) + self.image_shape)
+        self.images = jax.random.uniform(
+            self.rng,
+            (self.batch_size,) + self.image_shape
+        )
 
     def test_horizontal_flip(self):
         augmented, _ = data_augmentation(self.images, self.rng)
@@ -51,6 +55,7 @@ class TestDataAugmentation(unittest.TestCase):
         _, key1 = data_augmentation(self.images, self.rng)
         _, key2 = data_augmentation(self.images, key1)
         self.assertFalse(jnp.array_equal(key1, key2))
+
 
 if __name__ == '__main__':
     unittest.main()
