@@ -13,8 +13,7 @@ from aif360.algorithms.preprocessing import Reweighing
 import logging
 import scipy.signal
 import pywt
-from alphafold.data.tools import hhsearch
-from alphafold.data import templates
+from alphafold.data import pipeline, templates
 import hmmer
 from alphafold.common import residue_constants
 
@@ -24,29 +23,29 @@ logging.basicConfig(
 )
 
 class NeuroFlexNN(nn.Module):
-    """Advanced neural network with various capabilities."""
-    features: Sequence[int]
-    activation: Callable = nn.relu
-    dropout_rate: float = 0.5
-    fairness_constraint: float = 0.1
-    use_cnn: bool = False
-    use_rnn: bool = False
-    use_lstm: bool = False
-    use_gan: bool = False
-    conv_dim: int = 2  # 2D or 3D convolutions
-    use_rl: bool = False  # Reinforcement learning
-    output_dim: int = None  # RL output dimension
-    rnn_hidden_size: int = 64
-    lstm_hidden_size: int = 64
-    use_bci: bool = False  # BCI functionality
-    bci_channels: int = 64
-    bci_sampling_rate: int = 1000  # Hz
-    wireless_latency: float = 0.01  # Simulated latency
-    bci_signal_processing: str = 'fft'
-    bci_noise_reduction: bool = False
-    use_n1_implant: bool = False  # N1 implant
-    n1_electrode_count: int = 1024
-    ui_feedback_delay: float = 0.05  # Simulated delay
+    """Advanced neural network with various capabilities for flexible and multi-modal learning."""
+    features: Sequence[int]  # Sequence of layer sizes for the neural network
+    activation: Callable = nn.relu  # Activation function to use
+    dropout_rate: float = 0.5  # Dropout rate for regularization
+    fairness_constraint: float = 0.1  # Fairness constraint factor
+    use_cnn: bool = False  # Whether to use Convolutional Neural Network
+    use_rnn: bool = False  # Whether to use Recurrent Neural Network
+    use_lstm: bool = False  # Whether to use Long Short-Term Memory network
+    use_gan: bool = False  # Whether to use Generative Adversarial Network
+    conv_dim: int = 2  # Dimensionality of convolutions (2D or 3D)
+    use_rl: bool = False  # Whether to use Reinforcement Learning
+    output_dim: int = None  # Output dimension for RL
+    rnn_hidden_size: int = 64  # Hidden size for RNN
+    lstm_hidden_size: int = 64  # Hidden size for LSTM
+    use_bci: bool = False  # Whether to use Brain-Computer Interface functionality
+    bci_channels: int = 64  # Number of BCI channels
+    bci_sampling_rate: int = 1000  # BCI sampling rate in Hz
+    wireless_latency: float = 0.01  # Simulated wireless latency in seconds
+    bci_signal_processing: str = 'fft'  # BCI signal processing method
+    bci_noise_reduction: bool = False  # Whether to use noise reduction for BCI
+    use_n1_implant: bool = False  # Whether to use N1 implant
+    n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
+    ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
 
     @nn.compact
     def __call__(
@@ -55,7 +54,8 @@ class NeuroFlexNN(nn.Module):
         training: bool = False,
         sensitive_attribute: jnp.ndarray = None
     ) -> jnp.ndarray:
-        """Process input through the neural network.
+        """
+        Process input through the neural network.
 
         Args:
             x: Input data.
@@ -71,6 +71,7 @@ class NeuroFlexNN(nn.Module):
         return self._apply_final_processing(x)
 
     def _process_input(self, x):
+        """Process the input data through initial preprocessing steps."""
         if self.use_bci:
             x = self.bci_signal_processing(x)
         if self.use_cnn:
@@ -80,6 +81,7 @@ class NeuroFlexNN(nn.Module):
         return x
 
     def _apply_neural_layers(self, x, training):
+        """Apply the main neural network layers to the processed input."""
         if self.use_rnn:
             x = self.rnn_block(x)
         if self.use_lstm:
@@ -90,11 +92,13 @@ class NeuroFlexNN(nn.Module):
         return x
 
     def _apply_constraints(self, x, sensitive_attribute):
+        """Apply fairness constraints and final layer processing."""
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
         return self._apply_final_layer(x)
 
     def _apply_final_processing(self, x):
+        """Apply final processing steps including GAN, wireless transmission, and UI interaction."""
         if self.use_gan:
             x = self.gan_block(x)
         if getattr(self, 'use_wireless', False):
@@ -104,6 +108,7 @@ class NeuroFlexNN(nn.Module):
         return x
 
     def _reshape_input_for_rnn(self, x):
+        """Reshape input for RNN/LSTM processing if necessary."""
         if len(x.shape) == 2:
             return x.reshape(x.shape[0], 1, -1)
         elif len(x.shape) > 3:
@@ -111,21 +116,28 @@ class NeuroFlexNN(nn.Module):
         return x
 
     def _flatten_if_needed(self, x):
+        """Flatten the input if it has more than 2 dimensions."""
         if len(x.shape) > 2:
             return x.reshape(x.shape[0], -1)
         return x
 
     def _apply_dense_layer(self, x, feat, training):
+        """Apply a dense layer with activation and dropout."""
         x = nn.Dense(feat)(x)
         x = self.activation(x)
         return nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
 
     def _apply_final_layer(self, x):
+        """Apply the final layer, either for RL or standard output."""
         if self.use_rl and self.output_dim is not None:
             return nn.Dense(self.output_dim)(x)
         return nn.Dense(self.features[-1])(x)
 
     def cnn_block(self, x):
+        """
+        Apply a Convolutional Neural Network block to the input.
+        Supports both 2D and 3D convolutions.
+        """
         if self.conv_dim == 2:
             k_size = (3, 3)
             pad = 'SAME'
@@ -145,10 +157,15 @@ class NeuroFlexNN(nn.Module):
         return x
 
     def rnn_block(self, x):
+        """Apply a Recurrent Neural Network block to the input."""
         rnn = nn.RNN(nn.LSTMCell(features=self.rnn_hidden_size))
         return rnn(x)[0]
 
     def lstm_block(self, x):
+        """
+        Apply a Long Short-Term Memory block to the input.
+        Includes detailed shape printing for debugging purposes.
+        """
         class LSTMCellWrapper(nn.Module):
             features: int
 
@@ -195,6 +212,10 @@ class NeuroFlexNN(nn.Module):
         return outputs
 
     def gan_block(self, x):
+        """
+        Apply a Generative Adversarial Network block to the input.
+        Includes a generator and discriminator with adversarial training.
+        """
         latent_dim, style_dim = 100, 64
         num_iterations, batch_size = 1000, x.shape[0]
 
@@ -285,8 +306,11 @@ class NeuroFlexNN(nn.Module):
         style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
         return generator.apply({'params': generator.params}, z, style)
 
-
     def feature_importance(self, x):
+        """
+        Calculate feature importance by tracking activations through the network.
+        Returns a list of activations for each layer.
+        """
         activations = []
         for feat in self.features[:-1]:
             x = nn.Dense(feat)(x)
@@ -294,8 +318,11 @@ class NeuroFlexNN(nn.Module):
             activations.append(x)
         return activations
 
-
     def apply_fairness_constraint(self, x, sensitive_attribute):
+        """
+        Apply a fairness constraint to the output based on sensitive attributes.
+        Adjusts the output to reduce bias related to the sensitive attribute.
+        """
         group_means = jnp.mean(x, axis=0, keepdims=True)
         overall_mean = jnp.mean(group_means, axis=1, keepdims=True)
         adjustment = self.fairness_constraint * (
@@ -756,11 +783,11 @@ class DataPipeline:
         self.hhblits_binary_path = config.get('hhblits_binary_path')
         self.uniref90_database_path = config.get('uniref90_database_path')
         self.mgnify_database_path = config.get('mgnify_database_path')
-        self.template_searcher = config.get('template_searcher', hhsearch.HHSearch(
+        self.template_searcher = config.get('template_searcher', pipeline.TemplateSearcher(
             binary_path=config.get('hhsearch_binary_path'),
             databases=[config.get('pdb70_database_path')]
         ))
-        self.template_featurizer = config.get('template_featurizer', templates.HhsearchHitFeaturizer(
+        self.template_featurizer = config.get('template_featurizer', templates.TemplateHitFeaturizer(
             mmcif_dir=config.get('template_mmcif_dir'),
             max_template_date=config.get('max_template_date'),
             max_hits=20,

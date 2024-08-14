@@ -25,17 +25,23 @@ class DeepMindIntegration:
         params = jax.random.normal(key, (len(sequence), 128))
         return jax.jit(predict_structure)(params, seq_encoded)
 
-    def reinforcement_learning(self, env, policy_network: Callable) -> Tuple[Callable, Callable]:
-        # Simplified PPO-inspired RL algorithm
-        def loss_fn(params, observations, actions, rewards, dones):
-            logits = policy_network.apply(params, observations)
-            policy_loss = rlax.ppo_loss(logits, actions, rewards, dones)
-            return jnp.mean(policy_loss)
+    def reinforcement_learning(self, env, policy_network: Callable, value_network: Callable) -> Tuple[Callable, Callable]:
+        # Enhanced PPO-inspired RL algorithm for complex cognitive tasks
+        def loss_fn(params, observations, actions, rewards, dones, advantages, old_log_probs):
+            policy_params, value_params = params
+            policy_logits = policy_network.apply(policy_params, observations)
+            values = value_network.apply(value_params, observations)
+
+            policy_loss = rlax.ppo_loss(policy_logits, actions, advantages, old_log_probs, epsilon=0.2)
+            value_loss = jnp.mean(jnp.square(rewards - values))
+            entropy_loss = -0.01 * jnp.mean(rlax.entropy_loss(policy_logits))
+
+            return jnp.mean(policy_loss) + 0.5 * value_loss + entropy_loss
 
         @jax.jit
-        def update(params, observations, actions, rewards, dones):
-            grads = jax.grad(loss_fn)(params, observations, actions, rewards, dones)
-            return jax.tree_map(lambda p, g: p - 0.01 * g, params, grads)
+        def update(params, observations, actions, rewards, dones, advantages, old_log_probs):
+            grads = jax.grad(loss_fn)(params, observations, actions, rewards, dones, advantages, old_log_probs)
+            return jax.tree_map(lambda p, g: p - 0.001 * g, params, grads)
 
         return loss_fn, update
 
