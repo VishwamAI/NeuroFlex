@@ -4,7 +4,12 @@ import jax.numpy as jnp
 from jax import jit
 import flax.linen as nn
 import gym
-from training.advanced_nn import data_augmentation, NeuroFlexNN, create_train_state, select_action
+import shap
+from ..training.advanced_nn import (
+    data_augmentation, NeuroFlexNN, create_train_state, select_action,
+    interpret_model, adversarial_training
+)
+from alphafold.data import pipeline, templates
 
 
 class TestDataAugmentation(unittest.TestCase):
@@ -64,11 +69,12 @@ class TestXLAOptimizations(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 28, 28, 1)
-        self.model = NeuroFlexNN(features=[32, 10], use_cnn=True)
+        self.model = NeuroFlexNN(features=[32, 10], use_cnn=True, use_xla=True)
 
     def test_jit_compilation(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
 
+        @jit
         def forward(params, x):
             return self.model.apply({'params': params}, x)
 
@@ -118,6 +124,66 @@ class TestReinforcementLearning(unittest.TestCase):
         self.assertIsInstance(action, jax.numpy.ndarray)
         self.assertEqual(action.shape, ())
         self.assertTrue(0 <= int(action) < self.action_space)
+
+
+class TestConsciousnessSimulation(unittest.TestCase):
+    def setUp(self):
+        self.rng = jax.random.PRNGKey(0)
+        self.input_shape = (1, 64)
+        self.model = NeuroFlexNN(features=[32, 16], consciousness_sim=True)
+
+    def test_consciousness_simulation(self):
+        params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+        output = self.model.apply({'params': params}, jnp.ones(self.input_shape))
+        self.assertEqual(output.shape, (1, 16))
+        self.assertIsNotNone(self.model.simulate_consciousness)
+
+
+class TestDNNBlock(unittest.TestCase):
+    def setUp(self):
+        self.rng = jax.random.PRNGKey(0)
+        self.input_shape = (1, 100)
+        self.model = NeuroFlexNN(features=[64, 32, 16], use_dnn=True)
+
+    def test_dnn_block(self):
+        params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+        output = self.model.apply({'params': params}, jnp.ones(self.input_shape))
+        self.assertEqual(output.shape, (1, 16))
+        self.assertIsNotNone(self.model.dnn_block)
+
+
+class TestSHAPInterpretability(unittest.TestCase):
+    def setUp(self):
+        self.rng = jax.random.PRNGKey(0)
+        self.input_shape = (100, 20)
+        self.model = NeuroFlexNN(features=[32, 16, 2], use_shap=True)
+
+    def test_shap_interpretability(self):
+        params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+        input_data = jnp.random.normal(self.rng, self.input_shape)
+        shap_values = interpret_model(self.model, params, input_data)
+        self.assertIsNotNone(shap_values)
+        self.assertEqual(len(shap_values), 2)  # Assuming binary classification
+        self.assertEqual(shap_values[0].shape, self.input_shape)
+
+
+class TestAdversarialTraining(unittest.TestCase):
+    def setUp(self):
+        self.rng = jax.random.PRNGKey(0)
+        self.input_shape = (1, 28, 28, 1)
+        self.model = NeuroFlexNN(features=[32, 10], use_cnn=True)
+
+    def test_adversarial_training(self):
+        params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+        input_data = {
+            'image': jnp.random.normal(self.rng, self.input_shape),
+            'label': jnp.array([0])
+        }
+        epsilon = 0.1
+        perturbed_input = adversarial_training(self.model, params, input_data, epsilon)
+        self.assertIsNotNone(perturbed_input)
+        self.assertEqual(perturbed_input['image'].shape, self.input_shape)
+        self.assertFalse(jnp.array_equal(perturbed_input['image'], input_data['image']))
 
 
 if __name__ == '__main__':
