@@ -69,7 +69,6 @@ class TestXLAOptimizations(unittest.TestCase):
     def test_jit_compilation(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
 
-        @jit
         def forward(params, x):
             return self.model.apply({'params': params}, x)
 
