@@ -2,8 +2,8 @@ jax==0.4.10
 jaxlib==0.4.10
 flax==0.7.1
 optax==0.1.5
-tensorflow
-keras
+tensorflow==2.16.1
+keras==3.5.0
 gym==0.26.2
 pytest==7.3.1
 flake8==6.0.0
