@@ -3,12 +3,12 @@ from setuptools import setup, find_packages
 setup(
     name="neuroflex",
     version="0.0.1",
-    author="NeuroFlex Team",
-    author_email="contact@neuroflex.ai",
+    author="kasinadhsarma",
+    author_email="kasinadhsarma@gmail.com",
     description="An advanced neural network framework with interpretability, generalization, robustness, and fairness features",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/neuroflex/neuroflex",
+    url="https://github.com/VishwamAI/neuroflex",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
