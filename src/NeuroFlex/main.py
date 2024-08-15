@@ -20,8 +20,6 @@ from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
 from vae import VAE
 import pyhmmer
-import onnx
-import onnxruntime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
