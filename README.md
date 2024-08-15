@@ -103,4 +103,4 @@ If you use NeuroFlex in your research, please cite:
 
 ## Contact
 
-For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/neuroflex/neuroflex/issues) or contact us at support@neuroflex.ai.
+For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at kasinadhsarma@gmail.com.
