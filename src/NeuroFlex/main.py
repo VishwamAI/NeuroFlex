@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax import jit
+from jax import jit  # Included from 'main'
 import flax.linen as nn
 from flax.training import train_state
 import optax
@@ -12,15 +12,16 @@ from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
 import hmmer
 from alphafold.common import residue_constants
-from alphafold.data import templates, pipeline
+from alphafold.data import templates, pipeline  # Merged both imports
 import logging
 import scipy.signal as signal
 import pywt
-import shap
+import shap  # Included from 'main'
 from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
-from vae import VAE
-import pyhmmer
+from vae import VAE  # Included from 'main'
+import pyhmmer  # Included from 'main'
+
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
