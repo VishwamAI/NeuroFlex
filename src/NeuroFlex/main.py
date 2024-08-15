@@ -28,6 +28,7 @@ import einops
 import shap
 from tensorflow import keras
 import tensorflow as tf
+from quantum_nn_module import QuantumNeuralNetwork
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 

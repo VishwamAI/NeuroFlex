@@ -14,7 +14,7 @@ import logging
 import scipy.signal
 import pywt
 from alphafold.data import pipeline, templates
-import hmmer
+import pyhmmer as hmmer
 from alphafold.common import residue_constants
 
 logging.basicConfig(
@@ -46,6 +46,149 @@ class NeuroFlexNN(nn.Module):
     use_n1_implant: bool = False  # Whether to use N1 implant
     n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
     ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
+    consciousness_sim: bool = False  # Whether to use consciousness simulation
+    use_dnn: bool = False  # Whether to use Deep Neural Network
+
+    def setup(self):
+        self.dense_layers = [nn.Dense(feat) for feat in self.features[:-1]]
+        if self.use_cnn:
+            self.Conv_0 = nn.Conv(features=32, kernel_size=(3, 3) if self.conv_dim == 2 else (3, 3, 3), padding='SAME')
+            self.Conv_1 = nn.Conv(features=64, kernel_size=(3, 3) if self.conv_dim == 2 else (3, 3, 3), padding='SAME')
+        if self.use_rnn:
+            self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
+        if self.use_lstm:
+            self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
+                                variable_broadcast="params",
+                                split_rngs={"params": False})
+
+    @nn.compact
+    def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
+        if self.use_cnn:
+            x = self.cnn_block(x)
+        x = self._apply_neural_layers(x, training)
+        x = self._apply_constraints(x, sensitive_attribute)
+        x = self._apply_final_processing(x)
+        return self.simulate_consciousness(x)
+
+    @nn.compact
+    def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
+        if self.use_cnn:
+            x = self.cnn_block(x)
+        x = self._apply_neural_layers(x, training)
+        x = self._apply_constraints(x, sensitive_attribute)
+        x = self._apply_final_processing(x)
+        return self.simulate_consciousness(x)
+
+    def _apply_neural_layers(self, x, training):
+        if self.use_rnn:
+            x = self.rnn_block(x)
+        if self.use_lstm:
+            x = self.lstm_block(x)
+        x = self._flatten_if_needed(x)
+        for layer in self.dense_layers:
+            x = layer(x)
+            x = self.activation(x)
+            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+        return x
+
+    def _apply_constraints(self, x, sensitive_attribute):
+        if sensitive_attribute is not None:
+            x = self.apply_fairness_constraint(x, sensitive_attribute)
+        return self._apply_final_layer(x)
+
+    def _apply_final_processing(self, x):
+        if self.use_gan:
+            x = self.gan_block(x)
+        if getattr(self, 'use_wireless', False):
+            x = self.wireless_transmission(x)
+        if getattr(self, 'use_ui', False):
+            x = self.ui_interaction(x)
+        return x
+
+    def simulate_consciousness(self, x):
+        if self.consciousness_sim:
+            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
+            key = jax.random.PRNGKey(0)
+            noise = jax.random.normal(key, x.shape) * 0.1
+            x = x + noise
+        return x
+
+    def _apply_neural_layers(self, x, training):
+        if self.use_rnn:
+            x = self.rnn_block(x)
+        if self.use_lstm:
+            x = self.lstm_block(x)
+        x = self._flatten_if_needed(x)
+        for layer in self.dense_layers:
+            x = layer(x)
+            x = self.activation(x)
+            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+        return x
+        """Apply the main neural network layers to the processed input."""
+        if self.use_rnn:
+            x = self.rnn_block(x)
+        if self.use_lstm:
+            x = self.lstm_block(x)
+        x = self._flatten_if_needed(x)
+        for layer in self.dense_layers:
+            x = layer(x)
+            x = self.activation(x)
+            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+        return x
+
+    def _apply_constraints(self, x, sensitive_attribute):
+        """Apply fairness constraints and final layer processing."""
+        if sensitive_attribute is not None:
+            x = self.apply_fairness_constraint(x, sensitive_attribute)
+        return self._apply_final_layer(x)
+
+    def _apply_final_processing(self, x):
+        """Apply final processing steps including GAN, wireless transmission, and UI interaction."""
+        if self.use_gan:
+            x = self.gan_block(x)
+        if getattr(self, 'use_wireless', False):
+            x = self.wireless_transmission(x)
+        if getattr(self, 'use_ui', False):
+            x = self.ui_interaction(x)
+        return x
+
+    def simulate_consciousness(self, x):
+        """Simulate consciousness by applying a non-linear transformation."""
+        if self.consciousness_sim:
+            # Apply a complex non-linear transformation
+            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
+            # Add some stochasticity to simulate unpredictability of consciousness
+            key = jax.random.PRNGKey(0)
+            noise = jax.random.normal(key, x.shape) * 0.1
+            x = x + noise
+        return x
+
+    def _flatten_if_needed(self, x):
+        """Flatten the input if it has more than 2 dimensions."""
+        if len(x.shape) > 2:
+            return x.reshape(x.shape[0], -1)
+        return x
+
+    def _apply_final_layer(self, x):
+        """Apply the final layer, either for RL or standard output."""
+        if self.use_rl and self.output_dim is not None:
+            return nn.Dense(self.output_dim)(x)
+        return nn.Dense(self.features[-1])(x)
+
+    @nn.compact
+    def rnn_block(self, x):
+        """Apply a Recurrent Neural Network block to the input."""
+        rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
+        return rnn(x)[0]
+
+    @nn.compact
+    def lstm_block(self, x):
+        """Apply a Long Short-Term Memory block to the input."""
+        lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
+                       variable_broadcast="params",
+                       split_rngs={"params": False})
+        return lstm(carry=nn.LSTMCell.initialize_carry(jax.random.PRNGKey(0), x.shape[:1], self.lstm_hidden_size),
+                    xs=x)[1]
 
     @nn.compact
     def __call__(
@@ -138,22 +281,11 @@ class NeuroFlexNN(nn.Module):
         Apply a Convolutional Neural Network block to the input.
         Supports both 2D and 3D convolutions.
         """
-        if self.conv_dim == 2:
-            k_size = (3, 3)
-            pad = 'SAME'
-        elif self.conv_dim == 3:
-            k_size = (3, 3, 3)
-            pad = ((1, 1, 1), (1, 1, 1))
-        else:
-            raise ValueError(f"Unsupported conv_dim: {self.conv_dim}")
-
-        ConvLayer = nn.Conv
-
-        x = ConvLayer(features=32, kernel_size=k_size, padding=pad)(x)
-        x = self.activation(x)
-        x = ConvLayer(features=64, kernel_size=k_size, padding=pad)(x)
-        x = self.activation(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
+        if self.use_cnn:
+            x = self.activation(self.Conv_0(x))
+            x = self.activation(self.Conv_1(x))
+            # Flatten the output while preserving batch dimension
+            x = x.reshape((x.shape[0], -1))
         return x
 
     def rnn_block(self, x):
@@ -334,19 +466,142 @@ class NeuroFlexNN(nn.Module):
 
 
 
-
-
-
 @jit
-def create_train_state(rng, model_class, model_params, input_shape, learning_rate):
+def create_train_state(rng, model, input_shape, learning_rate):
     """Create and initialize the model and optimizer for training."""
     rng, init_rng = jax.random.split(rng)
-    model = model_class(**model_params)
-    params = model.init(init_rng, jnp.ones(input_shape))['params']
-    tx = optax.adam(learning_rate)
-    state = train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=tx)
-    return state, model, rng
+
+    try:
+        # Ensure input_shape is properly formatted
+        if isinstance(input_shape, jnp.ndarray):
+            dummy_input = input_shape
+        elif isinstance(input_shape, (tuple, list)):
+            dummy_input = jnp.ones((1,) + tuple(input_shape))
+        else:
+            raise ValueError("input_shape must be a jnp.ndarray, tuple, or list")
+
+        # Initialize the model
+        if isinstance(model, (nn.Module, NeuroFlexNN)):
+            variables = model.init(init_rng, dummy_input)
+            params = variables['params']
+            apply_fn = model.apply
+        elif isinstance(model, dict) and 'params' in model and 'apply_fn' in model:
+            params = model['params']
+            apply_fn = model['apply_fn']
+        else:
+            raise ValueError("model must be an instance of nn.Module, NeuroFlexNN, or a dict containing 'params' and 'apply_fn'")
+
+        # Ensure params is a valid PyTree
+        if not jax.tree_util.tree_is_leaves(params):
+            logging.warning("Model parameters are not leaf nodes. Attempting to flatten.")
+            params = jax.tree_util.tree_map(lambda x: x, params)
+
+        # Validate params structure
+        try:
+            jax.tree_util.tree_structure(params)
+        except ValueError as ve:
+            logging.error(f"Invalid parameter structure: {ve}")
+            raise
+
+        # Create optimizer
+        tx = optax.adam(learning_rate)
+
+        # Create train state
+        state = train_state.TrainState.create(
+            apply_fn=apply_fn,
+            params=params,
+            tx=tx
+        )
+
+        logging.info(f"Successfully created train state for model: {type(model).__name__}")
+        return state, model, rng
+
+    except Exception as e:
+        logging.error(f"Error in create_train_state: {str(e)}")
+        logging.debug(f"Model: {type(model)}, Input shape: {input_shape}")
+        if isinstance(model, (nn.Module, NeuroFlexNN)):
+            try:
+                logging.debug(f"Model structure: {model.tabulate(init_rng, dummy_input)}")
+            except Exception as tabulate_error:
+                logging.debug(f"Failed to tabulate model structure: {str(tabulate_error)}")
+
+        # Additional error handling for NeuroFlexNN
+        if isinstance(model, NeuroFlexNN):
+            logging.debug(f"NeuroFlexNN attributes: {vars(model)}")
+            try:
+                test_output = model.apply({'params': params}, dummy_input)
+                logging.debug(f"Test output shape: {test_output.shape}")
+            except Exception as apply_error:
+                logging.debug(f"Failed to apply model: {str(apply_error)}")
+
+        raise
+
+    finally:
+        # Ensure all resources are properly released
+        if 'params' in locals():
+            jax.tree_map(lambda x: x.delete() if hasattr(x, 'delete') else None, params)
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    if isinstance(model_class, type):
+        model = model_class(**model_params)
+    else:
+        model = model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
+
+# Remove the wrapper function as it's no longer needed
 
 
 @jit
