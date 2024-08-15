@@ -93,14 +93,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use NeuroFlex in your research, please cite:
 
 ```
-@software{neuroflex2023,
-  author = {NeuroFlex Team},
+@software{neuroflex2024,
+  author = {kasinadhsarma},
   title = {NeuroFlex: Advanced Neural Network Framework},
-  year = {2023},
-  url = {https://github.com/neuroflex/neuroflex}
+  year = {2024},
+  url = {https://github.com/VishwamAI/NeuroFlex}
 }
 ```
 
 ## Contact
 
-For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/neuroflex/neuroflex/issues) or contact us at support@neuroflex.ai.
+For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at kasinadhsarma@gmail.com.
