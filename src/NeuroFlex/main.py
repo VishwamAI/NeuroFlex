@@ -10,6 +10,7 @@ from typing import Sequence, Callable, Optional
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
+import hmmer
 from alphafold.common import residue_constants
 from alphafold.data import templates, pipeline
 import logging
@@ -20,6 +21,7 @@ from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
 from vae import VAE
 import pyhmmer
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -53,9 +55,12 @@ class NeuroFlexNN(nn.Module):
     use_ddpm: bool = False
     ddpm_timesteps: int = 1000
     ddpm_beta_schedule: str = "linear"
+<<<<<<< feature-integration-nnx-torax-orbax
+=======
     use_vae: bool = False
     vae_latent_dim: int = 32
     vae_hidden_dim: int = 256
+>>>>>>> main
 
     def setup(self):
         if self.use_ddpm:
@@ -64,6 +69,8 @@ class NeuroFlexNN(nn.Module):
                 timesteps=self.ddpm_timesteps,
                 beta_schedule=self.ddpm_beta_schedule,
             )
+<<<<<<< feature-integration-nnx-torax-orbax
+=======
         if self.use_vae:
             # Determine input shape based on the first feature dimension
             if isinstance(self.features[0], (tuple, list)):
@@ -76,6 +83,7 @@ class NeuroFlexNN(nn.Module):
                 hidden_dim=self.vae_hidden_dim,
                 input_shape=input_shape
             )
+>>>>>>> main
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
