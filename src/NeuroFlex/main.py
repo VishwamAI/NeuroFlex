@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+from jax import jit
 import flax.linen as nn
 from flax.training import train_state
 import optax
@@ -9,14 +10,18 @@ from typing import Sequence, Callable, Optional
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
-import hmmer
 from alphafold.common import residue_constants
-from alphafold.data import templates
+from alphafold.data import templates, pipeline
 import logging
 import scipy.signal as signal
 import pywt
+import shap
 from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
+from vae import VAE
+import pyhmmer
+import onnx
+import onnxruntime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -50,6 +55,9 @@ class NeuroFlexNN(nn.Module):
     use_ddpm: bool = False
     ddpm_timesteps: int = 1000
     ddpm_beta_schedule: str = "linear"
+    use_vae: bool = False
+    vae_latent_dim: int = 32
+    vae_hidden_dim: int = 256
 
     def setup(self):
         if self.use_ddpm:
@@ -57,6 +65,18 @@ class NeuroFlexNN(nn.Module):
                 unet_config={},  # Add appropriate UNet config
                 timesteps=self.ddpm_timesteps,
                 beta_schedule=self.ddpm_beta_schedule,
+            )
+        if self.use_vae:
+            # Determine input shape based on the first feature dimension
+            if isinstance(self.features[0], (tuple, list)):
+                input_shape = self.features[0]
+            else:
+                input_shape = (self.features[0],)
+
+            self.vae = VAE(
+                latent_dim=self.vae_latent_dim,
+                hidden_dim=self.vae_hidden_dim,
+                input_shape=input_shape
             )
 
     @nn.compact
@@ -69,6 +89,22 @@ class NeuroFlexNN(nn.Module):
 
         if self.use_cnn:
             x = self.cnn_block(x)
+
+        # VAE processing
+        if self.use_vae:
+            try:
+                rng = self.make_rng('vae')
+                x_flat = x.reshape((x.shape[0], -1))  # Flatten input
+                x_recon, mean, logvar = self.vae(x_flat, rng)
+                x = x_recon.reshape(x.shape)  # Reshape back to original shape
+
+                # Compute VAE loss for potential use in training
+                vae_loss = self.vae.loss_function(x_recon, x_flat, mean, logvar)
+                self.vae_loss = vae_loss  # Store for later use if needed
+            except Exception as e:
+                logging.error(f"Error in VAE processing: {str(e)}")
+                # Fallback to original input if VAE fails
+                pass
 
         # Ensure input is 3D for RNN/LSTM: (batch_size, sequence_length, features)
         if self.use_rnn or self.use_lstm:
@@ -782,11 +818,11 @@ class DataPipeline:
         self.hhblits_binary_path = config.get('hhblits_binary_path')
         self.uniref90_database_path = config.get('uniref90_database_path')
         self.mgnify_database_path = config.get('mgnify_database_path')
-        self.template_searcher = config.get('template_searcher', hhsearch.HHSearch(
+        self.template_searcher = config.get('template_searcher', pipeline.TemplateSearcher(
             binary_path=config.get('hhsearch_binary_path'),
             databases=[config.get('pdb70_database_path')]
         ))
-        self.template_featurizer = config.get('template_featurizer', templates.HhsearchHitFeaturizer(
+        self.template_featurizer = config.get('template_featurizer', templates.TemplateHitFeaturizer(
             mmcif_dir=config.get('template_mmcif_dir'),
             max_template_date=config.get('max_template_date'),
             max_hits=20,
@@ -851,7 +887,7 @@ class DataPipeline:
 
     def _run_jackhmmer(self, sequence, database):
         try:
-            runner = hmmer.Jackhmmer(
+            runner = pyhmmer.Jackhmmer(
                 binary_path=self.jackhmmer_binary_path,
                 database_path=database
             )
@@ -865,7 +901,7 @@ class DataPipeline:
 
     def _run_hhblits(self, sequence, database):
         try:
-            hhblits_runner = hmmer.HHBlits(binary_path=self.hhblits_binary_path, databases=[database])
+            hhblits_runner = pyhmmer.HHBlits(binary_path=self.hhblits_binary_path, databases=[database])
             result = hhblits_runner.query(sequence)
             return result.msa
         except Exception as e:
