@@ -6,7 +6,7 @@ from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Optional, List
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
@@ -34,7 +34,7 @@ class NeuroFlexNN(nn.Module):
     use_gan: bool = False  # Whether to use Generative Adversarial Network
     conv_dim: int = 2  # Dimensionality of convolutions (2D or 3D)
     use_rl: bool = False  # Whether to use Reinforcement Learning
-    output_dim: int = None  # Output dimension for RL
+    output_dim: Optional[int] = None  # Output dimension for RL
     rnn_hidden_size: int = 64  # Hidden size for RNN
     lstm_hidden_size: int = 64  # Hidden size for LSTM
     use_bci: bool = False  # Whether to use Brain-Computer Interface functionality
@@ -62,141 +62,7 @@ class NeuroFlexNN(nn.Module):
                                 split_rngs={"params": False})
 
     @nn.compact
-    def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
-        if self.use_cnn:
-            x = self.cnn_block(x)
-        x = self._apply_neural_layers(x, training)
-        x = self._apply_constraints(x, sensitive_attribute)
-        x = self._apply_final_processing(x)
-        return self.simulate_consciousness(x)
-
-    @nn.compact
-    def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
-        if self.use_cnn:
-            x = self.cnn_block(x)
-        x = self._apply_neural_layers(x, training)
-        x = self._apply_constraints(x, sensitive_attribute)
-        x = self._apply_final_processing(x)
-        return self.simulate_consciousness(x)
-
-    def _apply_neural_layers(self, x, training):
-        if self.use_rnn:
-            x = self.rnn_block(x)
-        if self.use_lstm:
-            x = self.lstm_block(x)
-        x = self._flatten_if_needed(x)
-        for layer in self.dense_layers:
-            x = layer(x)
-            x = self.activation(x)
-            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
-        return x
-
-    def _apply_constraints(self, x, sensitive_attribute):
-        if sensitive_attribute is not None:
-            x = self.apply_fairness_constraint(x, sensitive_attribute)
-        return self._apply_final_layer(x)
-
-    def _apply_final_processing(self, x):
-        if self.use_gan:
-            x = self.gan_block(x)
-        if getattr(self, 'use_wireless', False):
-            x = self.wireless_transmission(x)
-        if getattr(self, 'use_ui', False):
-            x = self.ui_interaction(x)
-        return x
-
-    def simulate_consciousness(self, x):
-        if self.consciousness_sim:
-            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
-            key = jax.random.PRNGKey(0)
-            noise = jax.random.normal(key, x.shape) * 0.1
-            x = x + noise
-        return x
-
-    def _apply_neural_layers(self, x, training):
-        if self.use_rnn:
-            x = self.rnn_block(x)
-        if self.use_lstm:
-            x = self.lstm_block(x)
-        x = self._flatten_if_needed(x)
-        for layer in self.dense_layers:
-            x = layer(x)
-            x = self.activation(x)
-            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
-        return x
-        """Apply the main neural network layers to the processed input."""
-        if self.use_rnn:
-            x = self.rnn_block(x)
-        if self.use_lstm:
-            x = self.lstm_block(x)
-        x = self._flatten_if_needed(x)
-        for layer in self.dense_layers:
-            x = layer(x)
-            x = self.activation(x)
-            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
-        return x
-
-    def _apply_constraints(self, x, sensitive_attribute):
-        """Apply fairness constraints and final layer processing."""
-        if sensitive_attribute is not None:
-            x = self.apply_fairness_constraint(x, sensitive_attribute)
-        return self._apply_final_layer(x)
-
-    def _apply_final_processing(self, x):
-        """Apply final processing steps including GAN, wireless transmission, and UI interaction."""
-        if self.use_gan:
-            x = self.gan_block(x)
-        if getattr(self, 'use_wireless', False):
-            x = self.wireless_transmission(x)
-        if getattr(self, 'use_ui', False):
-            x = self.ui_interaction(x)
-        return x
-
-    def simulate_consciousness(self, x):
-        """Simulate consciousness by applying a non-linear transformation."""
-        if self.consciousness_sim:
-            # Apply a complex non-linear transformation
-            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
-            # Add some stochasticity to simulate unpredictability of consciousness
-            key = jax.random.PRNGKey(0)
-            noise = jax.random.normal(key, x.shape) * 0.1
-            x = x + noise
-        return x
-
-    def _flatten_if_needed(self, x):
-        """Flatten the input if it has more than 2 dimensions."""
-        if len(x.shape) > 2:
-            return x.reshape(x.shape[0], -1)
-        return x
-
-    def _apply_final_layer(self, x):
-        """Apply the final layer, either for RL or standard output."""
-        if self.use_rl and self.output_dim is not None:
-            return nn.Dense(self.output_dim)(x)
-        return nn.Dense(self.features[-1])(x)
-
-    @nn.compact
-    def rnn_block(self, x):
-        """Apply a Recurrent Neural Network block to the input."""
-        rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
-        return rnn(x)[0]
-
-    @nn.compact
-    def lstm_block(self, x):
-        """Apply a Long Short-Term Memory block to the input."""
-        lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
-                       variable_broadcast="params",
-                       split_rngs={"params": False})
-        return lstm(carry=nn.LSTMCell.initialize_carry(jax.random.PRNGKey(0), x.shape[:1], self.lstm_hidden_size),
-                    xs=x)[1]
-
-    @nn.compact
-    def __call__(
-        self,
-        x,
-        training: bool = False,
-        sensitive_attribute: jnp.ndarray = None
-    ) -> jnp.ndarray:
+    def __call__(self, x: jnp.ndarray, training: bool = False, sensitive_attribute: Optional[jnp.ndarray] = None) -> jnp.ndarray:
         """
         Process input through the neural network.
 
@@ -211,9 +77,10 @@ class NeuroFlexNN(nn.Module):
         x = self._process_input(x)
         x = self._apply_neural_layers(x, training)
         x = self._apply_constraints(x, sensitive_attribute)
-        return self._apply_final_processing(x)
+        x = self._apply_final_processing(x)
+        return self.simulate_consciousness(x)
 
-    def _process_input(self, x):
+    def _process_input(self, x: jnp.ndarray) -> jnp.ndarray:
         """Process the input data through initial preprocessing steps."""
         if self.use_bci:
             x = self.bci_signal_processing(x)
@@ -223,24 +90,26 @@ class NeuroFlexNN(nn.Module):
             x = self._reshape_input_for_rnn(x)
         return x
 
-    def _apply_neural_layers(self, x, training):
+    def _apply_neural_layers(self, x: jnp.ndarray, training: bool) -> jnp.ndarray:
         """Apply the main neural network layers to the processed input."""
         if self.use_rnn:
             x = self.rnn_block(x)
         if self.use_lstm:
             x = self.lstm_block(x)
         x = self._flatten_if_needed(x)
-        for feat in self.features[:-1]:
-            x = self._apply_dense_layer(x, feat, training)
+        for layer in self.dense_layers:
+            x = layer(x)
+            x = self.activation(x)
+            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
         return x
 
-    def _apply_constraints(self, x, sensitive_attribute):
+    def _apply_constraints(self, x: jnp.ndarray, sensitive_attribute: Optional[jnp.ndarray]) -> jnp.ndarray:
         """Apply fairness constraints and final layer processing."""
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
         return self._apply_final_layer(x)
 
-    def _apply_final_processing(self, x):
+    def _apply_final_processing(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply final processing steps including GAN, wireless transmission, and UI interaction."""
         if self.use_gan:
             x = self.gan_block(x)
@@ -250,7 +119,16 @@ class NeuroFlexNN(nn.Module):
             x = self.ui_interaction(x)
         return x
 
-    def _reshape_input_for_rnn(self, x):
+    def simulate_consciousness(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Simulate consciousness by applying a non-linear transformation."""
+        if self.consciousness_sim:
+            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
+            key = jax.random.PRNGKey(0)
+            noise = jax.random.normal(key, x.shape) * 0.1
+            x = x + noise
+        return x
+
+    def _reshape_input_for_rnn(self, x: jnp.ndarray) -> jnp.ndarray:
         """Reshape input for RNN/LSTM processing if necessary."""
         if len(x.shape) == 2:
             return x.reshape(x.shape[0], 1, -1)
@@ -258,25 +136,19 @@ class NeuroFlexNN(nn.Module):
             return x.reshape(x.shape[0], -1, x.shape[-1])
         return x
 
-    def _flatten_if_needed(self, x):
+    def _flatten_if_needed(self, x: jnp.ndarray) -> jnp.ndarray:
         """Flatten the input if it has more than 2 dimensions."""
         if len(x.shape) > 2:
             return x.reshape(x.shape[0], -1)
         return x
 
-    def _apply_dense_layer(self, x, feat, training):
-        """Apply a dense layer with activation and dropout."""
-        x = nn.Dense(feat)(x)
-        x = self.activation(x)
-        return nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
-
-    def _apply_final_layer(self, x):
+    def _apply_final_layer(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply the final layer, either for RL or standard output."""
         if self.use_rl and self.output_dim is not None:
             return nn.Dense(self.output_dim)(x)
         return nn.Dense(self.features[-1])(x)
 
-    def cnn_block(self, x):
+    def cnn_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Convolutional Neural Network block to the input.
         Supports both 2D and 3D convolutions.
@@ -288,48 +160,27 @@ class NeuroFlexNN(nn.Module):
             x = x.reshape((x.shape[0], -1))
         return x
 
-    def rnn_block(self, x):
+    def rnn_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply a Recurrent Neural Network block to the input."""
         rnn = nn.RNN(nn.LSTMCell(features=self.rnn_hidden_size))
         return rnn(x)[0]
 
-    def lstm_block(self, x):
+    def lstm_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Long Short-Term Memory block to the input.
-        Includes detailed shape printing for debugging purposes.
         """
-        class LSTMCellWrapper(nn.Module):
-            features: int
-
-            @nn.compact
-            def __call__(self, carry, x):
-                lstm_cell = nn.LSTMCell(self.features)
-                return lstm_cell(carry, x)
-
         if len(x.shape) == 2:
             x = x.reshape(x.shape[0], 1, -1)
 
         batch_size, seq_len, input_dim = x.shape
-        print(f"Input shape: batch_size={batch_size}, seq_len={seq_len}, "
-              f"input_dim={input_dim}")
-
         lstm_cell = nn.LSTMCell(self.lstm_hidden_size)
-        initial_carry = lstm_cell.initialize_carry(
-            jax.random.PRNGKey(0), (batch_size,)
-        )
-        print("Initial carry shape:",
-              jax.tree.map(lambda x: x.shape, initial_carry))
+        initial_carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,))
 
         def scan_fn(carry, x):
-            lstm_wrapper = LSTMCellWrapper(features=self.lstm_hidden_size)
-            new_carry, output = lstm_wrapper(carry, x)
-            print(f"scan_fn - input x shape: {x.shape}")
-            print("scan_fn - output shapes: "
-                  f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
-                  f"output={output.shape}")
+            new_carry, output = lstm_cell(carry, x)
             return new_carry, output
 
-        final_carry, outputs = nn.scan(
+        _, outputs = nn.scan(
             scan_fn,
             variable_broadcast="params",
             split_rngs={"params": False},
@@ -337,13 +188,9 @@ class NeuroFlexNN(nn.Module):
             out_axes=1,
         )(initial_carry, x)
 
-        print("Outputs shape:", outputs.shape)
-        print("Final carry shape:",
-              jax.tree.map(lambda x: x.shape, final_carry))
-
         return outputs
 
-    def gan_block(self, x):
+    def gan_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Generative Adversarial Network block to the input.
         Includes a generator and discriminator with adversarial training.
@@ -438,7 +285,7 @@ class NeuroFlexNN(nn.Module):
         style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
         return generator.apply({'params': generator.params}, z, style)
 
-    def feature_importance(self, x):
+    def feature_importance(self, x: jnp.ndarray) -> List[jnp.ndarray]:
         """
         Calculate feature importance by tracking activations through the network.
         Returns a list of activations for each layer.
@@ -450,7 +297,7 @@ class NeuroFlexNN(nn.Module):
             activations.append(x)
         return activations
 
-    def apply_fairness_constraint(self, x, sensitive_attribute):
+    def apply_fairness_constraint(self, x: jnp.ndarray, sensitive_attribute: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a fairness constraint to the output based on sensitive attributes.
         Adjusts the output to reduce bias related to the sensitive attribute.
@@ -478,7 +325,7 @@ def create_train_state(rng, model, input_shape, learning_rate):
         elif isinstance(input_shape, (tuple, list)):
             dummy_input = jnp.ones((1,) + tuple(input_shape))
         else:
-            raise ValueError("input_shape must be a jnp.ndarray, tuple, or list")
+            raise ValueError(f"input_shape must be a jnp.ndarray, tuple, or list. Got {type(input_shape)}")
 
         # Initialize the model
         if isinstance(model, (nn.Module, NeuroFlexNN)):
@@ -489,12 +336,10 @@ def create_train_state(rng, model, input_shape, learning_rate):
             params = model['params']
             apply_fn = model['apply_fn']
         else:
-            raise ValueError("model must be an instance of nn.Module, NeuroFlexNN, or a dict containing 'params' and 'apply_fn'")
+            raise ValueError(f"model must be an instance of nn.Module, NeuroFlexNN, or a dict containing 'params' and 'apply_fn'. Got {type(model)}")
 
         # Ensure params is a valid PyTree
-        if not jax.tree_util.tree_is_leaves(params):
-            logging.warning("Model parameters are not leaf nodes. Attempting to flatten.")
-            params = jax.tree_util.tree_map(lambda x: x, params)
+        params = jax.tree_util.tree_map(lambda x: x, params)
 
         # Validate params structure
         try:
