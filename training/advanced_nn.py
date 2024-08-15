@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jax import jit, grad, random
+from jax import jit
 import flax.linen as nn
 from flax.training import train_state
 import optax
@@ -24,31 +24,31 @@ logging.basicConfig(
 
 class NeuroFlexNN(nn.Module):
     """Advanced neural network with various capabilities for flexible and multi-modal learning."""
-    features: Sequence[int]  # Sequence of layer sizes for the neural network
-    activation: Callable = nn.relu  # Activation function to use
-    dropout_rate: float = 0.5  # Dropout rate for regularization
-    fairness_constraint: float = 0.1  # Fairness constraint factor
-    use_cnn: bool = False  # Whether to use Convolutional Neural Network
-    use_rnn: bool = False  # Whether to use Recurrent Neural Network
-    use_lstm: bool = False  # Whether to use Long Short-Term Memory network
-    use_gan: bool = False  # Whether to use Generative Adversarial Network
-    conv_dim: int = 2  # Dimensionality of convolutions (2D or 3D)
-    use_rl: bool = False  # Whether to use Reinforcement Learning
-    output_dim: Optional[int] = None  # Output dimension for RL
-    rnn_hidden_size: int = 64  # Hidden size for RNN
-    lstm_hidden_size: int = 64  # Hidden size for LSTM
-    use_bci: bool = False  # Whether to use Brain-Computer Interface functionality
-    bci_channels: int = 64  # Number of BCI channels
-    bci_sampling_rate: int = 1000  # BCI sampling rate in Hz
-    wireless_latency: float = 0.01  # Simulated wireless latency in seconds
-    bci_signal_processing: str = 'fft'  # BCI signal processing method
-    bci_noise_reduction: bool = False  # Whether to use noise reduction for BCI
-    use_n1_implant: bool = False  # Whether to use N1 implant
-    n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
-    ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
-    consciousness_sim: bool = False  # Whether to use consciousness simulation
-    use_dnn: bool = False  # Whether to use Deep Neural Network
-    dtype: jnp.dtype = jnp.float32  # Data type for the model parameters
+    features: Sequence[int]
+    activation: Callable = nn.relu
+    dropout_rate: float = 0.5
+    fairness_constraint: float = 0.1
+    use_cnn: bool = False
+    use_rnn: bool = False
+    use_lstm: bool = False
+    use_gan: bool = False
+    conv_dim: int = 2
+    use_rl: bool = False
+    output_dim: Optional[int] = None
+    rnn_hidden_size: int = 64
+    lstm_hidden_size: int = 64
+    use_bci: bool = False
+    bci_channels: int = 64
+    bci_sampling_rate: int = 1000
+    wireless_latency: float = 0.01
+    bci_signal_processing: str = 'fft'
+    bci_noise_reduction: bool = False
+    use_n1_implant: bool = False
+    n1_electrode_count: int = 1024
+    ui_feedback_delay: float = 0.05
+    consciousness_sim: bool = False
+    use_dnn: bool = False
+    dtype: jnp.dtype = jnp.float32
 
     def setup(self):
         self.dense_layers = [nn.Dense(feat, dtype=self.dtype) for feat in self.features[:-1]]
@@ -256,13 +256,16 @@ class NeuroFlexNN(nn.Module):
         ))
 
         def train_step(g_params, d_params, g_opt_state, d_opt_state, z, style, x):
-            g_loss_fn = lambda g_p: generator_loss(g_p, d_params, z, style, x)
-            d_loss_fn = lambda d_p: (
-                discriminator_loss(d_p, g_params, z, style, x) +
-                10 * gradient_penalty(
-                    d_p, x, generator.apply({'params': g_params}, z, style)
+            def g_loss_fn(g_p):
+                return generator_loss(g_p, d_params, z, style, x)
+
+            def d_loss_fn(d_p):
+                return (
+                    discriminator_loss(d_p, g_params, z, style, x) +
+                    10 * gradient_penalty(
+                        d_p, x, generator.apply({'params': g_params}, z, style)
+                    )
                 )
-            )
 
             g_loss, g_grads = jax.value_and_grad(g_loss_fn)(g_params)
             d_loss, d_grads = jax.value_and_grad(d_loss_fn)(d_params)
@@ -380,94 +383,26 @@ def create_train_state(rng, model, input_shape, learning_rate):
 
 def initialize_model(rng, model_class, model_params, input_shape):
     """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
+    model = model_class(**model_params) if isinstance(model_class, type) else model_class
     dummy_input = jnp.ones((1,) + tuple(input_shape))
     variables = model.init(rng, dummy_input)
     return model, variables['params']
-
-def initialize_model(rng, model_class, model_params, input_shape):
-    """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
-    dummy_input = jnp.ones((1,) + tuple(input_shape))
-    variables = model.init(rng, dummy_input)
-    return model, variables['params']
-
-def initialize_model(rng, model_class, model_params, input_shape):
-    """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
-    dummy_input = jnp.ones((1,) + tuple(input_shape))
-    variables = model.init(rng, dummy_input)
-    return model, variables['params']
-
-def initialize_model(rng, model_class, model_params, input_shape):
-    """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
-    dummy_input = jnp.ones((1,) + tuple(input_shape))
-    variables = model.init(rng, dummy_input)
-    return model, variables['params']
-
-def initialize_model(rng, model_class, model_params, input_shape):
-    """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
-    dummy_input = jnp.ones((1,) + tuple(input_shape))
-    variables = model.init(rng, dummy_input)
-    return model, variables['params']
-
-def initialize_model(rng, model_class, model_params, input_shape):
-    """Initialize the model without creating a train state."""
-    if isinstance(model_class, type):
-        model = model_class(**model_params)
-    else:
-        model = model_class
-    dummy_input = jnp.ones((1,) + tuple(input_shape))
-    variables = model.init(rng, dummy_input)
-    return model, variables['params']
-
-# Remove the wrapper function as it's no longer needed
-
 
 @jit
 def train_step(state, batch):
     def loss_fn(params):
-        # Handle different input types (image, sequence, etc.)
         if 'image' in batch:
-            logits = state.apply_fn(
-                {'params': params}, batch['image'], method=state.apply_fn.cnn_forward
-            )
+            logits = state.apply_fn({'params': params}, batch['image'], method=state.apply_fn.cnn_forward)
         elif 'sequence' in batch:
-            logits = state.apply_fn(
-                {'params': params}, batch['sequence'],
-                method=state.apply_fn.rnn_forward
-            )
+            logits = state.apply_fn({'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward)
         else:
             logits = state.apply_fn({'params': params}, batch['input'])
 
-        # Compute loss for main task
-        main_loss = optax.softmax_cross_entropy_with_integer_labels(
-            logits, batch['label']
-        ).mean()
+        main_loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch['label']).mean()
 
-        # Compute GAN loss if applicable
         total_loss = main_loss
         if hasattr(state.apply_fn, 'gan_loss'):
-            gan_loss = state.apply_fn(
-                {'params': params}, batch['input'], method=state.apply_fn.gan_loss
-            )
+            gan_loss = state.apply_fn({'params': params}, batch['input'], method=state.apply_fn.gan_loss)
             total_loss += gan_loss
 
         return total_loss, logits

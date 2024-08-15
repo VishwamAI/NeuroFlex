@@ -1,36 +1,22 @@
 import jax
 import jax.numpy as jnp
-from jax import grad, jit, vmap, random
 import flax.linen as nn
 from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable, Any, Dict, Union, List
+from typing import Sequence, Callable, Optional
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
-from jax.example_libraries import stax
-from jax.example_libraries.stax import Conv, Dense, MaxPool, Relu, Flatten, BatchNorm, Dropout
-from jax.example_libraries import optimizers
-import Bio.SeqIO
-import Bio.PDB
 import hmmer
 from alphafold.common import residue_constants
-from alphafold.data.tools import hhsearch
 from alphafold.data import templates
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import scipy.signal as signal
 import pywt
-from functools import partial
-import einops
-import shap
-from tensorflow import keras
-import tensorflow as tf
 from quantum_nn_module import QuantumNeuralNetwork
-from ldm.models.diffusion.ddpm import DDPM, LatentDiffusion
-from ldm.modules.diffusionmodules.util import make_beta_schedule, extract_into_tensor
+from ldm.models.diffusion.ddpm import DDPM
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -43,27 +29,27 @@ class NeuroFlexNN(nn.Module):
     use_rnn: bool = False
     use_lstm: bool = False
     use_gan: bool = False
-    conv_dim: int = 2  # Parameter to specify 2D or 3D convolutions
-    use_rl: bool = False  # Parameter for reinforcement learning
-    output_dim: int = None  # For RL output dimension
+    conv_dim: int = 2
+    use_rl: bool = False
+    output_dim: Optional[int] = None
     rnn_hidden_size: int = 64
     lstm_hidden_size: int = 64
-    use_bci: bool = False  # Parameter for BCI functionality
-    bci_channels: int = 64  # Number of BCI input channels
-    bci_sampling_rate: int = 1000  # Sampling rate of BCI input in Hz
-    wireless_latency: float = 0.01  # Simulated wireless transmission latency in seconds
-    bci_signal_processing: str = 'fft'  # BCI signal processing method ('fft' or 'wavelet')
-    bci_noise_reduction: bool = False  # Apply noise reduction to BCI signals
-    use_n1_implant: bool = False  # Parameter for N1 implant functionality
-    n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
-    ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
-    consciousness_sim: bool = False  # Parameter for consciousness simulation
-    use_xla: bool = False  # Parameter for XLA optimization
-    use_dnn: bool = False  # Parameter for Deep Neural Network
-    use_shap: bool = False  # Parameter for SHAP interpretability
-    use_ddpm: bool = False  # Parameter for DDPM functionality
-    ddpm_timesteps: int = 1000  # Number of timesteps for DDPM
-    ddpm_beta_schedule: str = "linear"  # Beta schedule for DDPM
+    use_bci: bool = False
+    bci_channels: int = 64
+    bci_sampling_rate: int = 1000
+    wireless_latency: float = 0.01
+    bci_signal_processing: str = 'fft'
+    bci_noise_reduction: bool = False
+    use_n1_implant: bool = False
+    n1_electrode_count: int = 1024
+    ui_feedback_delay: float = 0.05
+    consciousness_sim: bool = False
+    use_xla: bool = False
+    use_dnn: bool = False
+    use_shap: bool = False
+    use_ddpm: bool = False
+    ddpm_timesteps: int = 1000
+    ddpm_beta_schedule: str = "linear"
 
     def setup(self):
         if self.use_ddpm:
@@ -647,7 +633,7 @@ def get_batches(data, batch_size):
 # Example usage
 if __name__ == "__main__":
     # Define model architecture class
-    class ModelArchitecture(neuroflexNN):
+    class ModelArchitecture(NeuroFlexNN):
         features = [64, 32, 10]
         activation = nn.relu
         dropout_rate = 0.5

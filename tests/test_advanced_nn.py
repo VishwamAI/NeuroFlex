@@ -1,19 +1,15 @@
 import unittest
 import logging
-from typing import Optional
 import jax
 import jax.numpy as jnp
-from jax import jit, random
-import flax.linen as nn
 from flax.training import train_state
 import gym
 import shap
 import numpy as np
 from training.advanced_nn import (
     data_augmentation, NeuroFlexNN, create_train_state, select_action,
-    interpret_model, adversarial_training
+    adversarial_training
 )
-from alphafold.data import pipeline, templates
 
 logging.basicConfig(level=logging.DEBUG)
 
