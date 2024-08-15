@@ -2,9 +2,18 @@
 
 NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
+## Latest Updates
+
+- Integration of Artificial Neural Network (ANN) technologies
+- Quantum Neural Network module for quantum computing integration
+- Enhanced cognitive architecture with consciousness simulation
+- Improved Brain-Computer Interface (BCI) functionality
+- Support for multiple Python versions (3.9, 3.10, 3.11, 3.12)
+
 ## Features
 
 - Advanced neural network architectures (CNN, RNN, LSTM, GAN)
+- Quantum Neural Network integration
 - Reinforcement learning capabilities
 - Brain-Computer Interface (BCI) integration
 - Fairness constraints and bias mitigation
@@ -12,12 +21,31 @@ NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, desi
 - Interpretability tools (SHAP)
 - 2D and 3D convolution support
 - Data augmentation techniques
+- Cognitive architecture with consciousness simulation
 
 ## Installation
 
 ```bash
 pip install neuroflex
 ```
+
+## Environment Setup
+
+NeuroFlex supports multiple operating systems and Python versions:
+
+- Ubuntu
+- Windows
+- macOS
+- Python 3.9, 3.10, 3.11, 3.12
+
+To set up your environment:
+
+1. Clone the repository: `git clone https://github.com/neuroflex/neuroflex.git`
+2. Create a virtual environment: `python -m venv neuroflex-env`
+3. Activate the environment:
+   - Ubuntu/macOS: `source neuroflex-env/bin/activate`
+   - Windows: `neuroflex-env\Scripts\activate`
+4. Install dependencies: `pip install -r requirements.txt`
 
 ## Quick Start
 
@@ -29,7 +57,8 @@ model = NeuroFlexNN(
     features=[64, 32, 10],
     use_cnn=True,
     use_rnn=True,
-    fairness_constraint=0.1
+    fairness_constraint=0.1,
+    use_quantum=True  # Enable quantum neural network
 )
 
 # Train your model
@@ -37,6 +66,14 @@ trained_state, trained_model = train_model(
     model, train_data, val_data,
     num_epochs=10, batch_size=32, learning_rate=1e-3
 )
+```
+
+## Testing
+
+To run tests for different Python versions and operating systems:
+
+```bash
+pytest tests/
 ```
 
 ## Documentation

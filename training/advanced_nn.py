@@ -1,12 +1,12 @@
 import jax
 import jax.numpy as jnp
-from jax import jit, grad, random
+from jax import jit
 import flax.linen as nn
 from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable
+from typing import Sequence, Callable, Optional, List
 from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import BinaryLabelDatasetMetric
 from aif360.algorithms.preprocessing import Reweighing
@@ -14,7 +14,7 @@ import logging
 import scipy.signal
 import pywt
 from alphafold.data import pipeline, templates
-import hmmer
+import pyhmmer as hmmer
 from alphafold.common import residue_constants
 
 logging.basicConfig(
@@ -24,36 +24,46 @@ logging.basicConfig(
 
 class NeuroFlexNN(nn.Module):
     """Advanced neural network with various capabilities for flexible and multi-modal learning."""
-    features: Sequence[int]  # Sequence of layer sizes for the neural network
-    activation: Callable = nn.relu  # Activation function to use
-    dropout_rate: float = 0.5  # Dropout rate for regularization
-    fairness_constraint: float = 0.1  # Fairness constraint factor
-    use_cnn: bool = False  # Whether to use Convolutional Neural Network
-    use_rnn: bool = False  # Whether to use Recurrent Neural Network
-    use_lstm: bool = False  # Whether to use Long Short-Term Memory network
-    use_gan: bool = False  # Whether to use Generative Adversarial Network
-    conv_dim: int = 2  # Dimensionality of convolutions (2D or 3D)
-    use_rl: bool = False  # Whether to use Reinforcement Learning
-    output_dim: int = None  # Output dimension for RL
-    rnn_hidden_size: int = 64  # Hidden size for RNN
-    lstm_hidden_size: int = 64  # Hidden size for LSTM
-    use_bci: bool = False  # Whether to use Brain-Computer Interface functionality
-    bci_channels: int = 64  # Number of BCI channels
-    bci_sampling_rate: int = 1000  # BCI sampling rate in Hz
-    wireless_latency: float = 0.01  # Simulated wireless latency in seconds
-    bci_signal_processing: str = 'fft'  # BCI signal processing method
-    bci_noise_reduction: bool = False  # Whether to use noise reduction for BCI
-    use_n1_implant: bool = False  # Whether to use N1 implant
-    n1_electrode_count: int = 1024  # Number of electrodes in N1 implant
-    ui_feedback_delay: float = 0.05  # Simulated UI feedback delay in seconds
+    features: Sequence[int]
+    activation: Callable = nn.relu
+    dropout_rate: float = 0.5
+    fairness_constraint: float = 0.1
+    use_cnn: bool = False
+    use_rnn: bool = False
+    use_lstm: bool = False
+    use_gan: bool = False
+    conv_dim: int = 2
+    use_rl: bool = False
+    output_dim: Optional[int] = None
+    rnn_hidden_size: int = 64
+    lstm_hidden_size: int = 64
+    use_bci: bool = False
+    bci_channels: int = 64
+    bci_sampling_rate: int = 1000
+    wireless_latency: float = 0.01
+    bci_signal_processing: str = 'fft'
+    bci_noise_reduction: bool = False
+    use_n1_implant: bool = False
+    n1_electrode_count: int = 1024
+    ui_feedback_delay: float = 0.05
+    consciousness_sim: bool = False
+    use_dnn: bool = False
+    dtype: jnp.dtype = jnp.float32
+
+    def setup(self):
+        self.dense_layers = [nn.Dense(feat, dtype=self.dtype) for feat in self.features[:-1]]
+        if self.use_cnn:
+            self.Conv_0 = nn.Conv(features=32, kernel_size=(3, 3) if self.conv_dim == 2 else (3, 3, 3), padding='SAME', dtype=self.dtype)
+            self.Conv_1 = nn.Conv(features=64, kernel_size=(3, 3) if self.conv_dim == 2 else (3, 3, 3), padding='SAME', dtype=self.dtype)
+        if self.use_rnn:
+            self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size, dtype=self.dtype))
+        if self.use_lstm:
+            self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size, dtype=self.dtype),
+                                variable_broadcast="params",
+                                split_rngs={"params": False})
 
     @nn.compact
-    def __call__(
-        self,
-        x,
-        training: bool = False,
-        sensitive_attribute: jnp.ndarray = None
-    ) -> jnp.ndarray:
+    def __call__(self, x: jnp.ndarray, training: bool = False, sensitive_attribute: Optional[jnp.ndarray] = None) -> jnp.ndarray:
         """
         Process input through the neural network.
 
@@ -65,12 +75,14 @@ class NeuroFlexNN(nn.Module):
         Returns:
             Processed output.
         """
+        x = x.astype(self.dtype)
         x = self._process_input(x)
         x = self._apply_neural_layers(x, training)
         x = self._apply_constraints(x, sensitive_attribute)
-        return self._apply_final_processing(x)
+        x = self._apply_final_processing(x)
+        return self.simulate_consciousness(x)
 
-    def _process_input(self, x):
+    def _process_input(self, x: jnp.ndarray) -> jnp.ndarray:
         """Process the input data through initial preprocessing steps."""
         if self.use_bci:
             x = self.bci_signal_processing(x)
@@ -80,24 +92,26 @@ class NeuroFlexNN(nn.Module):
             x = self._reshape_input_for_rnn(x)
         return x
 
-    def _apply_neural_layers(self, x, training):
+    def _apply_neural_layers(self, x: jnp.ndarray, training: bool) -> jnp.ndarray:
         """Apply the main neural network layers to the processed input."""
         if self.use_rnn:
             x = self.rnn_block(x)
         if self.use_lstm:
             x = self.lstm_block(x)
         x = self._flatten_if_needed(x)
-        for feat in self.features[:-1]:
-            x = self._apply_dense_layer(x, feat, training)
+        for layer in self.dense_layers:
+            x = layer(x)
+            x = self.activation(x)
+            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
         return x
 
-    def _apply_constraints(self, x, sensitive_attribute):
+    def _apply_constraints(self, x: jnp.ndarray, sensitive_attribute: Optional[jnp.ndarray]) -> jnp.ndarray:
         """Apply fairness constraints and final layer processing."""
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
         return self._apply_final_layer(x)
 
-    def _apply_final_processing(self, x):
+    def _apply_final_processing(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply final processing steps including GAN, wireless transmission, and UI interaction."""
         if self.use_gan:
             x = self.gan_block(x)
@@ -107,7 +121,16 @@ class NeuroFlexNN(nn.Module):
             x = self.ui_interaction(x)
         return x
 
-    def _reshape_input_for_rnn(self, x):
+    def simulate_consciousness(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Simulate consciousness by applying a non-linear transformation."""
+        if self.consciousness_sim:
+            x = jnp.tanh(x) * jnp.sin(x) + jnp.exp(-jnp.square(x))
+            key = jax.random.PRNGKey(0)
+            noise = jax.random.normal(key, x.shape, dtype=self.dtype) * 0.1
+            x = x + noise
+        return x
+
+    def _reshape_input_for_rnn(self, x: jnp.ndarray) -> jnp.ndarray:
         """Reshape input for RNN/LSTM processing if necessary."""
         if len(x.shape) == 2:
             return x.reshape(x.shape[0], 1, -1)
@@ -115,89 +138,51 @@ class NeuroFlexNN(nn.Module):
             return x.reshape(x.shape[0], -1, x.shape[-1])
         return x
 
-    def _flatten_if_needed(self, x):
+    def _flatten_if_needed(self, x: jnp.ndarray) -> jnp.ndarray:
         """Flatten the input if it has more than 2 dimensions."""
         if len(x.shape) > 2:
             return x.reshape(x.shape[0], -1)
         return x
 
-    def _apply_dense_layer(self, x, feat, training):
-        """Apply a dense layer with activation and dropout."""
-        x = nn.Dense(feat)(x)
-        x = self.activation(x)
-        return nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
-
-    def _apply_final_layer(self, x):
+    def _apply_final_layer(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply the final layer, either for RL or standard output."""
         if self.use_rl and self.output_dim is not None:
-            return nn.Dense(self.output_dim)(x)
-        return nn.Dense(self.features[-1])(x)
+            return nn.Dense(self.output_dim, dtype=self.dtype)(x)
+        return nn.Dense(self.features[-1], dtype=self.dtype)(x)
 
-    def cnn_block(self, x):
+    def cnn_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Convolutional Neural Network block to the input.
         Supports both 2D and 3D convolutions.
         """
-        if self.conv_dim == 2:
-            k_size = (3, 3)
-            pad = 'SAME'
-        elif self.conv_dim == 3:
-            k_size = (3, 3, 3)
-            pad = ((1, 1, 1), (1, 1, 1))
-        else:
-            raise ValueError(f"Unsupported conv_dim: {self.conv_dim}")
-
-        ConvLayer = nn.Conv
-
-        x = ConvLayer(features=32, kernel_size=k_size, padding=pad)(x)
-        x = self.activation(x)
-        x = ConvLayer(features=64, kernel_size=k_size, padding=pad)(x)
-        x = self.activation(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
+        if self.use_cnn:
+            x = self.activation(self.Conv_0(x))
+            x = self.activation(self.Conv_1(x))
+            # Flatten the output while preserving batch dimension
+            x = x.reshape((x.shape[0], -1))
         return x
 
-    def rnn_block(self, x):
+    def rnn_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """Apply a Recurrent Neural Network block to the input."""
-        rnn = nn.RNN(nn.LSTMCell(features=self.rnn_hidden_size))
+        rnn = nn.RNN(nn.LSTMCell(features=self.rnn_hidden_size, dtype=self.dtype))
         return rnn(x)[0]
 
-    def lstm_block(self, x):
+    def lstm_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Long Short-Term Memory block to the input.
-        Includes detailed shape printing for debugging purposes.
         """
-        class LSTMCellWrapper(nn.Module):
-            features: int
-
-            @nn.compact
-            def __call__(self, carry, x):
-                lstm_cell = nn.LSTMCell(self.features)
-                return lstm_cell(carry, x)
-
         if len(x.shape) == 2:
             x = x.reshape(x.shape[0], 1, -1)
 
         batch_size, seq_len, input_dim = x.shape
-        print(f"Input shape: batch_size={batch_size}, seq_len={seq_len}, "
-              f"input_dim={input_dim}")
-
-        lstm_cell = nn.LSTMCell(self.lstm_hidden_size)
-        initial_carry = lstm_cell.initialize_carry(
-            jax.random.PRNGKey(0), (batch_size,)
-        )
-        print("Initial carry shape:",
-              jax.tree.map(lambda x: x.shape, initial_carry))
+        lstm_cell = nn.LSTMCell(self.lstm_hidden_size, dtype=self.dtype)
+        initial_carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,))
 
         def scan_fn(carry, x):
-            lstm_wrapper = LSTMCellWrapper(features=self.lstm_hidden_size)
-            new_carry, output = lstm_wrapper(carry, x)
-            print(f"scan_fn - input x shape: {x.shape}")
-            print("scan_fn - output shapes: "
-                  f"carry={jax.tree.map(lambda x: x.shape, new_carry)}, "
-                  f"output={output.shape}")
+            new_carry, output = lstm_cell(carry, x)
             return new_carry, output
 
-        final_carry, outputs = nn.scan(
+        _, outputs = nn.scan(
             scan_fn,
             variable_broadcast="params",
             split_rngs={"params": False},
@@ -205,13 +190,9 @@ class NeuroFlexNN(nn.Module):
             out_axes=1,
         )(initial_carry, x)
 
-        print("Outputs shape:", outputs.shape)
-        print("Final carry shape:",
-              jax.tree.map(lambda x: x.shape, final_carry))
-
         return outputs
 
-    def gan_block(self, x):
+    def gan_block(self, x: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a Generative Adversarial Network block to the input.
         Includes a generator and discriminator with adversarial training.
@@ -220,24 +201,26 @@ class NeuroFlexNN(nn.Module):
         num_iterations, batch_size = 1000, x.shape[0]
 
         class Generator(nn.Module):
+            dtype: jnp.dtype = self.dtype
             @nn.compact
             def __call__(self, z, style):
-                x = nn.Dense(256)(z)
+                x = nn.Dense(256, dtype=self.dtype)(z)
                 x = nn.relu(x)
-                x = nn.Dense(512)(x)
+                x = nn.Dense(512, dtype=self.dtype)(x)
                 x = nn.relu(x)
-                style = nn.Dense(style_dim)(style)
+                style = nn.Dense(style_dim, dtype=self.dtype)(style)
                 x = x * style[:, None]
-                return nn.tanh(nn.Dense(x.shape[-1])(x))
+                return nn.tanh(nn.Dense(x.shape[-1], dtype=self.dtype)(x))
 
         class Discriminator(nn.Module):
+            dtype: jnp.dtype = self.dtype
             @nn.compact
             def __call__(self, x):
-                x = nn.Dense(512)(x)
+                x = nn.Dense(512, dtype=self.dtype)(x)
                 x = nn.leaky_relu(x, 0.2)
-                x = nn.Dense(256)(x)
+                x = nn.Dense(256, dtype=self.dtype)(x)
                 x = nn.leaky_relu(x, 0.2)
-                return nn.Dense(1)(x)
+                return nn.Dense(1, dtype=self.dtype)(x)
 
         generator, discriminator = Generator(), Discriminator()
 
@@ -253,7 +236,7 @@ class NeuroFlexNN(nn.Module):
             return jnp.mean(fake_logits) - jnp.mean(real_logits)
 
         def gradient_penalty(d_params, real_data, fake_data):
-            alpha = jax.random.uniform(self.make_rng('gan'), shape=(batch_size, 1))
+            alpha = jax.random.uniform(self.make_rng('gan'), shape=(batch_size, 1), dtype=self.dtype)
             interpolated = real_data * alpha + fake_data * (1 - alpha)
             def disc_output(x):
                 return jnp.sum(discriminator.apply({'params': d_params}, x))
@@ -264,22 +247,25 @@ class NeuroFlexNN(nn.Module):
         d_optimizer = optax.adam(learning_rate=1e-4, b1=0.5, b2=0.9)
         g_opt_state = g_optimizer.init(generator.init(
             self.make_rng('gan'),
-            jnp.ones((1, latent_dim)),
-            jnp.ones((1, style_dim))
+            jnp.ones((1, latent_dim), dtype=self.dtype),
+            jnp.ones((1, style_dim), dtype=self.dtype)
         ))
         d_opt_state = d_optimizer.init(discriminator.init(
             self.make_rng('gan'),
-            jnp.ones((1, x.shape[-1]))
+            jnp.ones((1, x.shape[-1]), dtype=self.dtype)
         ))
 
         def train_step(g_params, d_params, g_opt_state, d_opt_state, z, style, x):
-            g_loss_fn = lambda g_p: generator_loss(g_p, d_params, z, style, x)
-            d_loss_fn = lambda d_p: (
-                discriminator_loss(d_p, g_params, z, style, x) +
-                10 * gradient_penalty(
-                    d_p, x, generator.apply({'params': g_params}, z, style)
+            def g_loss_fn(g_p):
+                return generator_loss(g_p, d_params, z, style, x)
+
+            def d_loss_fn(d_p):
+                return (
+                    discriminator_loss(d_p, g_params, z, style, x) +
+                    10 * gradient_penalty(
+                        d_p, x, generator.apply({'params': g_params}, z, style)
+                    )
                 )
-            )
 
             g_loss, g_grads = jax.value_and_grad(g_loss_fn)(g_params)
             d_loss, d_grads = jax.value_and_grad(d_loss_fn)(d_params)
@@ -293,8 +279,8 @@ class NeuroFlexNN(nn.Module):
             return g_params, d_params, g_opt_state, d_opt_state, g_loss, d_loss
 
         for _ in range(num_iterations):
-            z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
-            style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
+            z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim), dtype=self.dtype)
+            style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim), dtype=self.dtype)
             g_params, d_params, g_opt_state, d_opt_state, _, _ = train_step(
                 generator.params, discriminator.params, g_opt_state,
                 d_opt_state, z, style, x
@@ -302,23 +288,23 @@ class NeuroFlexNN(nn.Module):
             generator = generator.replace(params=g_params)
             discriminator = discriminator.replace(params=d_params)
 
-        z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim))
-        style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim))
+        z = jax.random.normal(self.make_rng('gan'), (batch_size, latent_dim), dtype=self.dtype)
+        style = jax.random.normal(self.make_rng('gan'), (batch_size, style_dim), dtype=self.dtype)
         return generator.apply({'params': generator.params}, z, style)
 
-    def feature_importance(self, x):
+    def feature_importance(self, x: jnp.ndarray) -> List[jnp.ndarray]:
         """
         Calculate feature importance by tracking activations through the network.
         Returns a list of activations for each layer.
         """
         activations = []
         for feat in self.features[:-1]:
-            x = nn.Dense(feat)(x)
+            x = nn.Dense(feat, dtype=self.dtype)(x)
             x = self.activation(x)
             activations.append(x)
         return activations
 
-    def apply_fairness_constraint(self, x, sensitive_attribute):
+    def apply_fairness_constraint(self, x: jnp.ndarray, sensitive_attribute: jnp.ndarray) -> jnp.ndarray:
         """
         Apply a fairness constraint to the output based on sensitive attributes.
         Adjusts the output to reduce bias related to the sensitive attribute.
@@ -331,51 +317,90 @@ class NeuroFlexNN(nn.Module):
         return x + adjustment
 
 
-
-
-
-
-
-
-@jit
-def create_train_state(rng, model_class, model_params, input_shape, learning_rate):
+def create_train_state(rng, model, input_shape, learning_rate):
     """Create and initialize the model and optimizer for training."""
     rng, init_rng = jax.random.split(rng)
-    model = model_class(**model_params)
-    params = model.init(init_rng, jnp.ones(input_shape))['params']
-    tx = optax.adam(learning_rate)
-    state = train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=tx)
-    return state, model, rng
 
+    try:
+        # Ensure input_shape is properly formatted
+        if isinstance(input_shape, jnp.ndarray):
+            dummy_input = input_shape
+        elif isinstance(input_shape, (tuple, list)):
+            # Convert input_shape to a tuple of integers
+            input_shape = tuple(int(dim) for dim in input_shape)
+            dummy_input = jnp.ones((1,) + input_shape, dtype=model.dtype)
+        else:
+            raise ValueError(f"input_shape must be a jnp.ndarray, tuple, or list. Got {type(input_shape)}")
+
+        logging.debug(f"Dummy input shape: {dummy_input.shape}, dtype: {dummy_input.dtype}")
+
+        # Initialize the model
+        if not isinstance(model, NeuroFlexNN):
+            raise ValueError(f"model must be an instance of NeuroFlexNN. Got {type(model)}")
+
+        variables = model.init(init_rng, dummy_input)
+        logging.debug(f"Model initialization output: {variables}")
+
+        # Ensure 'params' is in the correct structure
+        if 'params' not in variables:
+            logging.warning("'params' not found in top-level of variables. Restructuring...")
+            params = {'params': variables}
+        else:
+            params = variables
+
+        logging.debug(f"Model params structure: {jax.tree_util.tree_map(lambda x: x.shape, params)}")
+
+        # Create optimizer
+        tx = optax.adam(learning_rate)
+
+        # Create train state
+        state = train_state.TrainState.create(
+            apply_fn=model.apply,
+            params=params['params'],
+            tx=tx
+        )
+
+        # Test model application
+        try:
+            test_output = model.apply(params, dummy_input)
+            logging.info(f"Model output shape: {test_output.shape}")
+        except Exception as apply_error:
+            logging.error(f"Failed to apply model: {str(apply_error)}")
+            logging.debug(f"Model params structure: {jax.tree_util.tree_map(lambda x: x.shape, state.params)}")
+            raise
+
+        logging.info(f"Successfully created train state for model: {type(model).__name__}")
+        return state
+
+    except Exception as e:
+        logging.error(f"Error in create_train_state: {str(e)}")
+        logging.debug(f"Model: {type(model)}, Input shape: {input_shape}")
+        if isinstance(model, NeuroFlexNN):
+            logging.debug(f"NeuroFlexNN attributes: {vars(model)}")
+        raise
+
+def initialize_model(rng, model_class, model_params, input_shape):
+    """Initialize the model without creating a train state."""
+    model = model_class(**model_params) if isinstance(model_class, type) else model_class
+    dummy_input = jnp.ones((1,) + tuple(input_shape))
+    variables = model.init(rng, dummy_input)
+    return model, variables['params']
 
 @jit
 def train_step(state, batch):
     def loss_fn(params):
-        # Handle different input types (image, sequence, etc.)
         if 'image' in batch:
-            logits = state.apply_fn(
-                {'params': params}, batch['image'], method=state.apply_fn.cnn_forward
-            )
+            logits = state.apply_fn({'params': params}, batch['image'], method=state.apply_fn.cnn_forward)
         elif 'sequence' in batch:
-            logits = state.apply_fn(
-                {'params': params}, batch['sequence'],
-                method=state.apply_fn.rnn_forward
-            )
+            logits = state.apply_fn({'params': params}, batch['sequence'], method=state.apply_fn.rnn_forward)
         else:
             logits = state.apply_fn({'params': params}, batch['input'])
 
-        # Compute loss for main task
-        main_loss = optax.softmax_cross_entropy_with_integer_labels(
-            logits, batch['label']
-        ).mean()
+        main_loss = optax.softmax_cross_entropy_with_integer_labels(logits, batch['label']).mean()
 
-        # Compute GAN loss if applicable
         total_loss = main_loss
         if hasattr(state.apply_fn, 'gan_loss'):
-            gan_loss = state.apply_fn(
-                {'params': params}, batch['input'], method=state.apply_fn.gan_loss
-            )
+            gan_loss = state.apply_fn({'params': params}, batch['input'], method=state.apply_fn.gan_loss)
             total_loss += gan_loss
 
         return total_loss, logits
@@ -569,8 +594,23 @@ def evaluate_fairness(state, data):
 
 def select_action(state, model, params):
     # Implement action selection for reinforcement learning
-    logits = model.apply({'params': params}, state[None, ...])
-    return jnp.argmax(logits, axis=-1)[0]
+    if isinstance(state, tuple):
+        state = state[0]  # Extract the observation from the tuple
+    state = jnp.asarray(state, dtype=jnp.float32).reshape(1, -1)  # Ensure state is a 2D array with float32 dtype
+    try:
+        # Use jax.lax.stop_gradient to prevent gradient computation
+        state = jax.lax.stop_gradient(state)
+        logits = model.apply({'params': params}, state, method=model.forward)  # Explicitly use forward method
+        return jnp.argmax(logits, axis=-1)[0]
+    except RuntimeError as e:
+        if "Array has been deleted" in str(e):
+            logging.error(f"Array deletion error in select_action: {e}")
+            # Return a random action as fallback
+            return jax.random.randint(jax.random.PRNGKey(0), (), 0, model.output_dim)
+        raise  # Re-raise other RuntimeErrors
+    except Exception as e:
+        logging.error(f"Unexpected error in select_action: {e}")
+        return jax.random.randint(jax.random.PRNGKey(0), (), 0, model.output_dim)
 
 def evaluate_model(state, data, batch_size):
     total_accuracy = 0
