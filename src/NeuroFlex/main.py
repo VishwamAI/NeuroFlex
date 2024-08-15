@@ -66,16 +66,20 @@ class NeuroFlexNN(nn.Module):
             )
         if self.use_vae:
             # Determine input shape based on the first feature dimension
-            if isinstance(self.features[0], (tuple, list)):
-                input_shape = self.features[0]
-            else:
-                input_shape = (self.features[0],)
-
+            input_shape = (self.features[0],) if isinstance(self.features[0], int) else self.features[0]
             self.vae = VAE(
                 latent_dim=self.vae_latent_dim,
                 hidden_dim=self.vae_hidden_dim,
                 input_shape=input_shape
             )
+        if self.use_cnn:
+            self.Conv = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        if self.use_rnn:
+            self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
+        if self.use_lstm:
+            self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
+                                variable_broadcast="params",
+                                split_rngs={"params": False})
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
