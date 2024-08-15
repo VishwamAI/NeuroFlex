@@ -29,10 +29,12 @@ import shap
 from tensorflow import keras
 import tensorflow as tf
 from quantum_nn_module import QuantumNeuralNetwork
+from ldm.models.diffusion.ddpm import DDPM, LatentDiffusion
+from ldm.modules.diffusionmodules.util import make_beta_schedule, extract_into_tensor
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class neuroflexNN(nn.Module):
+class NeuroFlexNN(nn.Module):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -59,6 +61,17 @@ class neuroflexNN(nn.Module):
     use_xla: bool = False  # Parameter for XLA optimization
     use_dnn: bool = False  # Parameter for Deep Neural Network
     use_shap: bool = False  # Parameter for SHAP interpretability
+    use_ddpm: bool = False  # Parameter for DDPM functionality
+    ddpm_timesteps: int = 1000  # Number of timesteps for DDPM
+    ddpm_beta_schedule: str = "linear"  # Beta schedule for DDPM
+
+    def setup(self):
+        if self.use_ddpm:
+            self.ddpm = DDPM(
+                unet_config={},  # Add appropriate UNet config
+                timesteps=self.ddpm_timesteps,
+                beta_schedule=self.ddpm_beta_schedule,
+            )
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
@@ -109,6 +122,10 @@ class neuroflexNN(nn.Module):
         if self.use_gan:
             x = self.gan_block(x)
 
+        # DDPM processing
+        if self.use_ddpm:
+            x = self.ddpm_block(x, training)
+
         # Wireless data transmission simulation
         if self.use_wireless:
             x = self.wireless_transmission(x)
@@ -123,6 +140,22 @@ class neuroflexNN(nn.Module):
 
         if self.use_xla:
             x = self.xla_optimization(x)
+
+        return x
+
+    def ddpm_block(self, x, training):
+        # Reshape x to match DDPM input requirements if necessary
+        x = x.reshape((-1,) + self.ddpm.image_size)
+
+        if training:
+            # During training, add noise and try to denoise
+            t = jax.random.randint(jax.random.PRNGKey(0), (x.shape[0],), 0, self.ddpm_timesteps)
+            noise = jax.random.normal(jax.random.PRNGKey(1), x.shape)
+            noisy_x = self.ddpm.q_sample(x, t, noise=noise)
+            return self.ddpm(noisy_x, t)
+        else:
+            # During inference, run the full denoising process
+            return self.ddpm.p_sample_loop(shape=x.shape)
 
         if self.use_shap and not training:
             self.compute_shap_values(x)

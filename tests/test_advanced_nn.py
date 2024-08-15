@@ -150,15 +150,16 @@ class TestReinforcementLearning(unittest.TestCase):
         self.model_params = {
             'features': [64, 32, self.action_space],
             'use_rl': True,
-            'output_dim': self.action_space
+            'output_dim': self.action_space,
+            'dtype': jnp.float32
         }
 
     def test_rl_model_initialization(self):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
             self.assertIsNotNone(state)
             self.assertIsInstance(state, train_state.TrainState)
             self.assertIn('params', state.params)
@@ -173,12 +174,11 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
-            observation = jnp.array(self.env.reset())
-            # Handle batched input correctly
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
+            observation = jnp.array(self.env.reset(), dtype=self.model_params['dtype'])
             batched_observation = observation[None, ...]
-            action = select_action(batched_observation, model, state.params)
+            action = select_action(batched_observation, state)
             self.assertIsInstance(action, jax.numpy.ndarray)
             self.assertEqual(action.shape, (1,))
             self.assertTrue(0 <= int(action[0]) < self.action_space)
@@ -190,11 +190,11 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
-            observation = jnp.array(self.env.reset())
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
+            observation = jnp.array(self.env.reset(), dtype=self.model_params['dtype'])
             batched_observation = observation[None, ...]
-            output = model.apply({'params': state.params}, batched_observation)
+            output = state.apply_fn({'params': state.params}, batched_observation)
             self.assertEqual(output.shape, (1, self.action_space))
         except Exception as e:
             logging.error(f"Model output test failed: {str(e)}")
@@ -204,8 +204,8 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
             self.assertIsInstance(model, NeuroFlexNN)
             self.assertEqual(model.features, [64, 32, self.action_space])
             self.assertTrue(model.use_rl)
@@ -218,11 +218,11 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
-            observation = jnp.array(self.env.reset())
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
+            observation = jnp.array(self.env.reset(), dtype=self.model_params['dtype'])
             batched_observation = observation[None, ...]
-            output = model.apply({'params': state.params}, batched_observation)
+            output = state.apply_fn({'params': state.params}, batched_observation)
             self.assertEqual(output.shape, (1, self.action_space))
         except Exception as e:
             logging.error(f"Model application failed: {str(e)}")
@@ -232,8 +232,8 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
-            state, _, _ = create_train_state(rng, model, dummy_input.shape, 1e-3)
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            state = create_train_state(rng, model, dummy_input, 1e-3)
             self.assertIsNotNone(state)
             self.assertIsInstance(state, train_state.TrainState)
         except Exception as e:
@@ -243,7 +243,7 @@ class TestReinforcementLearning(unittest.TestCase):
     def test_model_structure(self):
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape)
+            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
             model_structure = model.tabulate(jax.random.PRNGKey(0), dummy_input)
             logging.info(f"Model structure:\n{model_structure}")
             self.assertIsNotNone(model_structure)
@@ -354,8 +354,8 @@ class TestSHAPInterpretability(unittest.TestCase):
         expected_value = jnp.array(explainer.expected_value)
         if len(expected_value.shape) == 0:
             expected_value = expected_value.reshape(1)
-        total_shap = jnp.sum(shap_values_jax, axis=-1)  # Sum over features
-        model_output_diff = model_output - expected_value.reshape(-1, 1)
+        total_shap = jnp.sum(shap_values_jax, axis=(-2, -1))  # Sum over samples and features
+        model_output_diff = jnp.sum(model_output, axis=0) - expected_value * model_output.shape[0]
 
         # Log shapes and values for debugging
         logging.debug(f"Expected value shape: {expected_value.shape}")
