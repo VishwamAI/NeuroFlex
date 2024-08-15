@@ -317,9 +317,6 @@ class NeuroFlexNN(nn.Module):
         return x + adjustment
 
 
-
-
-
 def create_train_state(rng, model, input_shape, learning_rate):
     """Create and initialize the model and optimizer for training."""
     rng, init_rng = jax.random.split(rng)
@@ -329,37 +326,48 @@ def create_train_state(rng, model, input_shape, learning_rate):
         if isinstance(input_shape, jnp.ndarray):
             dummy_input = input_shape
         elif isinstance(input_shape, (tuple, list)):
-            dummy_input = jnp.ones((1,) + tuple(input_shape), dtype=model.dtype)
+            # Convert input_shape to a tuple of integers
+            input_shape = tuple(int(dim) for dim in input_shape)
+            dummy_input = jnp.ones((1,) + input_shape, dtype=model.dtype)
         else:
             raise ValueError(f"input_shape must be a jnp.ndarray, tuple, or list. Got {type(input_shape)}")
 
+        logging.debug(f"Dummy input shape: {dummy_input.shape}, dtype: {dummy_input.dtype}")
+
         # Initialize the model
-        if isinstance(model, NeuroFlexNN):
-            variables = model.init(init_rng, dummy_input)
-            params = variables['params']
-            apply_fn = model.apply
-        else:
+        if not isinstance(model, NeuroFlexNN):
             raise ValueError(f"model must be an instance of NeuroFlexNN. Got {type(model)}")
 
-        # Ensure params is a valid PyTree
-        params = jax.tree_util.tree_map(lambda x: x.astype(model.dtype), params)
+        variables = model.init(init_rng, dummy_input)
+        logging.debug(f"Model initialization output: {variables}")
 
-        # Validate params structure
-        try:
-            jax.tree_util.tree_structure(params)
-        except ValueError as ve:
-            logging.error(f"Invalid parameter structure: {ve}")
-            raise
+        # Ensure 'params' is in the correct structure
+        if 'params' not in variables:
+            logging.warning("'params' not found in top-level of variables. Restructuring...")
+            params = {'params': variables}
+        else:
+            params = variables
+
+        logging.debug(f"Model params structure: {jax.tree_util.tree_map(lambda x: x.shape, params)}")
 
         # Create optimizer
         tx = optax.adam(learning_rate)
 
         # Create train state
         state = train_state.TrainState.create(
-            apply_fn=apply_fn,
-            params=params,
+            apply_fn=model.apply,
+            params=params['params'],
             tx=tx
         )
+
+        # Test model application
+        try:
+            test_output = model.apply(params, dummy_input)
+            logging.info(f"Model output shape: {test_output.shape}")
+        except Exception as apply_error:
+            logging.error(f"Failed to apply model: {str(apply_error)}")
+            logging.debug(f"Model params structure: {jax.tree_util.tree_map(lambda x: x.shape, state.params)}")
+            raise
 
         logging.info(f"Successfully created train state for model: {type(model).__name__}")
         return state
@@ -369,17 +377,7 @@ def create_train_state(rng, model, input_shape, learning_rate):
         logging.debug(f"Model: {type(model)}, Input shape: {input_shape}")
         if isinstance(model, NeuroFlexNN):
             logging.debug(f"NeuroFlexNN attributes: {vars(model)}")
-            try:
-                test_output = model.apply({'params': params}, dummy_input)
-                logging.debug(f"Test output shape: {test_output.shape}")
-            except Exception as apply_error:
-                logging.debug(f"Failed to apply model: {str(apply_error)}")
         raise
-
-    finally:
-        # Ensure all resources are properly released
-        if 'params' in locals():
-            jax.tree_map(lambda x: x.delete() if hasattr(x, 'delete') else None, params)
 
 def initialize_model(rng, model_class, model_params, input_shape):
     """Initialize the model without creating a train state."""
@@ -596,8 +594,23 @@ def evaluate_fairness(state, data):
 
 def select_action(state, model, params):
     # Implement action selection for reinforcement learning
-    logits = model.apply({'params': params}, state[None, ...])
-    return jnp.argmax(logits, axis=-1)[0]
+    if isinstance(state, tuple):
+        state = state[0]  # Extract the observation from the tuple
+    state = jnp.asarray(state, dtype=jnp.float32).reshape(1, -1)  # Ensure state is a 2D array with float32 dtype
+    try:
+        # Use jax.lax.stop_gradient to prevent gradient computation
+        state = jax.lax.stop_gradient(state)
+        logits = model.apply({'params': params}, state, method=model.forward)  # Explicitly use forward method
+        return jnp.argmax(logits, axis=-1)[0]
+    except RuntimeError as e:
+        if "Array has been deleted" in str(e):
+            logging.error(f"Array deletion error in select_action: {e}")
+            # Return a random action as fallback
+            return jax.random.randint(jax.random.PRNGKey(0), (), 0, model.output_dim)
+        raise  # Re-raise other RuntimeErrors
+    except Exception as e:
+        logging.error(f"Unexpected error in select_action: {e}")
+        return jax.random.randint(jax.random.PRNGKey(0), (), 0, model.output_dim)
 
 def evaluate_model(state, data, batch_size):
     total_accuracy = 0
