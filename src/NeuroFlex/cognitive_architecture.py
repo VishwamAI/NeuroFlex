@@ -5,7 +5,28 @@ from typing import Dict, List, Tuple
 from .advanced_thinking import CDSTDP
 
 class CognitiveArchitecture:
+    """
+    A cognitive architecture that simulates various aspects of cognition including
+    sensory processing, consciousness, and feedback mechanisms.
+
+    This class integrates multiple cognitive processes to create a simplified model
+    of a cognitive system, utilizing concepts from neuroscience and cognitive science.
+
+    Attributes:
+        config (Dict): Configuration parameters for the cognitive architecture.
+        cdstdp (CDSTDP): An instance of the Consciousness-Driven Spike-Timing-Dependent Plasticity model.
+        sensory_modules (Dict): A dictionary of sensory processing modules.
+        consciousness_module (jnp.ndarray): A representation of the consciousness module.
+        feedback_mechanism (jnp.ndarray): A representation of the feedback mechanism.
+    """
+
     def __init__(self, config: Dict):
+        """
+        Initialize the CognitiveArchitecture with the given configuration.
+
+        Args:
+            config (Dict): Configuration parameters for the cognitive architecture.
+        """
         self.config = config
         self.cdstdp = CDSTDP()
         self.sensory_modules = self._initialize_sensory_modules()
@@ -13,7 +34,12 @@ class CognitiveArchitecture:
         self.feedback_mechanism = self._initialize_feedback_mechanism()
 
     def _initialize_sensory_modules(self) -> Dict:
-        # Placeholder for different sensory modules (vision, audition, etc.)
+        """
+        Initialize the sensory processing modules.
+
+        Returns:
+            Dict: A dictionary of sensory modules with random initial states.
+        """
         return {
             "vision": jax.random.normal(jax.random.PRNGKey(0), (100,)),
             "audition": jax.random.normal(jax.random.PRNGKey(1), (100,)),
@@ -21,32 +47,78 @@ class CognitiveArchitecture:
         }
 
     def _initialize_consciousness_module(self) -> jnp.ndarray:
-        # Placeholder for consciousness module
+        """
+        Initialize the consciousness module.
+
+        Returns:
+            jnp.ndarray: A random initial state for the consciousness module.
+        """
         return jax.random.normal(jax.random.PRNGKey(3), (100,))
 
     def _initialize_feedback_mechanism(self) -> jnp.ndarray:
-        # Placeholder for feedback mechanism
+        """
+        Initialize the feedback mechanism.
+
+        Returns:
+            jnp.ndarray: A random initial state for the feedback mechanism.
+        """
         return jax.random.normal(jax.random.PRNGKey(4), (100,))
 
     @jit
     def integrate_sensory_inputs(self, inputs: Dict[str, jnp.ndarray]) -> jnp.ndarray:
-        # Multi-modal sensory integration
+        """
+        Integrate multi-modal sensory inputs.
+
+        Args:
+            inputs (Dict[str, jnp.ndarray]): A dictionary of sensory inputs.
+
+        Returns:
+            jnp.ndarray: The integrated sensory input.
+        """
         integrated = jnp.concatenate([inputs[key] for key in self.sensory_modules.keys()])
         return jax.nn.relu(integrated)
 
     @jit
     def process_consciousness(self, integrated_input: jnp.ndarray) -> jnp.ndarray:
-        # Simulate subjective consciousness and qualia
+        """
+        Process the integrated input through the consciousness module.
+
+        Args:
+            integrated_input (jnp.ndarray): The integrated sensory input.
+
+        Returns:
+            jnp.ndarray: The processed consciousness state.
+        """
         consciousness_state = self.consciousness_module + integrated_input
         return jax.nn.sigmoid(consciousness_state)
 
     @jit
     def apply_feedback(self, consciousness_state: jnp.ndarray) -> jnp.ndarray:
-        # Apply feedback for self-awareness and adaptability
+        """
+        Apply feedback based on the current consciousness state.
+
+        Args:
+            consciousness_state (jnp.ndarray): The current consciousness state.
+
+        Returns:
+            jnp.ndarray: The feedback signal.
+        """
         feedback = jnp.dot(self.feedback_mechanism, consciousness_state)
         return jax.nn.tanh(feedback)
 
     def update_architecture(self, inputs: Dict[str, jnp.ndarray]) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Update the cognitive architecture based on new inputs.
+
+        This method integrates sensory inputs, processes consciousness, applies feedback,
+        and updates the sensory modules using CD-STDP.
+
+        Args:
+            inputs (Dict[str, jnp.ndarray]): A dictionary of new sensory inputs.
+
+        Returns:
+            Tuple[jnp.ndarray, jnp.ndarray]: The updated consciousness state and feedback.
+        """
         integrated = self.integrate_sensory_inputs(inputs)
         consciousness_state = self.process_consciousness(integrated)
         feedback = self.apply_feedback(consciousness_state)
@@ -63,8 +135,17 @@ class CognitiveArchitecture:
         return consciousness_state, feedback
 
     def agi_prototype_module(self, input_data: jnp.ndarray) -> jnp.ndarray:
-        # Placeholder for AGI prototyping
-        # This method can be expanded to implement more advanced AGI concepts
+        """
+        A prototype module for Artificial General Intelligence (AGI) concepts.
+
+        This method serves as a placeholder for implementing more advanced AGI concepts.
+
+        Args:
+            input_data (jnp.ndarray): Input data for the AGI module.
+
+        Returns:
+            jnp.ndarray: Processed output from the AGI module.
+        """
         return jax.nn.softmax(input_data)
 
 def test_cognitive_architecture():
