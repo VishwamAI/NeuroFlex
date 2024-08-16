@@ -20,10 +20,14 @@ from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
 from vae import VAE
 import pyhmmer
+from art.attacks.evasion import FastGradientMethod
+from art.estimators.classification import JAXClassifier
+import lale
+from lale import operators as lale_ops
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class NeuroFlexNN(nn.Module):
+class NeuroFlex(nn.Module):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -56,7 +60,11 @@ class NeuroFlexNN(nn.Module):
     use_vae: bool = False
     vae_latent_dim: int = 32
     vae_hidden_dim: int = 256
-
+    use_art: bool = False
+    art_attack_type: str = 'fgsm'
+    art_epsilon: float = 0.3
+    use_lale: bool = False
+    lale_operator: Optional[str] = None
     def setup(self):
         if self.use_ddpm:
             self.ddpm = DDPM(
@@ -80,6 +88,27 @@ class NeuroFlexNN(nn.Module):
             self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
                                 variable_broadcast="params",
                                 split_rngs={"params": False})
+        if self.use_lale:
+            self.lale_pipeline = self.setup_lale_pipeline()
+
+    def setup_lale_pipeline(self):
+        # Define a basic Lale pipeline
+        from lale import operators as lale_ops
+        from lale.lib.sklearn import LogisticRegression, RandomForestClassifier
+
+        # Create a choice between LogisticRegression and RandomForestClassifier
+        classifier = lale_ops.make_choice(
+            LogisticRegression, RandomForestClassifier
+        )
+
+        # Create a pipeline with the classifier
+        pipeline = classifier
+
+        # If a specific Lale operator is specified, use it instead
+        if self.lale_operator:
+            pipeline = getattr(lale_ops, self.lale_operator)()
+
+        return pipeline
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
@@ -165,7 +194,39 @@ class NeuroFlexNN(nn.Module):
         if self.use_xla:
             x = self.xla_optimization(x)
 
+        # ART adversarial example generation
+        if self.use_art and training:
+            x = self.generate_adversarial_examples(x)
+
+        # Lale integration for AutoML
+        if self.use_lale:
+            x = self.apply_lale_automl(x)
+
+        # Ensure the output is 2D
+        if len(x.shape) > 2:
+            x = x.reshape(x.shape[0], -1)
+
         return x
+
+    def generate_adversarial_examples(self, x):
+        from art.attacks.evasion import FastGradientMethod
+        from art.estimators.classification import JAXClassifier
+
+        # Create a JAXClassifier wrapper for our model
+        classifier = JAXClassifier(
+            model=lambda x: self.apply({'params': self.params}, x),
+            loss=lambda x, y: optax.softmax_cross_entropy(x, y),
+            input_shape=x.shape[1:],
+            nb_classes=self.features[-1]
+        )
+
+        # Create the attack
+        attack = FastGradientMethod(classifier, eps=0.3)
+
+        # Generate adversarial examples
+        x_adv = attack.generate(x)
+
+        return x_adv
 
     def ddpm_block(self, x, training):
         # Reshape x to match DDPM input requirements if necessary
@@ -461,19 +522,26 @@ def interpret_model(model, params, input_data):
 
     return shap_values
 
-# Implement FGSM for adversarial training
+
+
 def adversarial_training(model, params, input_data, epsilon):
-    def loss_fn(params, x, y):
-        logits = model.apply({'params': params}, x)
-        return optax.softmax_cross_entropy_with_integer_labels(logits, y).mean()
+    # Create a JaxClassifier wrapper for the model
+    def model_predict(x):
+        return model.apply({'params': params}, x)
 
-    grad_fn = jax.grad(loss_fn, argnums=1)
+    classifier = JaxClassifier(
+        model=model_predict,
+        input_shape=input_data['image'].shape[1:],
+        nb_classes=model.features[-1],
+        clip_values=(0, 1)
+    )
 
-    def fgsm_attack(params, x, y):
-        grads = grad_fn(params, x, y)
-        return x + epsilon * jnp.sign(grads)
+    # Create FGSM attack
+    fgsm = FastGradientMethod(estimator=classifier, eps=epsilon)
 
-    perturbed_input = fgsm_attack(params, input_data['image'], input_data['label'])
+    # Generate adversarial examples
+    perturbed_input = fgsm.generate(x=input_data['image'])
+
     return {'image': perturbed_input, 'label': input_data['label']}
 
 # Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
