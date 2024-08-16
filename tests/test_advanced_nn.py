@@ -2,11 +2,13 @@ import unittest
 import logging
 import jax
 import jax.numpy as jnp
+from jax import random, jit
 from flax.training import train_state
 import gym
 import shap
 import numpy as np
-from training.advanced_nn import (
+from optax import adam
+from NeuroFlex.advanced_thinking import (
     data_augmentation, NeuroFlexNN, create_train_state, select_action,
     adversarial_training
 )
@@ -104,7 +106,6 @@ class TestXLAOptimizations(unittest.TestCase):
         # Check output shape
         self.assertEqual(jit_output.shape, (1, 10))
 
-
 class TestConvolutionLayers(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
@@ -112,30 +113,38 @@ class TestConvolutionLayers(unittest.TestCase):
         self.input_shape_3d = (1, 16, 16, 16, 1)
 
     def test_2d_convolution(self):
-        model = NeuroFlexNN(features=[32, 10], use_cnn=True, conv_dim=2)
+        model = NeuroFlexNN(features=[32, 10], use_cnn=True)
         variables = model.init(self.rng, jnp.ones(self.input_shape_2d))
         params = variables['params']
         output = model.apply(variables, jnp.ones(self.input_shape_2d))
         self.assertEqual(output.shape, (1, 10))
-        self.assertIn('Conv_0', params)
-        self.assertIn('Conv_1', params)
+        self.assertIn('conv1', params)
+        self.assertIn('conv2', params)
         cnn_output = model.apply(variables, jnp.ones(self.input_shape_2d), method=model.cnn_block)
         self.assertIsInstance(cnn_output, jnp.ndarray)
-        expected_shape = (1, 28 * 28 * 64)  # Flattened output shape
+        expected_shape = (1, 7, 7, 64)  # Updated CNN output shape
         self.assertEqual(cnn_output.shape, expected_shape)
+        self.assertTrue(jnp.all(jnp.isfinite(cnn_output)), "CNN output should contain only finite values")
+        self.assertTrue(jnp.any(cnn_output != 0), "CNN output should not be all zeros")
+        self.assertTrue(jnp.all(cnn_output >= 0), "CNN output should be non-negative after ReLU")
+        self.assertLess(jnp.max(cnn_output), 1e5, "CNN output values should be reasonably bounded")
 
     def test_3d_convolution(self):
-        model = NeuroFlexNN(features=[32, 10], use_cnn=True, conv_dim=3)
+        model = NeuroFlexNN(features=[32, 10], use_cnn=True)
         variables = model.init(self.rng, jnp.ones(self.input_shape_3d))
         params = variables['params']
         output = model.apply(variables, jnp.ones(self.input_shape_3d))
         self.assertEqual(output.shape, (1, 10))
-        self.assertIn('Conv_0', params)
-        self.assertIn('Conv_1', params)
+        self.assertIn('conv1', params)
+        self.assertIn('conv2', params)
         cnn_output = model.apply(variables, jnp.ones(self.input_shape_3d), method=model.cnn_block)
         self.assertIsInstance(cnn_output, jnp.ndarray)
-        expected_shape = (1, 16 * 16 * 16 * 64)  # Flattened output shape
+        expected_shape = (1, 4, 4, 4, 64)  # Updated CNN output shape for 3D
         self.assertEqual(cnn_output.shape, expected_shape)
+        self.assertTrue(jnp.all(jnp.isfinite(cnn_output)), "CNN output should contain only finite values")
+        self.assertTrue(jnp.any(cnn_output != 0), "CNN output should not be all zeros")
+        self.assertTrue(jnp.all(cnn_output >= 0), "CNN output should be non-negative after ReLU")
+        self.assertLess(jnp.max(cnn_output), 1e5, "CNN output values should be reasonably bounded")
 
 
 class TestReinforcementLearning(unittest.TestCase):
@@ -187,13 +196,29 @@ class TestReinforcementLearning(unittest.TestCase):
             state = create_train_state(rng, model, dummy_input, 1e-3)
             observation, _ = self.env.reset()
             observation = jnp.array(observation, dtype=self.model_params['dtype'])
-            action = select_action(observation, model, state.params)
+
+            # Test single observation
+            batched_observation = observation[None, ...]
+            action = select_action(batched_observation, model, state.params)
             self.assertIsInstance(action, jax.numpy.ndarray)
-            self.assertEqual(action.shape, ())
-            self.assertTrue(0 <= int(action) < self.action_space)
+            self.assertEqual(action.shape, (1,), "Single action should have shape (1,)")
+            self.assertTrue(0 <= int(action[0]) < self.action_space,
+                            f"Action {action[0]} not in valid range [0, {self.action_space})")
+
+            # Test with multiple observations in a batch
+            batch_size = 5
+            batch_observations = jnp.stack([observation] * batch_size)
+            batch_actions = select_action(batch_observations, model, state.params)
+            self.assertEqual(batch_actions.shape, (batch_size,),
+                             f"Batch actions shape should be ({batch_size},)")
+            self.assertTrue(jnp.all((0 <= batch_actions) & (batch_actions < self.action_space)),
+                            "All batch actions should be in valid range")
+
         except Exception as e:
             logging.error(f"Action selection test failed: {str(e)}")
-            self.fail(f"Action selection test failed: {str(e)}")
+            self.fail(f"Action selection test failed: {str(e)}\n"
+                      f"Model params: {self.model_params}\n"
+                      f"Observation shape: {observation.shape}")
 
     def test_model_output(self):
         rng = jax.random.PRNGKey(0)
@@ -248,7 +273,6 @@ class TestReinforcementLearning(unittest.TestCase):
             self.assertIsNotNone(state)
             self.assertIsInstance(state, train_state.TrainState)
             self.assertIsInstance(state.params, dict)
-            # Removed assertion checking for 'params' in layer keys
         except Exception as e:
             logging.error(f"create_train_state failed: {str(e)}")
             self.fail(f"create_train_state failed: {str(e)}")
@@ -290,13 +314,28 @@ class TestDNNBlock(unittest.TestCase):
     def test_dnn_block(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
         output = self.model.apply({'params': params}, jnp.ones(self.input_shape))
+
+        # Check output shape
         self.assertEqual(output.shape, (1, 16))
 
-        # Check if DNN block is applied by verifying the presence of dense layers
-        self.assertTrue(any('Dense' in layer_name for layer_name in params.keys()))
+        # Verify the presence and correct sizes of dense layers
+        self.assertIn('Dense_0', params)
+        self.assertEqual(params['Dense_0']['kernel'].shape, (100, 64))
+        self.assertIn('Dense_1', params)
+        self.assertEqual(params['Dense_1']['kernel'].shape, (64, 32))
+        self.assertIn('Dense_2', params)
+        self.assertEqual(params['Dense_2']['kernel'].shape, (32, 16))
+
+        # Check for ReLU activation
+        intermediate_output = self.model.apply({'params': params}, jnp.ones(self.input_shape), method=lambda m, x: m.dense_layers[0](x))
+        self.assertTrue(jnp.all(intermediate_output >= 0), "ReLU activation should produce non-negative values")
 
         # Verify that the output is different from the input, indicating processing
         self.assertFalse(jnp.allclose(output, jnp.ones(output.shape)))
+
+        # Check if output values are within a reasonable range
+        self.assertTrue(jnp.all(jnp.isfinite(output)), "Output should contain only finite values")
+        self.assertLess(jnp.max(jnp.abs(output)), 1e5, "Output values should be reasonably bounded")
 
 
 class TestSHAPInterpretability(unittest.TestCase):
@@ -442,9 +481,27 @@ class TestAdversarialTraining(unittest.TestCase):
         }
         epsilon = 0.1
         perturbed_input = adversarial_training(self.model, params, input_data, epsilon)
+
+        # Check if perturbed input is not None
         self.assertIsNotNone(perturbed_input)
+
+        # Check if perturbed input has the same shape as original input
         self.assertEqual(perturbed_input['image'].shape, self.input_shape)
+
+        # Check if perturbed input is different from original input
         self.assertFalse(jnp.allclose(perturbed_input['image'], input_data['image']))
+
+        # Check if the magnitude of perturbation is within epsilon
+        perturbation = perturbed_input['image'] - input_data['image']
+        self.assertTrue(jnp.all(jnp.abs(perturbation) <= epsilon))
+
+        # Check if the perturbation changes the model's output
+        original_output = self.model.apply({'params': params}, input_data['image'])
+        perturbed_output = self.model.apply({'params': params}, perturbed_input['image'])
+        self.assertFalse(jnp.allclose(original_output, perturbed_output))
+
+        # Check if the label remains unchanged
+        self.assertTrue(jnp.array_equal(input_data['label'], perturbed_input['label']))
 
 
 if __name__ == '__main__':
