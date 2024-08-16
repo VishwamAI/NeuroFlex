@@ -1,27 +1,19 @@
-# Python package
-# Create and test a Python package on multiple Python versions.
-# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+# .azure-pipelines.yml
 
 trigger:
-- main
+- main  # Branches that trigger the pipeline
 
 pool:
-  vmImage: ubuntu-latest
-strategy:
-  matrix:
-    Python39:
-      python.version: '3.9'
-    Python310:
-      python.version: '3.10'
-    Python311:
-      python.version: '3.11'
+  vmImage: 'ubuntu-latest'  # Agent pool to use
+
+variables:
+  pythonVersion: '3.10'  # Specify the Python version
 
 steps:
 - task: UsePythonVersion@0
   inputs:
-    versionSpec: '$(python.version)'
-  displayName: 'Use Python $(python.version)'
+    versionSpec: $(pythonVersion)
+    addToPath: true
 
 - script: |
     python -m pip install --upgrade pip
@@ -29,6 +21,15 @@ steps:
   displayName: 'Install dependencies'
 
 - script: |
-    pip install pytest pytest-azurepipelines
-    pytest
-  displayName: 'pytest'
+    pytest --maxfail=1 --disable-warnings -q
+  displayName: 'Run tests'
+
+- script: |
+    python -m build
+  displayName: 'Build package'
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: '$(Pipeline.Workspace)/dist'
+    artifactName: 'drop'
+  displayName: 'Publish artifact'
