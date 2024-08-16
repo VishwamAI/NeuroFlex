@@ -1,5 +1,4 @@
 # NeuroFlex: Advanced Neural Network with Interpretability, Generalization, Robustness, and Fairness
-[![Continuous Integration](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci.yml/badge.svg)](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci.yml)
 ## Overview
 
 NeuroFlex is an advanced neural network implementation using JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
