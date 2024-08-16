@@ -8,7 +8,8 @@ import gym
 import shap
 import numpy as np
 from optax import adam
-from NeuroFlex.advanced_thinking import (
+from typing import Sequence
+from src.NeuroFlex.advanced_thinking import (
     data_augmentation, NeuroFlexNN, create_train_state, select_action,
     adversarial_training
 )
@@ -493,16 +494,22 @@ class TestAdversarialTraining(unittest.TestCase):
 
         # Check if the magnitude of perturbation is within epsilon
         perturbation = perturbed_input['image'] - input_data['image']
-        self.assertTrue(jnp.all(jnp.abs(perturbation) <= epsilon))
+        self.assertTrue(jnp.all(jnp.abs(perturbation) <= epsilon + 1e-6))  # Added small tolerance
+
+        # Check if perturbed input is clipped to [0, 1] range
+        self.assertTrue(jnp.all(perturbed_input['image'] >= 0) and jnp.all(perturbed_input['image'] <= 1))
 
         # Check if the perturbation changes the model's output
         original_output = self.model.apply({'params': params}, input_data['image'])
         perturbed_output = self.model.apply({'params': params}, perturbed_input['image'])
-        self.assertFalse(jnp.allclose(original_output, perturbed_output))
+        self.assertFalse(jnp.allclose(original_output, perturbed_output, atol=1e-4))
+
+        # Quantify the change in model output
+        output_diff = jnp.abs(original_output - perturbed_output)
+        self.assertTrue(jnp.any(output_diff > 1e-4))  # Ensure there's a significant change
 
         # Check if the label remains unchanged
         self.assertTrue(jnp.array_equal(input_data['label'], perturbed_input['label']))
-
 
 if __name__ == '__main__':
     unittest.main()

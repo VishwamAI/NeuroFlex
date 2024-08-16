@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, vmap
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Sequence
 from flax import linen as nn
 from flax.training import train_state
 import optax
@@ -148,8 +148,17 @@ def select_action(observation, model, params):
     return jnp.argmax(logits, axis=-1)
 
 def adversarial_training(model, params, input_data, epsilon):
-    # Implement adversarial training logic here
-    return input_data
+    def loss_fn(x):
+        logits = model.apply({'params': params}, x)
+        return optax.softmax_cross_entropy_with_integer_labels(logits, input_data['label']).mean()
+
+    grad_fn = jax.grad(loss_fn)
+    grad = grad_fn(input_data['image'])
+    perturbation = epsilon * jnp.sign(grad)
+    perturbation = jnp.clip(perturbation, -epsilon, epsilon)  # Ensure perturbation magnitude is within epsilon
+    perturbed_image = jnp.clip(input_data['image'] + perturbation, 0, 1)  # Ensure values are in [0, 1] range
+
+    return {'image': perturbed_image, 'label': input_data['label']}
 
 def test_cdstdp():
     """Simple test function for CD-STDP model."""
@@ -170,3 +179,43 @@ def test_cdstdp():
 
 if __name__ == "__main__":
     test_cdstdp()
+
+class NeuroFlex:
+    def __init__(self, features, use_cnn=False, use_rl=False, output_dim=10):
+        self.model = NeuroFlexNN(features=features, use_cnn=use_cnn, use_rl=use_rl, output_dim=output_dim)
+        self.cdstdp = CDSTDP()
+
+    def train(self, X, y, learning_rate=0.001, epochs=100):
+        rng = jax.random.PRNGKey(0)
+        state = create_train_state(rng, self.model, X[0], learning_rate)
+
+        @jax.jit
+        def train_step(state, batch_X, batch_y):
+            def loss_fn(params):
+                logits = self.model.apply({'params': params}, batch_X)
+                return optax.softmax_cross_entropy_with_integer_labels(logits, batch_y).mean()
+
+            loss, grads = jax.value_and_grad(loss_fn)(state.params)
+            state = state.apply_gradients(grads=grads)
+            return state, loss
+
+        for epoch in range(epochs):
+            state, loss = train_step(state, X, y)
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch}, Loss: {loss}")
+
+        return state
+
+    def predict(self, X, params):
+        return self.model.apply({'params': params}, X)
+
+    def interpret(self, X, params):
+        # Implement SHAP or other interpretability methods here
+        pass
+
+    def generate_adversarial(self, X, params, epsilon=0.1):
+        return adversarial_training(self.model, params, {'image': X, 'label': None}, epsilon)
+
+    def simulate_consciousness(self, X, params):
+        output = self.predict(X, params)
+        return self.model.simulate_consciousness(output)
