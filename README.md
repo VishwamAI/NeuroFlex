@@ -2,7 +2,7 @@
 
 NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
-![image](neuroflex-architecture-svg (1).svg)
+![image](neuroflex-architecture-svg.svg)
 
 ## Latest Updates
 
