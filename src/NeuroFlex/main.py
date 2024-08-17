@@ -6,10 +6,7 @@ from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable, Optional
-from aif360.datasets import BinaryLabelDataset
-from aif360.metrics import BinaryLabelDatasetMetric
-from aif360.algorithms.preprocessing import Reweighing
+from typing import Sequence, Callable, Optional, Tuple, List
 from alphafold.common import residue_constants
 from alphafold.data import templates, pipeline
 import logging
@@ -25,6 +22,31 @@ from art.estimators.classification import JAXClassifier, PyTorchClassifier
 import lale
 from lale import operators as lale_ops
 import torch
+from .generative_ai import GenerativeAIFramework, create_generative_ai_framework
+import os
+import sentencepiece
+
+class Tokenizer:
+    def __init__(self, model_path: Optional[str]):
+        assert os.path.isfile(model_path), model_path
+        self.sp_model = sentencepiece.SentencePieceProcessor()
+        self.sp_model.Load(model_path)
+        self.n_words: int = self.sp_model.GetPieceSize()
+        self.bos_id: int = self.sp_model.bos_id()
+        self.eos_id: int = self.sp_model.eos_id()
+        self.pad_id: int = self.sp_model.pad_id()
+
+    def encode(self, s: str, bos: bool = True, eos: bool = False) -> List[int]:
+        assert isinstance(s, str)
+        t = self.sp_model.EncodeAsIds(s)
+        if bos:
+            t = [self.bos_id] + t
+        if eos:
+            t = t + [self.eos_id]
+        return t
+
+    def decode(self, t: List[int]) -> str:
+        return self.sp_model.DecodeIds(t)
 
 try:
     import detectron2
@@ -85,6 +107,14 @@ class NeuroFlex(NeuroFlexNN):
     use_detectron2: bool = False
     detectron2_config: Optional[str] = None
     detectron2_weights: Optional[str] = None
+    use_generative_ai: bool = False
+    generative_ai_features: Tuple[int, ...] = (64, 32)
+    generative_ai_output_dim: int = 10
+    generative_ai_learning_rate: float = 1e-3
+    use_tokenizer: bool = False
+    tokenizer_model_path: Optional[str] = None
+    tokenizer_vocab_size: int = 50000
+    tokenizer_max_length: int = 512
 
     def setup(self):
         if self.use_ddpm:
@@ -113,6 +143,22 @@ class NeuroFlex(NeuroFlexNN):
             self.lale_pipeline = self.setup_lale_pipeline()
         if self.use_detectron2:
             self.setup_detectron2()
+
+        # Initialize GenerativeAIFramework
+        if self.use_generative_ai:
+            self.generative_ai_framework = create_generative_ai_framework(
+                features=self.generative_ai_features,
+                output_dim=self.generative_ai_output_dim
+            )
+            self.generative_ai_state = self.generative_ai_framework.init_model(
+                jax.random.PRNGKey(0),
+                (1,) + self.generative_ai_features[0:1]  # Assuming first feature is input dimension
+            )
+
+        # Initialize Tokenizer
+        if self.use_tokenizer:
+            assert os.path.isfile(self.tokenizer_model_path), f"Tokenizer model not found at {self.tokenizer_model_path}"
+            self.tokenizer = Tokenizer(self.tokenizer_model_path)
 
     def setup_detectron2(self):
         if not DETECTRON2_AVAILABLE:
@@ -157,6 +203,13 @@ class NeuroFlex(NeuroFlexNN):
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
         original_shape = x.shape
+
+        # Tokenizer processing
+        if self.use_tokenizer:
+            if isinstance(x, str):
+                x = jnp.array(self.tokenizer.encode(x))
+            elif isinstance(x, jnp.ndarray) and x.ndim == 2:
+                x = jnp.apply_along_axis(lambda s: jnp.array(self.tokenizer.encode(s.decode('utf-8'))), 1, x)
 
         # BCI and N1 implant signal processing
         if self.use_bci:
@@ -233,6 +286,10 @@ class NeuroFlex(NeuroFlexNN):
         # DDPM processing
         if self.use_ddpm:
             x = self.ddpm_block(x, training)
+
+        # GenerativeAI processing
+        if self.use_generative_ai:
+            x = self.generative_ai.generate(self.generative_ai_state, x)
 
         # Wireless data transmission simulation
         if self.use_wireless:
@@ -625,13 +682,6 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
     best_val_performance = float('-inf')
     patience_counter = 0
 
-    # Initialize fairness metrics if applicable
-    if 'sensitive_attr' in train_data:
-        fairness_metric = BinaryLabelDatasetMetric(
-            train_data, label_name='label', protected_attribute_names=['sensitive_attr']
-        )
-        initial_disparate_impact = fairness_metric.disparate_impact()
-
     for epoch in range(num_epochs):
         if env is None:  # Standard supervised learning
             for batch in get_batches(train_data, batch_size):
@@ -641,24 +691,7 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
                 # Adversarial training
                 adv_batch = adversarial_training(model, state.params, batch, epsilon)
 
-                # Apply bias mitigation if applicable
-                if 'sensitive_attr' in batch:
-                    reweighing = Reweighing(unprivileged_groups=[{'sensitive_attr': 0}],
-                                            privileged_groups=[{'sensitive_attr': 1}])
-                    mitigated_batch = reweighing.fit_transform(BinaryLabelDataset(
-                        df=adv_batch,
-                        label_names=['label'],
-                        protected_attribute_names=['sensitive_attr']
-                    ))
-
-                    # Apply fairness constraint
-                    mitigated_batch['image'] = model.apply_fairness_constraint(
-                        mitigated_batch['image'],
-                        mitigated_batch['sensitive_attr']
-                    )
-                    state, loss = train_step(state, mitigated_batch)
-                else:
-                    state, loss = train_step(state, adv_batch)
+                state, loss = train_step(state, adv_batch)
 
             # Validation
             val_performance = evaluate_model(state, val_data, batch_size)
@@ -676,24 +709,18 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
             loss = -total_reward  # Use negative reward as a proxy for loss
             val_performance = total_reward
 
-        # Compute fairness metrics if applicable
+        # Compute basic fairness metrics if applicable
         if 'sensitive_attr' in val_data:
-            fairness_metric = BinaryLabelDatasetMetric(
-                val_data, label_name='label', protected_attribute_names=['sensitive_attr']
-            )
-            current_disparate_impact = fairness_metric.disparate_impact()
+            fairness_metrics = compute_fairness_metrics(val_data, predicted_labels)
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}, "
-                  f"disparate_impact = {current_disparate_impact:.3f}")
+                  f"disparate_impact = {fairness_metrics['disparate_impact']:.3f}")
         else:
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}")
 
-        # Early stopping (considering both performance and fairness if applicable)
+        # Early stopping based on validation performance
         if val_performance > best_val_performance:
-            if 'sensitive_attr' not in val_data or current_disparate_impact > initial_disparate_impact:
-                best_val_performance = val_performance
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            best_val_performance = val_performance
+            patience_counter = 0
         else:
             patience_counter += 1
 
@@ -708,27 +735,33 @@ def evaluate_fairness(state, data):
     logits = state.apply_fn({'params': state.params}, data['image'])
     predicted_labels = jnp.argmax(logits, axis=-1)
 
-    # Create a BinaryLabelDataset
-    dataset = BinaryLabelDataset(
-        df=data,
-        label_names=['label'],
-        protected_attribute_names=['sensitive_attr'],
-        favorable_label=1,
-        unfavorable_label=0
-    )
+    # Compute basic fairness metrics without AIF360
+    sensitive_attr = data['sensitive_attr']
+    true_labels = data['label']
 
-    # Create a new dataset with predicted labels
-    predicted_dataset = dataset.copy()
-    predicted_dataset.labels = predicted_labels
+    # Calculate overall accuracy
+    overall_accuracy = jnp.mean(predicted_labels == true_labels)
 
-    # Compute fairness metrics
-    metric = BinaryLabelDatasetMetric(predicted_dataset,
-                                      unprivileged_groups=[{'sensitive_attr': 0}],
-                                      privileged_groups=[{'sensitive_attr': 1}])
+    # Calculate group-wise accuracies
+    privileged_mask = sensitive_attr == 1
+    unprivileged_mask = sensitive_attr == 0
+    privileged_accuracy = jnp.mean(predicted_labels[privileged_mask] == true_labels[privileged_mask])
+    unprivileged_accuracy = jnp.mean(predicted_labels[unprivileged_mask] == true_labels[unprivileged_mask])
+
+    # Calculate disparate impact
+    disparate_impact = unprivileged_accuracy / privileged_accuracy if privileged_accuracy > 0 else 0
+
+    # Calculate equal opportunity difference
+    privileged_tpr = jnp.sum((predicted_labels == 1) & (true_labels == 1) & privileged_mask) / jnp.sum((true_labels == 1) & privileged_mask)
+    unprivileged_tpr = jnp.sum((predicted_labels == 1) & (true_labels == 1) & unprivileged_mask) / jnp.sum((true_labels == 1) & unprivileged_mask)
+    equal_opportunity_difference = privileged_tpr - unprivileged_tpr
 
     return {
-        'disparate_impact': metric.disparate_impact(),
-        'equal_opportunity_difference': metric.equal_opportunity_difference()
+        'overall_accuracy': overall_accuracy,
+        'privileged_accuracy': privileged_accuracy,
+        'unprivileged_accuracy': unprivileged_accuracy,
+        'disparate_impact': disparate_impact,
+        'equal_opportunity_difference': equal_opportunity_difference
     }
 
 def select_action(state, model, params):
@@ -812,6 +845,9 @@ if __name__ == "__main__":
         bci_channels = 64
         bci_sampling_rate = 1000
         wireless_latency = 0.01
+        use_generative_ai = True
+        generative_ai_features = (128, 64)
+        generative_ai_output_dim = 10
 
     # Set up gym environment
     env = gym.make('CartPole-v1')
@@ -863,7 +899,10 @@ if __name__ == "__main__":
         'use_rnn': True,
         'use_lstm': True,
         'use_gan': True,
-        'conv_dim': 2
+        'conv_dim': 2,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': 10
     }
 
     # Define model parameters for 3D convolution
@@ -876,7 +915,10 @@ if __name__ == "__main__":
         'use_rnn': True,
         'use_lstm': True,
         'use_gan': True,
-        'conv_dim': 3
+        'conv_dim': 3,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': 10
     }
 
     # Train and evaluate 2D convolution model
@@ -908,7 +950,10 @@ if __name__ == "__main__":
         'use_rnn': False,
         'use_lstm': False,
         'use_gan': False,
-        'use_rl': True
+        'use_rl': True,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': action_space
     }
     rl_model = ModelArchitecture(**rl_model_params)
     rl_state, _ = create_train_state(jax.random.PRNGKey(0), rl_model, (observation_space,), 1e-3)
@@ -939,6 +984,23 @@ if __name__ == "__main__":
     rl_test_input = jax.random.normal(jax.random.PRNGKey(0), shape=(1, observation_space))
     rl_test_output = rl_model.apply({'params': rl_state.params}, rl_test_input)
     print("RL model test output shape:", rl_test_output.shape)
+
+    # Test GenerativeAIFramework
+    gen_ai_framework = GenerativeAIFramework(features=(128, 64), output_dim=10)
+    gen_ai_state = gen_ai_framework.init_model(jax.random.PRNGKey(0), (1, 28, 28))
+    gen_ai_input = jax.random.normal(jax.random.PRNGKey(0), shape=(1, 28, 28))
+    gen_ai_output = gen_ai_framework.generate(gen_ai_state, gen_ai_input)
+    print("GenerativeAI output shape:", gen_ai_output.shape)
+
+    # Integrate GenerativeAIFramework with NeuroFlex
+    integrated_model = ModelArchitecture(**model_params_2d)
+    integrated_state = create_train_state(jax.random.PRNGKey(0), integrated_model, (1, 28, 28, 1), 1e-3)[0]
+    integrated_output = integrated_model.apply({'params': integrated_state.params}, test_input_2d)
+    print("Integrated model output shape:", integrated_output.shape)
+
+    # Test GenerativeAI within NeuroFlex
+    neuroflex_gen_ai_output = integrated_model.apply({'params': integrated_state.params}, test_input_2d, method=integrated_model.generative_ai.generate)
+    print("NeuroFlex GenerativeAI output shape:", neuroflex_gen_ai_output.shape)
 
 class DataPipeline:
     def __init__(self, config):
