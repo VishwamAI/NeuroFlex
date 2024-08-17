@@ -5,7 +5,6 @@ from .array_libraries import ArrayLibraries
 from .wml_ce_integration import WMLCEIntegration
 from .art_integration import ARTIntegration
 from .lale_integration import LaleIntegration
-from .aif360_integration import AIF360Integration
 # from .ffdl_integration import FfDLIntegration  # Commented out due to missing setup
 from .neunets_integration import NeuNetSIntegration
 from NeuroFlex.modules.jax_module import JAXModel, train_jax_model
@@ -41,7 +40,6 @@ __all__ = [
     'WMLCEIntegration',
     'ARTIntegration',
     'LaleIntegration',
-    'AIF360Integration',
     # 'FfDLIntegration',  # Commented out due to missing setup
     'NeuNetSIntegration',
     'XarrayIntegration',

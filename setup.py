@@ -35,7 +35,6 @@ setup(
         "numpy==1.24.3",
         "scipy==1.10.1",
         "matplotlib==3.7.1",
-        "aif360==0.5.0",
         "packaging==23.1",
         "gast==0.6.0",
         "wrapt==1.16.0",
