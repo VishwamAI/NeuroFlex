@@ -2,6 +2,9 @@
 
 version: 2.1
 
+orbs:
+  codecov: codecov/codecov@4.0.1
+
 executors:
   python-executor:
     docker:
@@ -40,13 +43,21 @@ jobs:
           name: Run tests
           command: |
             . venv/bin/activate
-            pytest
+            pytest --junitxml=junit.xml
+      - codecov/upload:
+          file: junit.xml
 
 workflows:
   version: 2
   build_and_test:
     jobs:
       - build
+      - test:
+          requires:
+            - build
+
+  upload-to-codecov:
+    jobs:
       - test:
           requires:
             - build
