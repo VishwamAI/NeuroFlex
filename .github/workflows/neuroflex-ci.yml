@@ -1,4 +1,5 @@
 name: NeuroFlex CI
+
 on:
   push:
     branches: [ master ]
