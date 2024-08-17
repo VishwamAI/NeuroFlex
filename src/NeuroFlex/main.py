@@ -709,24 +709,18 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
             loss = -total_reward  # Use negative reward as a proxy for loss
             val_performance = total_reward
 
-        # Compute fairness metrics if applicable
+        # Compute basic fairness metrics if applicable
         if 'sensitive_attr' in val_data:
-            fairness_metric = BinaryLabelDatasetMetric(
-                val_data, label_name='label', protected_attribute_names=['sensitive_attr']
-            )
-            current_disparate_impact = fairness_metric.disparate_impact()
+            fairness_metrics = compute_fairness_metrics(val_data, predicted_labels)
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}, "
-                  f"disparate_impact = {current_disparate_impact:.3f}")
+                  f"disparate_impact = {fairness_metrics['disparate_impact']:.3f}")
         else:
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}")
 
-        # Early stopping (considering both performance and fairness if applicable)
+        # Early stopping based on validation performance
         if val_performance > best_val_performance:
-            if 'sensitive_attr' not in val_data or current_disparate_impact > initial_disparate_impact:
-                best_val_performance = val_performance
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            best_val_performance = val_performance
+            patience_counter = 0
         else:
             patience_counter += 1
 
