@@ -61,6 +61,7 @@ To set up your environment:
 from neuroflex import NeuroFlexNN, train_model, AlphaFoldIntegration
 
 # Define your model
+```
 model = NeuroFlexNN(
     features=[64, 32, 10],
     use_cnn=True,
@@ -69,28 +70,32 @@ model = NeuroFlexNN(
     use_quantum=True,  # Enable quantum neural network
     use_alphafold=True  # Enable AlphaFold integration
 )
-
+```
 # Initialize AlphaFold integration
+```
 alphafold = AlphaFoldIntegration()
 alphafold.setup_model(model_params={'max_recycling': 3})
-
+```
 # Predict protein structure
+```
 predicted_structure = alphafold.predict_structure()
-
+```
 # Train your model with AlphaFold integration
+```
 trained_state, trained_model = train_model(
     model, train_data, val_data,
     num_epochs=10, batch_size=32, learning_rate=1e-3,
     alphafold_structure=predicted_structure
 )
-
+```
 # Get pLDDT scores and predicted aligned error
+```
 plddt_scores = alphafold.get_plddt_scores()
 predicted_aligned_error = alphafold.get_predicted_aligned_error()
 
 print(f"Average pLDDT score: {plddt_scores.mean()}")
 print(f"Average predicted aligned error: {predicted_aligned_error.mean()}")
-
+```
 ## Testing
 
 To run tests for different Python versions and operating systems:
