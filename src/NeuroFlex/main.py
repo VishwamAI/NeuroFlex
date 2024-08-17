@@ -21,13 +21,30 @@ from ldm.models.diffusion.ddpm import DDPM
 from vae import VAE
 import pyhmmer
 from art.attacks.evasion import FastGradientMethod
-from art.estimators.classification import JAXClassifier
+from art.estimators.classification import JAXClassifier, PyTorchClassifier
 import lale
 from lale import operators as lale_ops
+import torch
+
+try:
+    import detectron2
+    from detectron2.engine import DefaultPredictor
+    from detectron2.config import get_cfg
+    from detectron2.utils.visualizer import Visualizer
+    from detectron2.data import MetadataCatalog
+    DETECTRON2_AVAILABLE = True
+except ImportError as e:
+    DETECTRON2_AVAILABLE = False
+    logging.error(f"Detectron2 import error: {str(e)}. Some features will be disabled.")
+except Exception as e:
+    DETECTRON2_AVAILABLE = False
+    logging.error(f"Unexpected error importing Detectron2: {str(e)}. Some features will be disabled.")
+
+from .neuroflex_nn import NeuroFlexNN
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class NeuroFlex(nn.Module):
+class NeuroFlex(NeuroFlexNN):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -65,6 +82,10 @@ class NeuroFlex(nn.Module):
     art_epsilon: float = 0.3
     use_lale: bool = False
     lale_operator: Optional[str] = None
+    use_detectron2: bool = False
+    detectron2_config: Optional[str] = None
+    detectron2_weights: Optional[str] = None
+
     def setup(self):
         if self.use_ddpm:
             self.ddpm = DDPM(
@@ -90,6 +111,29 @@ class NeuroFlex(nn.Module):
                                 split_rngs={"params": False})
         if self.use_lale:
             self.lale_pipeline = self.setup_lale_pipeline()
+        if self.use_detectron2:
+            self.setup_detectron2()
+
+    def setup_detectron2(self):
+        if not DETECTRON2_AVAILABLE:
+            logging.warning("Detectron2 is not available. Some features will be disabled.")
+            self.detectron2_predictor = None
+            return
+
+        try:
+            cfg = get_cfg()
+            if self.detectron2_config:
+                cfg.merge_from_file(self.detectron2_config)
+            else:
+                logging.info("No custom Detectron2 config provided. Using default configuration.")
+
+            cfg.MODEL.WEIGHTS = self.detectron2_weights if self.detectron2_weights else "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"
+            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+            self.detectron2_predictor = DefaultPredictor(cfg)
+            logging.info("Detectron2 setup completed successfully.")
+        except Exception as e:
+            logging.error(f"Error setting up Detectron2: {str(e)}")
+            self.detectron2_predictor = None
 
     def setup_lale_pipeline(self):
         # Define a basic Lale pipeline
@@ -136,6 +180,17 @@ class NeuroFlex(nn.Module):
                 logging.error(f"Error in VAE processing: {str(e)}")
                 # Fallback to original input if VAE fails
                 pass
+
+        # Detectron2 processing
+        if self.use_detectron2 and DETECTRON2_AVAILABLE:
+            try:
+                x = self.detectron2_block(x, training)
+            except Exception as e:
+                logging.error(f"Error in Detectron2 processing: {str(e)}")
+                # Fallback to original input if Detectron2 processing fails
+                pass
+        elif self.use_detectron2 and not DETECTRON2_AVAILABLE:
+            logging.warning("Detectron2 processing requested but not available. Skipping.")
 
         # Ensure input is 3D for RNN/LSTM: (batch_size, sequence_length, features)
         if self.use_rnn or self.use_lstm:
@@ -523,26 +578,30 @@ def interpret_model(model, params, input_data):
     return shap_values
 
 
-
 def adversarial_training(model, params, input_data, epsilon):
-    # Create a JaxClassifier wrapper for the model
-    def model_predict(x):
-        return model.apply({'params': params}, x)
+    try:
+        # Create a PyTorchClassifier wrapper for the model
+        def model_predict(x):
+            return model.apply({'params': params}, torch.from_numpy(x).float())
 
-    classifier = JaxClassifier(
-        model=model_predict,
-        input_shape=input_data['image'].shape[1:],
-        nb_classes=model.features[-1],
-        clip_values=(0, 1)
-    )
+        classifier = PyTorchClassifier(
+            model=model_predict,
+            loss=torch.nn.CrossEntropyLoss(),
+            input_shape=input_data['image'].shape[1:],
+            nb_classes=model.features[-1],
+            clip_values=(0, 1)
+        )
 
-    # Create FGSM attack
-    fgsm = FastGradientMethod(estimator=classifier, eps=epsilon)
+        # Create FGSM attack
+        fgsm = FastGradientMethod(estimator=classifier, eps=epsilon)
 
-    # Generate adversarial examples
-    perturbed_input = fgsm.generate(x=input_data['image'])
+        # Generate adversarial examples
+        perturbed_input = fgsm.generate(x=input_data['image'])
 
-    return {'image': perturbed_input, 'label': input_data['label']}
+        return {'image': perturbed_input, 'label': input_data['label']}
+    except Exception as e:
+        logging.error(f"Error in adversarial_training: {str(e)}")
+        return input_data  # Return original input if an error occurs
 
 # Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
 def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size, learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):

@@ -1,10 +1,13 @@
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, vmap
-from typing import Tuple, Dict, Any, Sequence
+from typing import Tuple, Dict, Any, Sequence, Union
 from flax import linen as nn
 from flax.training import train_state
 import optax
+from jax.typing import ArrayLike
+
+Shape = Sequence[Union[int, Any]]
 
 class CDSTDP:
     def __init__(self, learning_rate: float = 0.01, time_window: float = 20.0):
