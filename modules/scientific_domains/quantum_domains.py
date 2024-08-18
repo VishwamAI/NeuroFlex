@@ -3,7 +3,9 @@ import jax.numpy as jnp
 import flax.linen as nn
 from typing import List, Optional
 import qiskit
-from qiskit import QuantumCircuit, execute, Aer
+from qiskit import QuantumCircuit
+from qiskit_aer import Aer
+from qiskit.primitives import Sampler
 import qutip as qt
 import pyquil
 from pyquil import Program, get_qc
@@ -36,15 +38,15 @@ class QuantumDomains(nn.Module):
 
     def _qiskit_circuit(self, x):
         def circuit(params, xi):
-            qc = QuantumCircuit(1, 1)
+            qc = QuantumCircuit(1)
             qc.rx(xi[0], 0)
             qc.ry(params[0], 0)
-            qc.measure(0, 0)
-            backend = Aer.get_backend('qasm_simulator')
-            job = execute(qc, backend, shots=1000)
+
+            sampler = Sampler()
+            job = sampler.run(qc, shots=1000)
             result = job.result()
-            counts = result.get_counts(qc)
-            return 1 - 2 * counts.get('0', 0) / 1000  # Convert to expectation value
+            quasi_dist = result.quasi_dists[0]
+            return 1 - 2 * quasi_dist.get(0, 0)  # Convert to expectation value
 
         params = jnp.array([0.1])
         return jnp.array([circuit(params, xi) for xi in x])
