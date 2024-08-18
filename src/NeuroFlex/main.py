@@ -6,7 +6,7 @@ from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable, Optional, Tuple, List
+from typing import Sequence, Callable, Optional, Tuple, List, Dict
 from alphafold.common import residue_constants
 from alphafold.data import templates, pipeline
 import logging
@@ -25,6 +25,8 @@ import torch
 from .generative_ai import GenerativeAIFramework, create_generative_ai_framework
 import os
 import sentencepiece
+from .inception_module import InceptionModule, MultiScaleProcessing
+from .rl_module import RLAgent, RLEnvironment, train_rl_agent, create_train_state, select_action
 
 class Tokenizer:
     def __init__(self, model_path: Optional[str]):
@@ -115,6 +117,16 @@ class NeuroFlex(NeuroFlexNN):
     tokenizer_model_path: Optional[str] = None
     tokenizer_vocab_size: int = 50000
     tokenizer_max_length: int = 512
+    use_inception: bool = False
+    inception_modules: int = 3
+    inception_channels: Sequence[int] = (64, 96, 128)
+    inception_reduction_factor: float = 0.7
+    multi_scale_processing: bool = False
+    multi_scale_levels: int = 3
+    multi_scale_features: Sequence[int] = (32, 64, 128)
+    action_dim: Optional[int] = None
+    rl_learning_rate: float = 1e-3
+    rl_num_episodes: int = 1000
 
     def setup(self):
         if self.use_ddpm:
@@ -133,6 +145,12 @@ class NeuroFlex(NeuroFlexNN):
             )
         if self.use_cnn:
             self.Conv = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        if self.use_inception:
+            self.inception_layers = [InceptionModule(channels=self.inception_channels,
+                                                     reduction_factor=self.inception_reduction_factor)
+                                     for _ in range(self.inception_modules)]
+        if self.multi_scale_processing:
+            self.multi_scale_layers = [nn.Dense(feat) for feat in self.multi_scale_features]
         if self.use_rnn:
             self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
         if self.use_lstm:
@@ -143,6 +161,11 @@ class NeuroFlex(NeuroFlexNN):
             self.lale_pipeline = self.setup_lale_pipeline()
         if self.use_detectron2:
             self.setup_detectron2()
+        if self.use_rl:
+            if self.action_dim is None:
+                raise ValueError("action_dim must be specified when use_rl is True")
+            self.rl_agent = RLAgent(features=self.features[:-1], action_dim=self.action_dim)
+            self.rl_env = RLEnvironment("CartPole-v1")  # Replace with appropriate environment
 
         # Initialize GenerativeAIFramework
         if self.use_generative_ai:
@@ -159,6 +182,9 @@ class NeuroFlex(NeuroFlexNN):
         if self.use_tokenizer:
             assert os.path.isfile(self.tokenizer_model_path), f"Tokenizer model not found at {self.tokenizer_model_path}"
             self.tokenizer = Tokenizer(self.tokenizer_model_path)
+
+        # Initialize multi-scale processing
+        self.multi_scale_layers = [nn.Dense(feat) for feat in self.multi_scale_features]
 
     def setup_detectron2(self):
         if not DETECTRON2_AVAILABLE:
@@ -215,7 +241,10 @@ class NeuroFlex(NeuroFlexNN):
         if self.use_bci:
             x = self.bci_signal_processing(x)
 
-        if self.use_cnn:
+        # Inception-inspired multi-scale processing
+        if self.use_inception:
+            x = self.inception_block(x)
+        elif self.use_cnn:
             x = self.cnn_block(x)
 
         # VAE processing
@@ -275,7 +304,11 @@ class NeuroFlex(NeuroFlexNN):
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
 
-        if self.use_rl and self.output_dim is not None:
+        if self.use_rl:
+            if not hasattr(self, 'rl_agent'):
+                raise AttributeError("RL agent not initialized. Call _init_rl_agent first.")
+            x = self.rl_agent(x)
+        elif self.output_dim is not None:
             x = nn.Dense(self.output_dim)(x)
         else:
             x = nn.Dense(self.features[-1])(x)
@@ -696,21 +729,26 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
             # Validation
             val_performance = evaluate_model(state, val_data, batch_size)
         else:  # Reinforcement learning
-            total_reward = 0
-            obs = env.reset()
-            done = False
-            while not done:
-                action = select_action(obs, model, state.params)
-                next_obs, reward, done, _ = env.step(action)
-                # Store experience in replay buffer (not implemented here)
-                # train_step_rl(state, experience)  # Update model using RL algorithms
-                total_reward += reward
-                obs = next_obs
-            loss = -total_reward  # Use negative reward as a proxy for loss
-            val_performance = total_reward
+            state, rewards, training_info = train_rl_agent(
+                model.rl_agent, env,
+                num_episodes=model_params.get('rl_num_episodes', 100),
+                max_steps=model_params.get('rl_max_steps', 1000),
+                gamma=model_params.get('rl_gamma', 0.99),
+                epsilon_start=model_params.get('rl_epsilon_start', 1.0),
+                epsilon_end=model_params.get('rl_epsilon_end', 0.01),
+                epsilon_decay=model_params.get('rl_epsilon_decay', 0.995),
+                learning_rate=model_params.get('rl_learning_rate', learning_rate),
+                batch_size=model_params.get('rl_batch_size', 64),
+                buffer_size=model_params.get('rl_buffer_size', 10000),
+                target_update_freq=model_params.get('rl_target_update_freq', 100),
+                seed=rng[0]
+            )
+            loss = -np.mean(rewards)  # Use negative mean reward as a proxy for loss
+            val_performance = np.mean(rewards[-10:])  # Use mean of last 10 episodes as validation performance
 
         # Compute basic fairness metrics if applicable
         if 'sensitive_attr' in val_data:
+            predicted_labels = jnp.argmax(state.apply_fn({'params': state.params}, val_data['image']), axis=-1)
             fairness_metrics = compute_fairness_metrics(val_data, predicted_labels)
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}, "
                   f"disparate_impact = {fairness_metrics['disparate_impact']:.3f}")
@@ -729,6 +767,22 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
             break
 
     return state, model
+
+def compute_fairness_metrics(data, predicted_labels):
+    sensitive_attr = data['sensitive_attr']
+    true_labels = data['label']
+
+    privileged_mask = sensitive_attr == 1
+    unprivileged_mask = sensitive_attr == 0
+
+    privileged_accuracy = jnp.mean(predicted_labels[privileged_mask] == true_labels[privileged_mask])
+    unprivileged_accuracy = jnp.mean(predicted_labels[unprivileged_mask] == true_labels[unprivileged_mask])
+
+    disparate_impact = unprivileged_accuracy / privileged_accuracy if privileged_accuracy > 0 else 0
+
+    return {
+        'disparate_impact': disparate_impact
+    }
 
 def evaluate_fairness(state, data):
     # Predict labels using the trained model
