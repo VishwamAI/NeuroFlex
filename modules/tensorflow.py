@@ -1,14 +1,15 @@
 # TensorFlow specific implementations will go here
 
 import tensorflow as tf
+import keras
 
 # Example model using TensorFlow
-class TensorFlowModel(tf.keras.Model):
+class TensorFlowModel(keras.Model):
     def __init__(self, features):
         super(TensorFlowModel, self).__init__()
-        self.layers_ = tf.keras.Sequential([
-            tf.keras.layers.Dense(100, activation='relu'),
-            tf.keras.layers.Dense(features),
+        self.layers_ = keras.Sequential([
+            keras.layers.Dense(100, activation='relu'),
+            keras.layers.Dense(features),
         ])
 
     def call(self, inputs):
@@ -17,8 +18,8 @@ class TensorFlowModel(tf.keras.Model):
 # Training function
 @tf.function
 def train_tf_model(model, X, y, epochs=10, lr=0.001):
-    optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    optimizer = keras.optimizers.Adam(learning_rate=lr)
+    loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
     @tf.function
     def train_step(x, y):
