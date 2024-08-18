@@ -5,11 +5,12 @@ from torch import nn, optim
 class PyTorchModel(nn.Module):
     def __init__(self, features):
         super(PyTorchModel, self).__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(features, 100),
-            nn.ReLU(),
-            nn.Linear(100, 10),
-        )
+        layers = []
+        for i in range(len(features) - 1):
+            layers.append(nn.Linear(features[i], features[i+1]))
+            if i < len(features) - 2:
+                layers.append(nn.ReLU())
+        self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.layers(x)
@@ -18,6 +19,10 @@ class PyTorchModel(nn.Module):
 def train_pytorch_model(model, X, y, lr=0.001, epochs=10):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    # Convert inputs to PyTorch tensors
+    X = torch.tensor(X, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.long)
 
     for epoch in range(epochs):
         optimizer.zero_grad()
