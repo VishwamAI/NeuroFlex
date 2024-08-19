@@ -1,8 +1,8 @@
 import pytest
-import jax
-import jax.numpy as jnp
+from jax import numpy as jnp
+from jax import random
 import pennylane as qml
-from quantum_nn_module import QuantumNeuralNetwork
+from NeuroFlex.quantum_nn import QuantumNeuralNetwork
 
 @pytest.fixture
 def qnn():

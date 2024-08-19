@@ -6,10 +6,7 @@ from flax.training import train_state
 import optax
 import numpy as np
 import gym
-from typing import Sequence, Callable, Optional
-from aif360.datasets import BinaryLabelDataset
-from aif360.metrics import BinaryLabelDatasetMetric
-from aif360.algorithms.preprocessing import Reweighing
+from typing import Sequence, Callable, Optional, Tuple, List, Dict
 from alphafold.common import residue_constants
 from alphafold.data import templates, pipeline
 import logging
@@ -20,10 +17,58 @@ from quantum_nn_module import QuantumNeuralNetwork
 from ldm.models.diffusion.ddpm import DDPM
 from vae import VAE
 import pyhmmer
+from art.attacks.evasion import FastGradientMethod
+from art.estimators.classification import JAXClassifier, PyTorchClassifier
+import lale
+from lale import operators as lale_ops
+import torch
+from .generative_ai import GenerativeAIFramework, create_generative_ai_framework
+import os
+import sentencepiece
+from .inception_module import InceptionModule, MultiScaleProcessing
+from .rl_module import RLAgent, RLEnvironment, train_rl_agent, create_train_state, select_action
+
+class Tokenizer:
+    def __init__(self, model_path: Optional[str]):
+        assert os.path.isfile(model_path), model_path
+        self.sp_model = sentencepiece.SentencePieceProcessor()
+        self.sp_model.Load(model_path)
+        self.n_words: int = self.sp_model.GetPieceSize()
+        self.bos_id: int = self.sp_model.bos_id()
+        self.eos_id: int = self.sp_model.eos_id()
+        self.pad_id: int = self.sp_model.pad_id()
+
+    def encode(self, s: str, bos: bool = True, eos: bool = False) -> List[int]:
+        assert isinstance(s, str)
+        t = self.sp_model.EncodeAsIds(s)
+        if bos:
+            t = [self.bos_id] + t
+        if eos:
+            t = t + [self.eos_id]
+        return t
+
+    def decode(self, t: List[int]) -> str:
+        return self.sp_model.DecodeIds(t)
+
+try:
+    import detectron2
+    from detectron2.engine import DefaultPredictor
+    from detectron2.config import get_cfg
+    from detectron2.utils.visualizer import Visualizer
+    from detectron2.data import MetadataCatalog
+    DETECTRON2_AVAILABLE = True
+except ImportError as e:
+    DETECTRON2_AVAILABLE = False
+    logging.error(f"Detectron2 import error: {str(e)}. Some features will be disabled.")
+except Exception as e:
+    DETECTRON2_AVAILABLE = False
+    logging.error(f"Unexpected error importing Detectron2: {str(e)}. Some features will be disabled.")
+
+from .neuroflex_nn import NeuroFlexNN
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class NeuroFlexNN(nn.Module):
+class NeuroFlex(NeuroFlexNN):
     features: Sequence[int]
     activation: Callable = nn.relu
     dropout_rate: float = 0.5
@@ -56,6 +101,32 @@ class NeuroFlexNN(nn.Module):
     use_vae: bool = False
     vae_latent_dim: int = 32
     vae_hidden_dim: int = 256
+    use_art: bool = False
+    art_attack_type: str = 'fgsm'
+    art_epsilon: float = 0.3
+    use_lale: bool = False
+    lale_operator: Optional[str] = None
+    use_detectron2: bool = False
+    detectron2_config: Optional[str] = None
+    detectron2_weights: Optional[str] = None
+    use_generative_ai: bool = False
+    generative_ai_features: Tuple[int, ...] = (64, 32)
+    generative_ai_output_dim: int = 10
+    generative_ai_learning_rate: float = 1e-3
+    use_tokenizer: bool = False
+    tokenizer_model_path: Optional[str] = None
+    tokenizer_vocab_size: int = 50000
+    tokenizer_max_length: int = 512
+    use_inception: bool = False
+    inception_modules: int = 3
+    inception_channels: Sequence[int] = (64, 96, 128)
+    inception_reduction_factor: float = 0.7
+    multi_scale_processing: bool = False
+    multi_scale_levels: int = 3
+    multi_scale_features: Sequence[int] = (32, 64, 128)
+    action_dim: Optional[int] = None
+    rl_learning_rate: float = 1e-3
+    rl_num_episodes: int = 1000
 
     def setup(self):
         if self.use_ddpm:
@@ -74,22 +145,106 @@ class NeuroFlexNN(nn.Module):
             )
         if self.use_cnn:
             self.Conv = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+        if self.use_inception:
+            self.inception_layers = [InceptionModule(channels=self.inception_channels,
+                                                     reduction_factor=self.inception_reduction_factor)
+                                     for _ in range(self.inception_modules)]
+        if self.multi_scale_processing:
+            self.multi_scale_layers = [nn.Dense(feat) for feat in self.multi_scale_features]
         if self.use_rnn:
             self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
         if self.use_lstm:
             self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
                                 variable_broadcast="params",
                                 split_rngs={"params": False})
+        if self.use_lale:
+            self.lale_pipeline = self.setup_lale_pipeline()
+        if self.use_detectron2:
+            self.setup_detectron2()
+        if self.use_rl:
+            if self.action_dim is None:
+                raise ValueError("action_dim must be specified when use_rl is True")
+            self.rl_agent = RLAgent(features=self.features[:-1], action_dim=self.action_dim)
+            self.rl_env = RLEnvironment("CartPole-v1")  # Replace with appropriate environment
+
+        # Initialize GenerativeAIFramework
+        if self.use_generative_ai:
+            self.generative_ai_framework = create_generative_ai_framework(
+                features=self.generative_ai_features,
+                output_dim=self.generative_ai_output_dim
+            )
+            self.generative_ai_state = self.generative_ai_framework.init_model(
+                jax.random.PRNGKey(0),
+                (1,) + self.generative_ai_features[0:1]  # Assuming first feature is input dimension
+            )
+
+        # Initialize Tokenizer
+        if self.use_tokenizer:
+            assert os.path.isfile(self.tokenizer_model_path), f"Tokenizer model not found at {self.tokenizer_model_path}"
+            self.tokenizer = Tokenizer(self.tokenizer_model_path)
+
+        # Initialize multi-scale processing
+        self.multi_scale_layers = [nn.Dense(feat) for feat in self.multi_scale_features]
+
+    def setup_detectron2(self):
+        if not DETECTRON2_AVAILABLE:
+            logging.warning("Detectron2 is not available. Some features will be disabled.")
+            self.detectron2_predictor = None
+            return
+
+        try:
+            cfg = get_cfg()
+            if self.detectron2_config:
+                cfg.merge_from_file(self.detectron2_config)
+            else:
+                logging.info("No custom Detectron2 config provided. Using default configuration.")
+
+            cfg.MODEL.WEIGHTS = self.detectron2_weights if self.detectron2_weights else "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"
+            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+            self.detectron2_predictor = DefaultPredictor(cfg)
+            logging.info("Detectron2 setup completed successfully.")
+        except Exception as e:
+            logging.error(f"Error setting up Detectron2: {str(e)}")
+            self.detectron2_predictor = None
+
+    def setup_lale_pipeline(self):
+        # Define a basic Lale pipeline
+        from lale import operators as lale_ops
+        from lale.lib.sklearn import LogisticRegression, RandomForestClassifier
+
+        # Create a choice between LogisticRegression and RandomForestClassifier
+        classifier = lale_ops.make_choice(
+            LogisticRegression, RandomForestClassifier
+        )
+
+        # Create a pipeline with the classifier
+        pipeline = classifier
+
+        # If a specific Lale operator is specified, use it instead
+        if self.lale_operator:
+            pipeline = getattr(lale_ops, self.lale_operator)()
+
+        return pipeline
 
     @nn.compact
     def __call__(self, x, training: bool = False, sensitive_attribute: jnp.ndarray = None):
         original_shape = x.shape
 
+        # Tokenizer processing
+        if self.use_tokenizer:
+            if isinstance(x, str):
+                x = jnp.array(self.tokenizer.encode(x))
+            elif isinstance(x, jnp.ndarray) and x.ndim == 2:
+                x = jnp.apply_along_axis(lambda s: jnp.array(self.tokenizer.encode(s.decode('utf-8'))), 1, x)
+
         # BCI and N1 implant signal processing
         if self.use_bci:
             x = self.bci_signal_processing(x)
 
-        if self.use_cnn:
+        # Inception-inspired multi-scale processing
+        if self.use_inception:
+            x = self.inception_block(x)
+        elif self.use_cnn:
             x = self.cnn_block(x)
 
         # VAE processing
@@ -107,6 +262,17 @@ class NeuroFlexNN(nn.Module):
                 logging.error(f"Error in VAE processing: {str(e)}")
                 # Fallback to original input if VAE fails
                 pass
+
+        # Detectron2 processing
+        if self.use_detectron2 and DETECTRON2_AVAILABLE:
+            try:
+                x = self.detectron2_block(x, training)
+            except Exception as e:
+                logging.error(f"Error in Detectron2 processing: {str(e)}")
+                # Fallback to original input if Detectron2 processing fails
+                pass
+        elif self.use_detectron2 and not DETECTRON2_AVAILABLE:
+            logging.warning("Detectron2 processing requested but not available. Skipping.")
 
         # Ensure input is 3D for RNN/LSTM: (batch_size, sequence_length, features)
         if self.use_rnn or self.use_lstm:
@@ -138,7 +304,11 @@ class NeuroFlexNN(nn.Module):
         if sensitive_attribute is not None:
             x = self.apply_fairness_constraint(x, sensitive_attribute)
 
-        if self.use_rl and self.output_dim is not None:
+        if self.use_rl:
+            if not hasattr(self, 'rl_agent'):
+                raise AttributeError("RL agent not initialized. Call _init_rl_agent first.")
+            x = self.rl_agent(x)
+        elif self.output_dim is not None:
             x = nn.Dense(self.output_dim)(x)
         else:
             x = nn.Dense(self.features[-1])(x)
@@ -149,6 +319,10 @@ class NeuroFlexNN(nn.Module):
         # DDPM processing
         if self.use_ddpm:
             x = self.ddpm_block(x, training)
+
+        # GenerativeAI processing
+        if self.use_generative_ai:
+            x = self.generative_ai.generate(self.generative_ai_state, x)
 
         # Wireless data transmission simulation
         if self.use_wireless:
@@ -165,7 +339,39 @@ class NeuroFlexNN(nn.Module):
         if self.use_xla:
             x = self.xla_optimization(x)
 
+        # ART adversarial example generation
+        if self.use_art and training:
+            x = self.generate_adversarial_examples(x)
+
+        # Lale integration for AutoML
+        if self.use_lale:
+            x = self.apply_lale_automl(x)
+
+        # Ensure the output is 2D
+        if len(x.shape) > 2:
+            x = x.reshape(x.shape[0], -1)
+
         return x
+
+    def generate_adversarial_examples(self, x):
+        from art.attacks.evasion import FastGradientMethod
+        from art.estimators.classification import JAXClassifier
+
+        # Create a JAXClassifier wrapper for our model
+        classifier = JAXClassifier(
+            model=lambda x: self.apply({'params': self.params}, x),
+            loss=lambda x, y: optax.softmax_cross_entropy(x, y),
+            input_shape=x.shape[1:],
+            nb_classes=self.features[-1]
+        )
+
+        # Create the attack
+        attack = FastGradientMethod(classifier, eps=0.3)
+
+        # Generate adversarial examples
+        x_adv = attack.generate(x)
+
+        return x_adv
 
     def ddpm_block(self, x, training):
         # Reshape x to match DDPM input requirements if necessary
@@ -461,20 +667,31 @@ def interpret_model(model, params, input_data):
 
     return shap_values
 
-# Implement FGSM for adversarial training
+
 def adversarial_training(model, params, input_data, epsilon):
-    def loss_fn(params, x, y):
-        logits = model.apply({'params': params}, x)
-        return optax.softmax_cross_entropy_with_integer_labels(logits, y).mean()
+    try:
+        # Create a PyTorchClassifier wrapper for the model
+        def model_predict(x):
+            return model.apply({'params': params}, torch.from_numpy(x).float())
 
-    grad_fn = jax.grad(loss_fn, argnums=1)
+        classifier = PyTorchClassifier(
+            model=model_predict,
+            loss=torch.nn.CrossEntropyLoss(),
+            input_shape=input_data['image'].shape[1:],
+            nb_classes=model.features[-1],
+            clip_values=(0, 1)
+        )
 
-    def fgsm_attack(params, x, y):
-        grads = grad_fn(params, x, y)
-        return x + epsilon * jnp.sign(grads)
+        # Create FGSM attack
+        fgsm = FastGradientMethod(estimator=classifier, eps=epsilon)
 
-    perturbed_input = fgsm_attack(params, input_data['image'], input_data['label'])
-    return {'image': perturbed_input, 'label': input_data['label']}
+        # Generate adversarial examples
+        perturbed_input = fgsm.generate(x=input_data['image'])
+
+        return {'image': perturbed_input, 'label': input_data['label']}
+    except Exception as e:
+        logging.error(f"Error in adversarial_training: {str(e)}")
+        return input_data  # Return original input if an error occurs
 
 # Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
 def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size, learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):
@@ -498,13 +715,6 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
     best_val_performance = float('-inf')
     patience_counter = 0
 
-    # Initialize fairness metrics if applicable
-    if 'sensitive_attr' in train_data:
-        fairness_metric = BinaryLabelDatasetMetric(
-            train_data, label_name='label', protected_attribute_names=['sensitive_attr']
-        )
-        initial_disparate_impact = fairness_metric.disparate_impact()
-
     for epoch in range(num_epochs):
         if env is None:  # Standard supervised learning
             for batch in get_batches(train_data, batch_size):
@@ -514,59 +724,41 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
                 # Adversarial training
                 adv_batch = adversarial_training(model, state.params, batch, epsilon)
 
-                # Apply bias mitigation if applicable
-                if 'sensitive_attr' in batch:
-                    reweighing = Reweighing(unprivileged_groups=[{'sensitive_attr': 0}],
-                                            privileged_groups=[{'sensitive_attr': 1}])
-                    mitigated_batch = reweighing.fit_transform(BinaryLabelDataset(
-                        df=adv_batch,
-                        label_names=['label'],
-                        protected_attribute_names=['sensitive_attr']
-                    ))
-
-                    # Apply fairness constraint
-                    mitigated_batch['image'] = model.apply_fairness_constraint(
-                        mitigated_batch['image'],
-                        mitigated_batch['sensitive_attr']
-                    )
-                    state, loss = train_step(state, mitigated_batch)
-                else:
-                    state, loss = train_step(state, adv_batch)
+                state, loss = train_step(state, adv_batch)
 
             # Validation
             val_performance = evaluate_model(state, val_data, batch_size)
         else:  # Reinforcement learning
-            total_reward = 0
-            obs = env.reset()
-            done = False
-            while not done:
-                action = select_action(obs, model, state.params)
-                next_obs, reward, done, _ = env.step(action)
-                # Store experience in replay buffer (not implemented here)
-                # train_step_rl(state, experience)  # Update model using RL algorithms
-                total_reward += reward
-                obs = next_obs
-            loss = -total_reward  # Use negative reward as a proxy for loss
-            val_performance = total_reward
-
-        # Compute fairness metrics if applicable
-        if 'sensitive_attr' in val_data:
-            fairness_metric = BinaryLabelDatasetMetric(
-                val_data, label_name='label', protected_attribute_names=['sensitive_attr']
+            state, rewards, training_info = train_rl_agent(
+                model.rl_agent, env,
+                num_episodes=model_params.get('rl_num_episodes', 100),
+                max_steps=model_params.get('rl_max_steps', 1000),
+                gamma=model_params.get('rl_gamma', 0.99),
+                epsilon_start=model_params.get('rl_epsilon_start', 1.0),
+                epsilon_end=model_params.get('rl_epsilon_end', 0.01),
+                epsilon_decay=model_params.get('rl_epsilon_decay', 0.995),
+                learning_rate=model_params.get('rl_learning_rate', learning_rate),
+                batch_size=model_params.get('rl_batch_size', 64),
+                buffer_size=model_params.get('rl_buffer_size', 10000),
+                target_update_freq=model_params.get('rl_target_update_freq', 100),
+                seed=rng[0]
             )
-            current_disparate_impact = fairness_metric.disparate_impact()
+            loss = -np.mean(rewards)  # Use negative mean reward as a proxy for loss
+            val_performance = np.mean(rewards[-10:])  # Use mean of last 10 episodes as validation performance
+
+        # Compute basic fairness metrics if applicable
+        if 'sensitive_attr' in val_data:
+            predicted_labels = jnp.argmax(state.apply_fn({'params': state.params}, val_data['image']), axis=-1)
+            fairness_metrics = compute_fairness_metrics(val_data, predicted_labels)
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}, "
-                  f"disparate_impact = {current_disparate_impact:.3f}")
+                  f"disparate_impact = {fairness_metrics['disparate_impact']:.3f}")
         else:
             print(f"Epoch {epoch}: loss = {loss:.3f}, val_performance = {val_performance:.3f}")
 
-        # Early stopping (considering both performance and fairness if applicable)
+        # Early stopping based on validation performance
         if val_performance > best_val_performance:
-            if 'sensitive_attr' not in val_data or current_disparate_impact > initial_disparate_impact:
-                best_val_performance = val_performance
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            best_val_performance = val_performance
+            patience_counter = 0
         else:
             patience_counter += 1
 
@@ -576,32 +768,54 @@ def train_model(model_class, model_params, train_data, val_data, num_epochs, bat
 
     return state, model
 
+def compute_fairness_metrics(data, predicted_labels):
+    sensitive_attr = data['sensitive_attr']
+    true_labels = data['label']
+
+    privileged_mask = sensitive_attr == 1
+    unprivileged_mask = sensitive_attr == 0
+
+    privileged_accuracy = jnp.mean(predicted_labels[privileged_mask] == true_labels[privileged_mask])
+    unprivileged_accuracy = jnp.mean(predicted_labels[unprivileged_mask] == true_labels[unprivileged_mask])
+
+    disparate_impact = unprivileged_accuracy / privileged_accuracy if privileged_accuracy > 0 else 0
+
+    return {
+        'disparate_impact': disparate_impact
+    }
+
 def evaluate_fairness(state, data):
     # Predict labels using the trained model
     logits = state.apply_fn({'params': state.params}, data['image'])
     predicted_labels = jnp.argmax(logits, axis=-1)
 
-    # Create a BinaryLabelDataset
-    dataset = BinaryLabelDataset(
-        df=data,
-        label_names=['label'],
-        protected_attribute_names=['sensitive_attr'],
-        favorable_label=1,
-        unfavorable_label=0
-    )
+    # Compute basic fairness metrics without AIF360
+    sensitive_attr = data['sensitive_attr']
+    true_labels = data['label']
 
-    # Create a new dataset with predicted labels
-    predicted_dataset = dataset.copy()
-    predicted_dataset.labels = predicted_labels
+    # Calculate overall accuracy
+    overall_accuracy = jnp.mean(predicted_labels == true_labels)
 
-    # Compute fairness metrics
-    metric = BinaryLabelDatasetMetric(predicted_dataset,
-                                      unprivileged_groups=[{'sensitive_attr': 0}],
-                                      privileged_groups=[{'sensitive_attr': 1}])
+    # Calculate group-wise accuracies
+    privileged_mask = sensitive_attr == 1
+    unprivileged_mask = sensitive_attr == 0
+    privileged_accuracy = jnp.mean(predicted_labels[privileged_mask] == true_labels[privileged_mask])
+    unprivileged_accuracy = jnp.mean(predicted_labels[unprivileged_mask] == true_labels[unprivileged_mask])
+
+    # Calculate disparate impact
+    disparate_impact = unprivileged_accuracy / privileged_accuracy if privileged_accuracy > 0 else 0
+
+    # Calculate equal opportunity difference
+    privileged_tpr = jnp.sum((predicted_labels == 1) & (true_labels == 1) & privileged_mask) / jnp.sum((true_labels == 1) & privileged_mask)
+    unprivileged_tpr = jnp.sum((predicted_labels == 1) & (true_labels == 1) & unprivileged_mask) / jnp.sum((true_labels == 1) & unprivileged_mask)
+    equal_opportunity_difference = privileged_tpr - unprivileged_tpr
 
     return {
-        'disparate_impact': metric.disparate_impact(),
-        'equal_opportunity_difference': metric.equal_opportunity_difference()
+        'overall_accuracy': overall_accuracy,
+        'privileged_accuracy': privileged_accuracy,
+        'unprivileged_accuracy': unprivileged_accuracy,
+        'disparate_impact': disparate_impact,
+        'equal_opportunity_difference': equal_opportunity_difference
     }
 
 def select_action(state, model, params):
@@ -685,6 +899,9 @@ if __name__ == "__main__":
         bci_channels = 64
         bci_sampling_rate = 1000
         wireless_latency = 0.01
+        use_generative_ai = True
+        generative_ai_features = (128, 64)
+        generative_ai_output_dim = 10
 
     # Set up gym environment
     env = gym.make('CartPole-v1')
@@ -736,7 +953,10 @@ if __name__ == "__main__":
         'use_rnn': True,
         'use_lstm': True,
         'use_gan': True,
-        'conv_dim': 2
+        'conv_dim': 2,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': 10
     }
 
     # Define model parameters for 3D convolution
@@ -749,7 +969,10 @@ if __name__ == "__main__":
         'use_rnn': True,
         'use_lstm': True,
         'use_gan': True,
-        'conv_dim': 3
+        'conv_dim': 3,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': 10
     }
 
     # Train and evaluate 2D convolution model
@@ -781,7 +1004,10 @@ if __name__ == "__main__":
         'use_rnn': False,
         'use_lstm': False,
         'use_gan': False,
-        'use_rl': True
+        'use_rl': True,
+        'use_generative_ai': True,
+        'generative_ai_features': (128, 64),
+        'generative_ai_output_dim': action_space
     }
     rl_model = ModelArchitecture(**rl_model_params)
     rl_state, _ = create_train_state(jax.random.PRNGKey(0), rl_model, (observation_space,), 1e-3)
@@ -812,6 +1038,23 @@ if __name__ == "__main__":
     rl_test_input = jax.random.normal(jax.random.PRNGKey(0), shape=(1, observation_space))
     rl_test_output = rl_model.apply({'params': rl_state.params}, rl_test_input)
     print("RL model test output shape:", rl_test_output.shape)
+
+    # Test GenerativeAIFramework
+    gen_ai_framework = GenerativeAIFramework(features=(128, 64), output_dim=10)
+    gen_ai_state = gen_ai_framework.init_model(jax.random.PRNGKey(0), (1, 28, 28))
+    gen_ai_input = jax.random.normal(jax.random.PRNGKey(0), shape=(1, 28, 28))
+    gen_ai_output = gen_ai_framework.generate(gen_ai_state, gen_ai_input)
+    print("GenerativeAI output shape:", gen_ai_output.shape)
+
+    # Integrate GenerativeAIFramework with NeuroFlex
+    integrated_model = ModelArchitecture(**model_params_2d)
+    integrated_state = create_train_state(jax.random.PRNGKey(0), integrated_model, (1, 28, 28, 1), 1e-3)[0]
+    integrated_output = integrated_model.apply({'params': integrated_state.params}, test_input_2d)
+    print("Integrated model output shape:", integrated_output.shape)
+
+    # Test GenerativeAI within NeuroFlex
+    neuroflex_gen_ai_output = integrated_model.apply({'params': integrated_state.params}, test_input_2d, method=integrated_model.generative_ai.generate)
+    print("NeuroFlex GenerativeAI output shape:", neuroflex_gen_ai_output.shape)
 
 class DataPipeline:
     def __init__(self, config):
