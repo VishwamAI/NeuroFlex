@@ -2,7 +2,7 @@ import pytest
 from jax import numpy as jnp
 from jax import random
 import pennylane as qml
-from NeuroFlex.quantum_nn import QuantumNeuralNetwork
+from quantum_nn_module import QuantumNeuralNetwork
 
 @pytest.fixture
 def qnn():

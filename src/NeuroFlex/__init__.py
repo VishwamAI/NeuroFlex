@@ -8,9 +8,9 @@ from .lale_integration import LaleIntegration
 from .aif360_integration import AIF360Integration
 # from .ffdl_integration import FfDLIntegration  # Commented out due to missing setup
 from .neunets_integration import NeuNetSIntegration
-from NeuroFlex.modules.jax_module import JAXModel, train_jax_model
-from NeuroFlex.modules.tensorflow import TensorFlowModel, train_tf_model
-from NeuroFlex.modules.pytorch import PyTorchModel, train_pytorch_model
+from .modules.jax_module import JAXModel, train_jax_model
+from .modules.tensorflow import TensorFlowModel, train_tf_model
+from .modules.pytorch import PyTorchModel, train_pytorch_model
 from .xarray_integration import XarrayIntegration
 from .bioinformatics_integration import BioinformaticsIntegration
 from .scikit_bio_integration import ScikitBioIntegration
