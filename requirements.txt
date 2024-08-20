@@ -32,4 +32,4 @@ torch>=2.0.1,<2.1.0
 transformers>=4.18.0,<4.19.0
 
 # For Alphafold, consider pinning to a specific commit for stability
-git+https://github.com/google-deepmind/alphafold.git@<commit_hash>#egg=alphafold
+git+https://github.com/google-deepmind/alphafold.git@main#egg=alphafold
