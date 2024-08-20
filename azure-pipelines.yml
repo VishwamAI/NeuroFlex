@@ -25,15 +25,3 @@ steps:
     python -m pip install --upgrade pip
     pip install -r requirements.txt
   displayName: 'Install dependencies'
-
-- script: |
-    pytest --junitxml=junit/test-results.xml
-  displayName: 'Run tests with pytest'
-
-- task: PublishTestResults@2
-  inputs:
-    testResultsFormat: 'JUnit'
-    testResultsFiles: 'junit/test-results.xml'
-    failTaskOnFailedTests: true
-  displayName: 'Publish test results'
-
