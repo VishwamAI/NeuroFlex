@@ -31,3 +31,4 @@ xarray
 torch
 transformers
 git+https://github.com/google-deepmind/alphafold.git
+shap

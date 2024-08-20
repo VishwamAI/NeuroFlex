@@ -11,6 +11,7 @@ from neuroflex.scikit_bio_integration import ScikitBioIntegration
 from neuroflex.ete_integration import ETEIntegration
 from neuroflex.alphafold_integration import AlphaFoldIntegration
 from neuroflex.xarray_integration import XarrayIntegration
+from neuroflex.quantum_nn_module import QuantumNeuralNetwork
 
 # Define your model
 model = NeuroFlex(
@@ -20,6 +21,7 @@ model = NeuroFlex(
     use_gan=True,
     fairness_constraint=0.1,
     use_quantum=True,  # Enable quantum neural network
+    use_alphafold=True,  # Enable AlphaFold integration
     backend='jax',  # Choose from 'jax', 'tensorflow', 'pytorch'
     jax_model=JAXModel,
     tensorflow_model=TensorFlowModel,
@@ -28,7 +30,8 @@ model = NeuroFlex(
     bioinformatics_integration=BioinformaticsIntegration(),
     scikit_bio_integration=ScikitBioIntegration(),
     ete_integration=ETEIntegration(),
-    alphafold_integration=AlphaFoldIntegration()
+    alphafold_integration=AlphaFoldIntegration(),
+    alphafold_params={'max_recycling': 3}  # Add AlphaFold-specific parameters
 )
 
 # Prepare bioinformatics data
@@ -55,13 +58,23 @@ ete_integration.visualize_tree(tree, "output_tree.png")
 tree_stats = ete_integration.get_tree_statistics(tree)
 
 # Prepare AlphaFold data
-alphafold_integration.setup_model({})  # Add appropriate model parameters
+alphafold_integration.setup_model({'max_recycling': 3})  # Add appropriate model parameters
 protein_sequences = [seq for seq in processed_sequences if not bio_integration._is_dna(seq.seq)]
 alphafold_structures = []
+alphafold_plddt_scores = []
+alphafold_pae_scores = []
 for seq in protein_sequences:
     alphafold_integration.prepare_features(str(seq.seq))
     structure = alphafold_integration.predict_structure()
     alphafold_structures.append(structure)
+    plddt_scores = alphafold_integration.get_plddt_scores()
+    pae_scores = alphafold_integration.get_predicted_aligned_error()
+    alphafold_plddt_scores.append(plddt_scores)
+    alphafold_pae_scores.append(pae_scores)
+
+# Print average scores
+print(f"Average pLDDT score: {np.mean([np.mean(scores) for scores in alphafold_plddt_scores])}")
+print(f"Average predicted aligned error: {np.mean([np.mean(scores) for scores in alphafold_pae_scores])}")
 
 # Combine bioinformatics data
 bioinformatics_data = {
@@ -101,5 +114,9 @@ val_data = None    # Replace with actual validation data
 trained_state, trained_model = train_model(
     model, train_data, val_data,
     num_epochs=10, batch_size=32, learning_rate=1e-3,
-    bioinformatics_data=bioinformatics_data
+    bioinformatics_data=bioinformatics_data,
+    use_alphafold=True,
+    use_quantum=True,
+    alphafold_structures=alphafold_structures,
+    quantum_params=quantum_model.get_params()
 )
