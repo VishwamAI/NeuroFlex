@@ -30,9 +30,9 @@ ete3
 xarray
 torch
 transformers
-# Removed direct GitHub dependency: git+https://github.com/google-deepmind/alphafold.git
+git+https://github.com/google-deepmind/alphafold.git
 # If needed, install alphafold separately or specify a PyPI-compatible version
 shap
 sentencepiece
 nltk
-gramformer
+git+https://github.com/PrithivirajDamodaran/Gramformer.git
