@@ -69,6 +69,20 @@ class NeuroFlexNN(nn.Module):
         self.conv_layers = []
         self.bn_layers = []
         self.dense_layers = []
+        self.step_count = 0
+        self.rng = jax.random.PRNGKey(0)  # Initialize with a default seed
+
+        if self.use_cnn:
+            self._setup_cnn_layers()
+        self._setup_dense_layers()
+
+        self.final_dense = nn.Dense(self.output_shape[-1], dtype=self.dtype, name="final_dense")
+        if self.use_rl:
+            self.rl_layer = nn.Dense(self.action_dim, dtype=self.dtype, name="rl_layer")
+            self.value_layer = nn.Dense(1, dtype=self.dtype, name="value_layer")
+            self.rl_optimizer = optax.adam(learning_rate=self.rl_learning_rate)
+            self.replay_buffer = ReplayBuffer(100000)  # Default buffer size of 100,000
+            self.rl_epsilon = self.rl_epsilon_start
 
         if self.use_cnn:
             self._setup_cnn_layers()
@@ -83,13 +97,14 @@ class NeuroFlexNN(nn.Module):
             self.rl_epsilon = self.rl_epsilon_start
 
     def _setup_cnn_layers(self):
-        for i, feat in enumerate(self.features[:-1]):
-            self.conv_layers.append(nn.Conv(features=feat, kernel_size=(3,) * self.conv_dim, dtype=self.dtype, padding='SAME', name=f"conv_{i}"))
-            self.bn_layers.append(nn.BatchNorm(dtype=self.dtype, name=f"bn_{i}"))
+        self.conv_layers = [nn.Conv(features=feat, kernel_size=(3,) * self.conv_dim, dtype=self.dtype, padding='SAME', name=f"conv_{i}")
+                            for i, feat in enumerate(self.features[:-1])]
+        self.bn_layers = [nn.BatchNorm(dtype=self.dtype, name=f"bn_{i}")
+                          for i in range(len(self.features) - 1)]
 
     def _setup_dense_layers(self):
-        for i, feat in enumerate(self.features[:-1]):
-            self.dense_layers.append(nn.Dense(feat, dtype=self.dtype, name=f"dense_{i}"))
+        self.dense_layers = [nn.Dense(feat, dtype=self.dtype, name=f"dense_{i}")
+                             for i, feat in enumerate(self.features[:-1])]
         self.dense_layers.append(nn.Dropout(0.5))
 
     def _validate_shapes(self):
@@ -143,9 +158,12 @@ class NeuroFlexNN(nn.Module):
             else:
                 epsilon = self.rl_epsilon_end + (self.rl_epsilon_start - self.rl_epsilon_end) * \
                           jnp.exp(-self.rl_epsilon_decay * self.step_count)
+                if not hasattr(self, 'rng'):
+                    self.rng = jax.random.PRNGKey(0)
+                self.rng, subkey = jax.random.split(self.rng)
                 x = jax.lax.cond(
-                    jax.random.uniform(self.rng) < epsilon,
-                    lambda: jax.random.randint(self.rng, (x.shape[0],), 0, self.action_dim),
+                    jax.random.uniform(subkey) < epsilon,
+                    lambda: jax.random.randint(subkey, (x.shape[0],), 0, self.action_dim),
                     lambda: jnp.argmax(q_values, axis=-1)
                 )
             self.step_count += 1
@@ -275,6 +293,8 @@ class AdvancedNNComponents:
         else:
             q_values = state.apply_fn({'params': state.params}, observation[None, ...])
             return jnp.argmax(q_values[0])
+
+from flax.training import train_state
 
 def create_rl_train_state(rng, model, dummy_input, optimizer):
     params = model.init(rng, dummy_input)['params']

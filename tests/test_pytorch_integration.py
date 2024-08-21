@@ -1,8 +1,8 @@
 import unittest
 import torch
 import numpy as np
-from modules.pytorch import PyTorchModel, train_pytorch_model
-from array_libraries import ArrayLibraries
+from NeuroFlex.modules.pytorch import PyTorchModel, train_pytorch_model
+from NeuroFlex.array_libraries import ArrayLibraries
 
 class TestPyTorchIntegration(unittest.TestCase):
     def setUp(self):

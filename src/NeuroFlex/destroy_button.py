@@ -53,6 +53,21 @@ class DestroyButton:
         self.confirmation_expiry = None
         self.logger.info(f"Destruction request cancelled by user {self.user_id}")
 
+class HumanOperatedDestroyButton(DestroyButton):
+    def __init__(self, user_id, authentication_func, destruction_func):
+        super().__init__(user_id, authentication_func, destruction_func)
+
+    def request_human_confirmation(self):
+        # Request human confirmation before proceeding with destruction
+        user_input = input("Enter confirmation code to destroy (or 'cancel' to abort): ")
+        if user_input.lower() == 'cancel':
+            self.cancel_destruction()
+            print("Destruction cancelled.")
+        elif self.confirm_destruction(user_input):
+            print("Destruction confirmed and executed.")
+        else:
+            print("Incorrect confirmation code. Destruction aborted.")
+
 def example_authentication(user_id: str) -> bool:
     """Example authentication function. Replace with actual authentication logic."""
     return user_id == "authorized_user"
@@ -61,22 +76,16 @@ def example_destruction() -> None:
     """Example destruction function. Replace with actual destruction logic."""
     print("System destroyed!")
 
+# Integrate the human-operated button into the main script
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    destroy_button = DestroyButton("authorized_user", example_authentication, example_destruction)
+    destroy_button = HumanOperatedDestroyButton("authorized_user", example_authentication, example_destruction)
 
     try:
         confirmation_code = destroy_button.request_destruction()
         print(f"Confirmation code: {confirmation_code}")
 
-        user_input = input("Enter confirmation code to destroy (or 'cancel' to abort): ")
-
-        if user_input.lower() == 'cancel':
-            destroy_button.cancel_destruction()
-            print("Destruction cancelled.")
-        elif destroy_button.confirm_destruction(user_input):
-            print("Destruction confirmed and executed.")
-        else:
-            print("Incorrect confirmation code. Destruction aborted.")
+        # Request human confirmation
+        destroy_button.request_human_confirmation()
     except Exception as e:
         print(f"An error occurred: {str(e)}")

@@ -6,20 +6,20 @@ import optax
 from sklearn.base import BaseEstimator, ClassifierMixin
 from lale import operators as lale_ops
 from art.attacks.evasion import FastGradientMethod
-from art.experimental.estimators.jax import JAXClassifier
+from art.estimators.classification import KerasClassifier
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tensorflow import keras
 
 class MachineLearning(nn.Module):
     features: List[int]
-    activation: callable = nn.relu
+    activation: callable = nn.ReLU()
     dropout_rate: float = 0.5
     use_lale: bool = False
     use_art: bool = False
     art_epsilon: float = 0.3
 
-    @nn.compact
     def __call__(self, x, training: bool = False):
         for feat in self.features[:-1]:
             x = nn.Dense(feat)(x)
@@ -46,20 +46,23 @@ class MachineLearning(nn.Module):
         return classifier
 
     def generate_adversarial_examples(self, x):
-        classifier = JAXClassifier(
-            model=lambda x: self.apply({'params': self.params}, x),
-            loss=lambda x, y: optax.softmax_cross_entropy(x, y),
+        def keras_model(x):
+            return self.apply({'params': self.params}, x).numpy()
+
+        classifier = KerasClassifier(
+            model=keras_model,
+            use_logits=True,
             input_shape=x.shape[1:],
             nb_classes=self.features[-1]
         )
 
         attack = FastGradientMethod(classifier, eps=self.art_epsilon)
-        x_adv = attack.generate(x)
+        x_adv = attack.generate(x.numpy())
 
-        return x_adv
+        return jnp.array(x_adv)
 
 class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, features, activation=nn.relu, dropout_rate=0.5, learning_rate=0.001):
+    def __init__(self, features, activation=nn.ReLU(), dropout_rate=0.5, learning_rate=0.001):
         self.features = features
         self.activation = activation
         self.dropout_rate = dropout_rate

@@ -3,9 +3,10 @@
 import unittest
 import jax
 import jax.numpy as jnp
-import flax
+from flax import linen as nn
+from flax.training import train_state
 import optax
-from modules.jax_module import JAXModel, train_jax_model, batch_predict
+from NeuroFlex.jax_module import JAXModel, train_jax_model, batch_predict
 
 class TestJAXModule(unittest.TestCase):
     def setUp(self):
