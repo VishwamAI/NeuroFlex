@@ -1,4 +1,5 @@
-from ete3 import Tree, TreeStyle
+from ete3 import Tree
+from ete3.treeview import TreeStyle
 from typing import List, Optional
 
 class ETEIntegration:

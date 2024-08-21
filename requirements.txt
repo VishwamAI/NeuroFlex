@@ -31,4 +31,8 @@ xarray
 torch
 transformers
 git+https://github.com/google-deepmind/alphafold.git
+# If needed, install alphafold separately or specify a PyPI-compatible version
 shap
+sentencepiece
+nltk
+git+https://github.com/PrithivirajDamodaran/Gramformer.git

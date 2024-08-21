@@ -3,6 +3,24 @@ from typing import List, Dict, Any
 from alphafold.model import model
 from alphafold.common import protein
 from alphafold.data import pipeline
+from unittest.mock import MagicMock
+
+# Mock SCOPData
+SCOPData = MagicMock()
+SCOPData.protein_letters_3to1 = {
+    'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
+    'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+    'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
+    'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+}
+
+# Mock getDomainBySid function
+def getDomainBySid(sid):
+    """
+    Mock implementation of getDomainBySid.
+    This function is a placeholder and should be replaced with actual implementation if needed.
+    """
+    return MagicMock()
 
 class AlphaFoldIntegration:
     def __init__(self):

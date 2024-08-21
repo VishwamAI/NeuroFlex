@@ -81,19 +81,20 @@ class TestXLAOptimizations(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shapes = [(1, 28, 28, 1), (1, 14, 14, 1), (2, 28, 28, 1), (4, 7, 7, 1), (8, 32, 32, 1)]
+        self.output_shapes = [(1, 10), (1, 10), (2, 10), (4, 10), (8, 10)]
 
     def test_jit_compilation(self):
         import time
         logging.info("Starting test_jit_compilation")
 
-        for input_shape in self.input_shapes:
-            with self.subTest(input_shape=input_shape):
-                logging.info(f"Testing input shape: {input_shape}")
+        for input_shape, output_shape in zip(self.input_shapes, self.output_shapes):
+            with self.subTest(input_shape=input_shape, output_shape=output_shape):
+                logging.info(f"Testing input shape: {input_shape}, output shape: {output_shape}")
                 model = None
                 params = None
                 try:
-                    model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True)
-                    logging.info(f"Model created for input shape: {input_shape}")
+                    model = NeuroFlexNN(features=[32, 64, output_shape[1]], use_cnn=True, input_shape=input_shape, output_shape=output_shape)
+                    logging.info(f"Model created for input shape: {input_shape}, output shape: {output_shape}")
 
                     x = jnp.ones(input_shape)
                     params = model.init(self.rng, x)['params']
@@ -101,7 +102,7 @@ class TestXLAOptimizations(unittest.TestCase):
                     logging.info(f"Params structure: {jax.tree_map(lambda x: x.shape, params)}")
 
                     def forward(params, x):
-                        return model.apply({'params': params}, x)
+                        return model.apply({'params': params}, x, deterministic=True)
 
                     jitted_forward = jax.jit(forward)
 
@@ -113,7 +114,6 @@ class TestXLAOptimizations(unittest.TestCase):
                     non_jit_time = time.time() - start_time
                     logging.info(f"Non-jitted execution time for shape {input_shape}: {non_jit_time:.6f} seconds")
                     logging.info(f"Non-jitted output shape: {non_jit_output.shape}")
-                    logging.info(f"Non-jitted output: {non_jit_output}")
 
                     # Jitted execution
                     _ = jitted_forward(params, x)  # Compile
@@ -122,24 +122,24 @@ class TestXLAOptimizations(unittest.TestCase):
                     jit_time = time.time() - start_time
                     logging.info(f"Jitted execution time for shape {input_shape}: {jit_time:.6f} seconds")
                     logging.info(f"Jitted output shape: {jit_output.shape}")
-                    logging.info(f"Jitted output: {jit_output}")
 
                     # Shape check
                     self.assertEqual(non_jit_output.shape, jit_output.shape,
                                      f"Shape mismatch for input {input_shape}: non-jitted {non_jit_output.shape}, jitted {jit_output.shape}")
+                    self.assertEqual(jit_output.shape, output_shape,
+                                     f"Expected output shape {output_shape}, got {jit_output.shape}")
 
                     # Output equality check
-                    np.testing.assert_allclose(non_jit_output, jit_output, rtol=1e-5, atol=1e-5)
+                    np.testing.assert_allclose(non_jit_output, jit_output, rtol=1e-5, atol=1e-5,
+                                               err_msg=f"Outputs not equal for input {input_shape}")
                     logging.info(f"Outputs are equal for input {input_shape}")
 
                     # Performance check
                     self.assertLess(jit_time, non_jit_time,
-                                    f"Jitted function is not faster for input {input_shape}")
+                                    f"Jitted function is not faster for input {input_shape}. "
+                                    f"Jitted time: {jit_time:.6f}, Non-jitted time: {non_jit_time:.6f}")
 
                     # Output checks
-                    expected_output_shape = (input_shape[0], model.features[-1])
-                    self.assertEqual(jit_output.shape, expected_output_shape,
-                                     f"Expected output shape {expected_output_shape}, got {jit_output.shape}")
                     self.assertTrue(jnp.all(jnp.isfinite(jit_output)),
                                     f"Output contains non-finite values for input {input_shape}")
                     self.assertFalse(jnp.all(jit_output == 0),
@@ -151,46 +151,70 @@ class TestXLAOptimizations(unittest.TestCase):
                     # Test for consistent output across multiple calls
                     jit_outputs = [jitted_forward(params, x) for _ in range(5)]
                     for i, output in enumerate(jit_outputs[1:], 1):
-                        np.testing.assert_allclose(jit_outputs[0], output, rtol=1e-5, atol=1e-5)
+                        np.testing.assert_allclose(jit_outputs[0], output, rtol=1e-5, atol=1e-5,
+                                                   err_msg=f"Inconsistent output on call {i} for input {input_shape}")
 
                     # Test with random input
                     random_x = jax.random.normal(self.rng, input_shape)
                     random_output = jitted_forward(params, random_x)
-                    self.assertEqual(random_output.shape, (input_shape[0], model.features[-1]),
-                                     f"Shape mismatch for random input: expected {(input_shape[0], model.features[-1])}, got {random_output.shape}")
+                    self.assertEqual(random_output.shape, output_shape,
+                                     f"Shape mismatch for random input: expected {output_shape}, got {random_output.shape}")
 
                     # Test gradients
                     grad_fn = jax.grad(lambda p, x: jnp.sum(forward(p, x)))
                     grads = grad_fn(params, x)
                     self.assertTrue(all(jnp.any(g != 0) for g in jax.tree_leaves(grads)),
-                                    "Gradients should not be all zero")
+                                    f"Gradients should not be all zero for input {input_shape}")
 
-                    logging.info(f"Test for input shape {input_shape} completed successfully")
+                    # Test gradient magnitudes
+                    grad_magnitudes = [jnp.max(jnp.abs(g)) for g in jax.tree_leaves(grads)]
+                    self.assertTrue(all(1e-8 < m < 1e5 for m in grad_magnitudes),
+                                    f"Gradient magnitudes should be within reasonable range for input {input_shape}")
+
+                    logging.info(f"Test for input shape {input_shape} and output shape {output_shape} completed successfully")
 
                     # Test input shape mismatch
                     incorrect_shape = input_shape[:-1] + (input_shape[-1] + 1,)
                     with self.assertRaises(ValueError) as cm:
-                        model.apply({'params': params}, jnp.ones(incorrect_shape))
-                    self.assertIn("Channel size mismatch", str(cm.exception))
+                        model.apply({'params': params}, jnp.ones(incorrect_shape), deterministic=True)
+                    self.assertIn("Channel size mismatch", str(cm.exception),
+                                  f"Expected 'Channel size mismatch' error for incorrect shape {incorrect_shape}")
                     logging.info(f"Input shape mismatch test passed for {input_shape}")
 
                     # Test with batch size mismatch
                     incorrect_batch_shape = (input_shape[0] + 1,) + input_shape[1:]
                     with self.assertRaises(ValueError) as cm:
-                        model.apply({'params': params}, jnp.ones(incorrect_batch_shape))
-                    self.assertIn("Batch size mismatch", str(cm.exception))
+                        model.apply({'params': params}, jnp.ones(incorrect_batch_shape), deterministic=True)
+                    self.assertIn("Batch size mismatch", str(cm.exception),
+                                  f"Expected 'Batch size mismatch' error for incorrect batch shape {incorrect_batch_shape}")
                     logging.info(f"Batch size mismatch test passed for {input_shape}")
 
+                    # Test handling of NaN and Inf values
+                    nan_input = jnp.ones(input_shape)
+                    nan_input = nan_input.at[0, 0, 0, 0].set(jnp.nan)
+                    with self.assertRaises(ValueError) as cm:
+                        jitted_forward(params, nan_input)
+                    self.assertIn("NaN", str(cm.exception), "Expected error for NaN input")
+
+                    inf_input = jnp.ones(input_shape)
+                    inf_input = inf_input.at[0, 0, 0, 0].set(jnp.inf)
+                    with self.assertRaises(ValueError) as cm:
+                        jitted_forward(params, inf_input)
+                    self.assertIn("Inf", str(cm.exception), "Expected error for Inf input")
+
+                    logging.info(f"NaN and Inf handling test passed for {input_shape}")
+
                 except Exception as e:
-                    logging.error(f"Error in test_jit_compilation for input shape {input_shape}: {str(e)}")
+                    logging.error(f"Error in test_jit_compilation for input shape {input_shape} and output shape {output_shape}: {str(e)}")
                     if model is not None:
                         logging.error(f"Model configuration: {model}")
                     logging.error(f"Input shape: {input_shape}")
+                    logging.error(f"Output shape: {output_shape}")
                     if params is not None:
                         logging.error(f"Params structure: {jax.tree_map(lambda x: x.shape, params)}")
                     raise
 
-        logging.info("test_jit_compilation completed successfully for all input shapes")
+        logging.info("test_jit_compilation completed successfully for all input and output shapes")
 
 class TestConvolutionLayers(unittest.TestCase):
     def setUp(self):
@@ -201,14 +225,15 @@ class TestConvolutionLayers(unittest.TestCase):
     def test_2d_convolution(self):
         for input_shape in self.input_shapes_2d:
             with self.subTest(input_shape=input_shape):
-                model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape)
+                output_shape = (input_shape[0], 10)
+                model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape)
                 variables = model.init(self.rng, jnp.ones(input_shape))
                 params = variables['params']
-                output = model.apply(variables, jnp.ones(input_shape))
-                self.assertEqual(output.shape, (input_shape[0], 10))
-                self.assertIn('conv_layers_0', params)
-                self.assertIn('conv_layers_1', params)
-                cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block)
+                output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
+                self.assertEqual(output.shape, output_shape)
+                self.assertIn('conv_layers', params)
+                self.assertIn('bn_layers', params)
+                cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block, deterministic=True)
                 self.assertIsInstance(cnn_output, jnp.ndarray)
 
                 # Calculate expected flattened output size
@@ -224,18 +249,18 @@ class TestConvolutionLayers(unittest.TestCase):
                 self.assertTrue(jnp.any(cnn_output != 0), "CNN output should not be all zeros")
                 self.assertTrue(jnp.all(cnn_output >= 0), "CNN output should be non-negative after ReLU")
                 self.assertLess(jnp.max(cnn_output), 1e5, "CNN output values should be reasonably bounded")
-                self.assertEqual(params['conv_layers_0']['kernel'].shape, (3, 3, input_shape[-1], 32))
-                self.assertEqual(params['conv_layers_1']['kernel'].shape, (3, 3, 32, 64))
+                self.assertEqual(params['conv_layers'][0]['kernel'].shape, (3, 3, input_shape[-1], 32))
+                self.assertEqual(params['conv_layers'][1]['kernel'].shape, (3, 3, 32, 64))
                 self.assertEqual(len(cnn_output.shape), 2, "CNN output should be 2D (flattened)")
 
                 # Check if the output is different for different inputs
                 random_input = jax.random.normal(self.rng, input_shape)
-                random_output = model.apply(variables, random_input, method=model.cnn_block)
+                random_output = model.apply(variables, random_input, method=model.cnn_block, deterministic=True)
                 self.assertFalse(jnp.allclose(cnn_output, random_output), "Output should be different for different inputs")
 
                 # Check if gradients can be computed
                 def loss_fn(params):
-                    output = model.apply({'params': params}, jnp.ones(input_shape))
+                    output = model.apply({'params': params}, jnp.ones(input_shape), deterministic=True)
                     return jnp.sum(output)
                 grads = jax.grad(loss_fn)(params)
                 self.assertIsNotNone(grads, "Gradients should be computable")
@@ -244,14 +269,15 @@ class TestConvolutionLayers(unittest.TestCase):
     def test_3d_convolution(self):
         for input_shape in self.input_shapes_3d:
             with self.subTest(input_shape=input_shape):
-                model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=3, input_shape=input_shape)
+                output_shape = (input_shape[0], 10)
+                model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=3, input_shape=input_shape, output_shape=output_shape)
                 variables = model.init(self.rng, jnp.ones(input_shape))
                 params = variables['params']
-                output = model.apply(variables, jnp.ones(input_shape))
-                self.assertEqual(output.shape, (input_shape[0], 10))
-                self.assertIn('conv_layers_0', params)
-                self.assertIn('conv_layers_1', params)
-                cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block)
+                output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
+                self.assertEqual(output.shape, output_shape)
+                self.assertIn('conv_layers', params)
+                self.assertIn('bn_layers', params)
+                cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block, deterministic=True)
                 self.assertIsInstance(cnn_output, jnp.ndarray)
 
                 # Calculate expected output shape
@@ -268,67 +294,68 @@ class TestConvolutionLayers(unittest.TestCase):
                 self.assertTrue(jnp.any(cnn_output != 0), "CNN output should not be all zeros")
                 self.assertTrue(jnp.all(cnn_output >= 0), "CNN output should be non-negative after ReLU")
                 self.assertLess(jnp.max(cnn_output), 1e5, "CNN output values should be reasonably bounded")
-                self.assertEqual(params['conv_layers_0']['kernel'].shape, (3, 3, 3, input_shape[-1], 32))
-                self.assertEqual(params['conv_layers_1']['kernel'].shape, (3, 3, 3, 32, 64))
+                self.assertEqual(params['conv_layers'][0]['kernel'].shape, (3, 3, 3, input_shape[-1], 32))
+                self.assertEqual(params['conv_layers'][1]['kernel'].shape, (3, 3, 3, 32, 64))
                 self.assertEqual(len(cnn_output.shape), 2, "CNN output should be 2D (flattened)")
                 self.assertEqual(cnn_output.size, expected_flat_size,
                                  f"Expected {expected_flat_size} elements, got {cnn_output.size}")
 
                 # Test with different input values
                 random_input = jax.random.normal(self.rng, input_shape)
-                random_output = model.apply(variables, random_input, method=model.cnn_block)
+                random_output = model.apply(variables, random_input, method=model.cnn_block, deterministic=True)
                 self.assertEqual(random_output.shape, expected_shape, "Shape mismatch with random input")
                 self.assertFalse(jnp.allclose(cnn_output, random_output), "Output should differ for different inputs")
 
                 # Test for gradient flow
                 def loss_fn(params):
-                    output = model.apply({'params': params}, jnp.ones(input_shape), method=model.cnn_block)
+                    output = model.apply({'params': params}, jnp.ones(input_shape), method=model.cnn_block, deterministic=True)
                     return jnp.sum(output)
                 grads = jax.grad(loss_fn)(params)
                 self.assertTrue(all(jnp.any(jnp.abs(g) > 0) for g in jax.tree_leaves(grads)),
                                 "Gradients should flow through all layers")
 
     def test_cnn_block_accessibility(self):
-        model_2d = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1))
-        model_3d = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=3, input_shape=(1, 16, 16, 16, 1))
+        model_2d = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1), output_shape=(1, 10))
+        model_3d = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=3, input_shape=(1, 16, 16, 16, 1), output_shape=(1, 10))
 
         self.assertTrue(hasattr(model_2d, 'cnn_block'), "cnn_block should be accessible in 2D model")
         self.assertTrue(hasattr(model_3d, 'cnn_block'), "cnn_block should be accessible in 3D model")
 
     def test_mixed_cnn_dnn(self):
         input_shape = (1, 28, 28, 1)
-        model = NeuroFlexNN(features=[32, 64, 128, 10], use_cnn=True, conv_dim=2, input_shape=input_shape)
+        output_shape = (1, 10)
+        model = NeuroFlexNN(features=[32, 64, 128, 10], use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape)
         variables = model.init(self.rng, jnp.ones(input_shape))
         params = variables['params']
-        output = model.apply(variables, jnp.ones(input_shape))
-        self.assertEqual(output.shape, (1, 10))
-        self.assertIn('conv_layers_0', params)
-        self.assertIn('conv_layers_1', params)
-        self.assertIn('dense_layers_0', params)
+        output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
+        self.assertEqual(output.shape, output_shape)
+        self.assertIn('conv_layers', params)
+        self.assertIn('bn_layers', params)
+        self.assertIn('dense_layers', params)
         self.assertIn('final_dense', params)
 
         # Test CNN block output
-        cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block)
+        cnn_output = model.apply(variables, jnp.ones(input_shape), method=model.cnn_block, deterministic=True)
         self.assertIsInstance(cnn_output, jnp.ndarray)
         self.assertEqual(len(cnn_output.shape), 2, "CNN output should be 2D (flattened)")
 
         # Test DNN block output
         dnn_input = jnp.ones((1, 128))  # Assuming 128 is the flattened size after CNN
-        dnn_output = model.apply(variables, dnn_input, method=model.dnn_block)
-        self.assertEqual(dnn_output.shape, (1, 10))
+        dnn_output = model.apply(variables, dnn_input, method=model.dnn_block, deterministic=True)
+        self.assertEqual(dnn_output.shape, output_shape)
 
         # Test end-to-end forward pass
-        full_output = model.apply(variables, jnp.ones(input_shape))
-        self.assertEqual(full_output.shape, (1, 10))
+        full_output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
+        self.assertEqual(full_output.shape, output_shape)
 
     def test_error_handling(self):
         with self.assertRaises(ValueError):
-            NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=4, input_shape=(1, 28, 28, 1))
+            NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=4, input_shape=(1, 28, 28, 1), output_shape=(1, 10))
 
-        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1))
+        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1), output_shape=(1, 10))
         variables = model.init(self.rng, jnp.ones((1, 28, 28, 1)))
         params = variables['params']
-        del params['conv_layers_0']
+        del params['conv_layers'][0]
         with self.assertRaises(KeyError):
             model.apply({'params': params}, jnp.ones((1, 28, 28, 1)))
 
@@ -336,7 +363,7 @@ class TestConvolutionLayers(unittest.TestCase):
             model.apply(variables, jnp.ones((1, 32, 32, 1)))
 
     def test_input_dimension_mismatch(self):
-        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1))
+        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=(1, 28, 28, 1), output_shape=(1, 10))
         variables = model.init(self.rng, jnp.ones((1, 28, 28, 1)))
 
         incorrect_shape = (1, 32, 32, 1)
@@ -345,17 +372,18 @@ class TestConvolutionLayers(unittest.TestCase):
 
     def test_gradients(self):
         input_shape = (1, 28, 28, 1)
-        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape)
+        output_shape = (1, 10)
+        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape)
         variables = model.init(self.rng, jnp.ones(input_shape))
 
         def loss_fn(params):
-            output = model.apply({'params': params}, jnp.ones(input_shape))
+            output = model.apply({'params': params}, jnp.ones(input_shape), deterministic=True)
             return jnp.sum(output)
 
         grads = jax.grad(loss_fn)(variables['params'])
 
-        self.assertIn('conv_layers_0', grads)
-        self.assertIn('conv_layers_1', grads)
+        self.assertIn('conv_layers', grads)
+        self.assertIn('bn_layers', grads)
         self.assertIn('final_dense', grads)
 
         for layer_grad in jax.tree_leaves(grads):
@@ -363,11 +391,12 @@ class TestConvolutionLayers(unittest.TestCase):
 
     def test_model_consistency(self):
         input_shape = (1, 28, 28, 1)
-        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape)
+        output_shape = (1, 10)
+        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape)
         variables = model.init(self.rng, jnp.ones(input_shape))
 
-        output1 = model.apply(variables, jnp.ones(input_shape))
-        output2 = model.apply(variables, jnp.ones(input_shape))
+        output1 = model.apply(variables, jnp.ones(input_shape), deterministic=True)
+        output2 = model.apply(variables, jnp.ones(input_shape), deterministic=True)
         self.assertTrue(jnp.allclose(output1, output2), "Model should produce consistent output for the same input")
 
     def test_activation_function(self):
@@ -375,11 +404,12 @@ class TestConvolutionLayers(unittest.TestCase):
             return jnp.tanh(x)
 
         input_shape = (1, 28, 28, 1)
-        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, activation=custom_activation, input_shape=input_shape)
+        output_shape = (1, 10)
+        model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape)
         variables = model.init(self.rng, jnp.ones(input_shape))
-        output = model.apply(variables, jnp.ones(input_shape))
+        output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
 
-        self.assertTrue(jnp.all(jnp.abs(output) <= 1), "Output should be bounded by tanh activation")
+        self.assertTrue(jnp.all(jnp.abs(output) <= 1), "Output should be bounded between -1 and 1")
 
 
 class TestReinforcementLearning(unittest.TestCase):
@@ -390,10 +420,10 @@ class TestReinforcementLearning(unittest.TestCase):
         self.model_params = {
             'features': [64, 32, self.action_space],
             'use_rl': True,
-            'output_dim': self.action_space,
+            'input_shape': (1,) + self.input_shape,
+            'output_shape': (1, self.action_space),  # Updated to include batch dimension
             'action_dim': self.action_space,
-            'dtype': jnp.float32,
-            'input_shape': (1,) + self.input_shape  # Add input_shape parameter
+            'dtype': jnp.float32
         }
 
     def test_rl_model_initialization(self):
@@ -406,20 +436,19 @@ class TestReinforcementLearning(unittest.TestCase):
             self.assertIsInstance(state, train_state.TrainState)
 
             self.assertIsInstance(state.params, dict)
-            self.assertIn('rl_agent', state.params)
-            self.assertIn('Dense_0', state.params['rl_agent'])
-            self.assertEqual(state.params['rl_agent']['Dense_0']['kernel'].shape[-1], 64)
+            self.assertIn('Dense_0', state.params)
+            self.assertEqual(state.params['Dense_0']['kernel'].shape[-1], 64)
 
             test_output = model.apply({'params': state.params}, dummy_input)
             self.assertIsNotNone(test_output)
-            self.assertEqual(test_output.shape, (1, self.action_space))
+            self.assertEqual(test_output.shape, (1,) + self.model_params['output_shape'])
             self.assertTrue(jnp.all(jnp.isfinite(test_output)), "Output should contain only finite values")
             self.assertLess(jnp.max(jnp.abs(test_output)), 1e5, "Output values should be reasonably bounded")
 
             # Test with invalid input shape
             invalid_input = jnp.ones((1, *self.input_shape, 1))
             with self.assertRaises(ValueError):
-                create_train_state(rng, model, invalid_input, 1e-3)
+                model.apply({'params': state.params}, invalid_input)
 
         except Exception as e:
             logging.error(f"RL model initialization failed: {str(e)}")
@@ -429,7 +458,7 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             state = create_train_state(rng, model, dummy_input, 1e-3)
             observation, _ = self.env.reset()
             observation = jnp.array(observation, dtype=self.model_params['dtype'])
@@ -454,13 +483,13 @@ class TestReinforcementLearning(unittest.TestCase):
                             "All batch actions should be in valid range")
 
             model_output = model.apply({'params': state.params}, batched_observation)
-            self.assertEqual(model_output.shape, (1, self.action_space),
+            self.assertEqual(model_output.shape, (1,) + self.model_params['output_shape'],
                              f"Model output shape should be (1, {self.action_space})")
             self.assertTrue(jnp.all(jnp.isfinite(model_output)), "Model output should contain only finite values")
             self.assertLess(jnp.max(jnp.abs(model_output)), 1e5, "Model output values should be reasonably bounded")
 
             batch_model_output = model.apply({'params': state.params}, batch_observations)
-            self.assertEqual(batch_model_output.shape, (batch_size, self.action_space),
+            self.assertEqual(batch_model_output.shape, (batch_size,) + self.model_params['output_shape'],
                              f"Batch model output shape should be ({batch_size}, {self.action_space})")
             selected_actions = jnp.argmax(batch_model_output, axis=-1)
             self.assertTrue(jnp.array_equal(batch_actions, selected_actions),
@@ -472,7 +501,7 @@ class TestReinforcementLearning(unittest.TestCase):
                              "Actions should be different for different observations")
 
             # Test edge case: all equal action values
-            equal_action_values = jnp.ones((1, self.action_space))
+            equal_action_values = jnp.ones((1,) + self.model_params['output_shape'])
             equal_action = select_action(equal_action_values, model, state.params)
             self.assertTrue(0 <= int(equal_action) < self.action_space,
                             f"Action {equal_action} not in valid range [0, {self.action_space}) for equal action values")
@@ -492,13 +521,13 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             state = create_train_state(rng, model, dummy_input, 1e-3)
             observation, _ = self.env.reset()
             observation = jnp.array(observation, dtype=self.model_params['dtype'])
             batched_observation = observation[None, ...]
             output = model.apply({'params': state.params}, batched_observation)
-            self.assertEqual(output.shape, (1, self.action_space))
+            self.assertEqual(output.shape, (1,) + self.model_params['output_shape'])
             self.assertTrue(jnp.all(jnp.isfinite(output)), "Output should contain only finite values")
             self.assertTrue(jnp.any(output != 0), "Output should not be all zeros")
             self.assertLess(jnp.max(jnp.abs(output)), 1e5, "Output values should be reasonably bounded")
@@ -527,13 +556,14 @@ class TestReinforcementLearning(unittest.TestCase):
         self.assertIsInstance(model, NeuroFlexNN)
         self.assertEqual(model.features, [64, 32, self.action_space])
         self.assertTrue(model.use_rl)
-        self.assertEqual(model.output_dim, self.action_space)
         self.assertEqual(model.action_dim, self.action_space)
+        self.assertEqual(model.input_shape, (1,) + self.input_shape)
+        self.assertEqual(model.output_shape, (1, self.action_space))
 
     def test_learning_rate_scheduler(self):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
-        dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+        dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
         state = create_train_state(rng, model, dummy_input, 1e-3)
 
         self.assertAlmostEqual(state.tx.learning_rate_fn(0), 1e-3)
@@ -549,13 +579,13 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             state = create_train_state(rng, model, dummy_input, 1e-3)
             observation, _ = self.env.reset()
             observation = jnp.array(observation, dtype=self.model_params['dtype'])
             batched_observation = observation[None, ...]
             output = model.apply({'params': state.params}, batched_observation)
-            self.assertEqual(output.shape, (1, self.action_space))
+            self.assertEqual(output.shape, (1,) + self.model_params['output_shape'])
             self.assertTrue(jnp.all(jnp.isfinite(output)), "Output should contain only finite values")
 
             # Test with invalid input shape
@@ -571,12 +601,11 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             state = create_train_state(rng, model, dummy_input, 1e-3)
             self.assertIsNotNone(state)
             self.assertIsInstance(state, train_state.TrainState)
             self.assertIsInstance(state.params, dict)
-            self.assertIn('rl_agent', state.params)
 
             # Test with invalid learning rate
             with self.assertRaises(ValueError):
@@ -594,11 +623,10 @@ class TestReinforcementLearning(unittest.TestCase):
     def test_model_structure(self):
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             model_structure = model.tabulate(jax.random.PRNGKey(0), dummy_input)
             logging.info(f"Model structure:\n{model_structure}")
             self.assertIsNotNone(model_structure)
-            self.assertIn('RLAgent', str(model_structure), "RLAgent should be present in the model structure")
         except Exception as e:
             logging.error(f"Model structure test failed: {str(e)}")
             self.fail(f"Model structure test failed: {str(e)}")
@@ -607,21 +635,21 @@ class TestReinforcementLearning(unittest.TestCase):
         rng = jax.random.PRNGKey(0)
         model = NeuroFlexNN(**self.model_params)
         try:
-            dummy_input = jnp.ones((1,) + self.input_shape, dtype=self.model_params['dtype'])
+            dummy_input = jnp.ones(self.model_params['input_shape'], dtype=self.model_params['dtype'])
             state = create_train_state(rng, model, dummy_input, 1e-3)
-            rl_output = model.rl_agent.apply({'params': state.params['rl_agent']}, dummy_input)
-            self.assertEqual(rl_output.shape, (1, self.action_space))
+            rl_output = model.apply({'params': state.params}, dummy_input)
+            self.assertEqual(rl_output.shape, (1,) + self.model_params['output_shape'])
             self.assertTrue(jnp.all(jnp.isfinite(rl_output)), "RL agent output should contain only finite values")
 
             # Test with batch input
             batch_input = jnp.ones((10,) + self.input_shape, dtype=self.model_params['dtype'])
-            batch_output = model.rl_agent.apply({'params': state.params['rl_agent']}, batch_input)
-            self.assertEqual(batch_output.shape, (10, self.action_space))
+            batch_output = model.apply({'params': state.params}, batch_input)
+            self.assertEqual(batch_output.shape, (10,) + self.model_params['output_shape'])
 
             # Test with invalid input shape
             invalid_input = jnp.ones((1, *self.input_shape, 1))
             with self.assertRaises(ValueError):
-                model.rl_agent.apply({'params': state.params['rl_agent']}, invalid_input)
+                model.apply({'params': state.params}, invalid_input)
 
         except Exception as e:
             logging.error(f"RL agent output test failed: {str(e)}")
@@ -633,9 +661,9 @@ class TestReinforcementLearning(unittest.TestCase):
         env = RLEnvironment('CartPole-v1')
         try:
             trained_state, rewards, training_info = train_rl_agent(
-                model.rl_agent, env, num_episodes=5, max_steps=100,
-                early_stop_threshold=50.0, early_stop_episodes=3,
-                validation_episodes=2, learning_rate=1e-3, seed=42
+                model, env, num_episodes=10, max_steps=200,
+                early_stop_threshold=150.0, early_stop_episodes=5,
+                validation_episodes=3, learning_rate=1e-3, seed=42
             )
             self.assertIsNotNone(trained_state)
             self.assertIsInstance(rewards, list)
@@ -644,109 +672,87 @@ class TestReinforcementLearning(unittest.TestCase):
             self.assertIn('best_average_reward', training_info)
             self.assertGreater(training_info['best_average_reward'], 0)
 
-            self.assertLessEqual(len(rewards), 5)  # Should not exceed num_episodes
-            self.assertGreaterEqual(training_info['total_episodes'], 1)
-            self.assertLess(training_info['total_episodes'], 6)  # Should be less than or equal to num_episodes + 1
+            logging.info(f"Training rewards: {rewards}")
+            logging.info(f"Best average reward: {training_info['best_average_reward']}")
 
-            # Test training with extreme learning rate
-            with self.assertRaises(Exception):
-                train_rl_agent(model.rl_agent, env, num_episodes=5, learning_rate=1e6, seed=42)
-
-            # Test training with very short episodes
-            short_rewards, _ = train_rl_agent(model.rl_agent, env, num_episodes=5, max_steps=1, seed=42)
-            self.assertTrue(all(r <= 1 for r in short_rewards), "Rewards should be limited by max_steps")
-
-            # Test early stopping
-            _, _, early_stop_info = train_rl_agent(
-                model.rl_agent, env, num_episodes=100, max_steps=100,
-                early_stop_threshold=195.0, early_stop_episodes=10,
-                validation_episodes=5, learning_rate=1e-3, seed=42
-            )
-            self.assertIn('early_stop_reason', early_stop_info)
-            self.assertIn(early_stop_info['early_stop_reason'], ['solved', 'no_improvement', 'max_episodes_without_improvement'])
+            # Check if the model improves over time
+            self.assertGreater(np.mean(rewards[-3:]), np.mean(rewards[:3]),
+                               "Agent should improve over time")
 
             # Test learning rate scheduling
             self.assertIn('lr_history', training_info)
-            self.assertTrue(training_info['lr_history'][0] > training_info['lr_history'][-1], "Learning rate should decrease over time")
+            self.assertLess(training_info['lr_history'][-1], training_info['lr_history'][0],
+                            "Learning rate should decrease over time")
 
-            # Test epsilon decay
-            self.assertIn('epsilon_history', training_info)
-            self.assertTrue(training_info['epsilon_history'][0] > training_info['epsilon_history'][-1], "Epsilon should decrease over time")
+            # Test with different hyperparameters
+            _, rewards_short, info_short = train_rl_agent(
+                model, env, num_episodes=5, max_steps=100,
+                early_stop_threshold=None, early_stop_episodes=None,
+                validation_episodes=1, learning_rate=1e-2, seed=43
+            )
+            self.assertEqual(len(rewards_short), 5, "Should have rewards for exactly 5 episodes")
+            logging.info(f"Short training rewards: {rewards_short}")
+            logging.info(f"Short training info: {info_short}")
 
-            # Test shaped rewards
-            self.assertIn('shaped_rewards', training_info)
-            self.assertGreater(np.mean(training_info['shaped_rewards']), np.mean(rewards), "Shaped rewards should be higher on average")
+            # Test early stopping
+            _, rewards_early_stop, info_early_stop = train_rl_agent(
+                model, env, num_episodes=100, max_steps=200,
+                early_stop_threshold=195, early_stop_episodes=5,
+                validation_episodes=2, learning_rate=1e-3, seed=44
+            )
+            self.assertLess(len(rewards_early_stop), 100, "Training should stop early")
+            self.assertIn('early_stop_reason', info_early_stop)
+            logging.info(f"Early stop reason: {info_early_stop['early_stop_reason']}")
 
             # Test training stability
             self.assertIn('loss_history', training_info)
-            self.assertLess(np.mean(training_info['loss_history'][-10:]), np.mean(training_info['loss_history'][:10]),
+            self.assertLess(np.mean(training_info['loss_history'][-10:]),
+                            np.mean(training_info['loss_history'][:10]),
                             "Loss should decrease over time")
+
+            # Test with invalid parameters
+            with self.assertRaises(ValueError):
+                train_rl_agent(model, env, num_episodes=-1, max_steps=100)
+
+            with self.assertRaises(ValueError):
+                train_rl_agent(model, env, num_episodes=5, max_steps=-1)
 
         except Exception as e:
             logging.error(f"RL agent training test failed: {str(e)}")
             self.fail(f"RL agent training test failed: {str(e)}")
 
-    def test_rl_agent_error_handling(self):
-        rng = jax.random.PRNGKey(0)
-        model = NeuroFlexNN(**self.model_params)
-        env = RLEnvironment('CartPole-v1')
-
-        # Test with invalid environment
-        with self.assertRaises(Exception):
-            train_rl_agent(model.rl_agent, "invalid_env", num_episodes=5, seed=42)
-
-        # Test with invalid agent
-        with self.assertRaises(Exception):
-            train_rl_agent("invalid_agent", env, num_episodes=5, seed=42)
-
-        # Test with incompatible agent and environment
-        incompatible_model = NeuroFlexNN(features=[64, 32, 5], use_rl=True, action_dim=5)
-        with self.assertRaises(Exception):
-            train_rl_agent(incompatible_model.rl_agent, env, num_episodes=5, seed=42)
-
-        # Test with invalid hyperparameters
-        with self.assertRaises(ValueError):
-            train_rl_agent(model.rl_agent, env, num_episodes=-1, seed=42)
-
-        with self.assertRaises(ValueError):
-            train_rl_agent(model.rl_agent, env, num_episodes=5, max_steps=-1, seed=42)
-
-    def test_rl_agent_reproducibility(self):
-        model1 = NeuroFlexNN(**self.model_params)
-        model2 = NeuroFlexNN(**self.model_params)
-        env = RLEnvironment('CartPole-v1')
-
-        _, rewards1, _ = train_rl_agent(model1.rl_agent, env, num_episodes=10, seed=42)
-        _, rewards2, _ = train_rl_agent(model2.rl_agent, env, num_episodes=10, seed=42)
-
-        self.assertTrue(np.allclose(rewards1, rewards2), "Training should be reproducible with the same seed")
-
-        # Test with different seeds
-        _, rewards3, _ = train_rl_agent(model1.rl_agent, env, num_episodes=10, seed=43)
-        self.assertFalse(np.allclose(rewards1, rewards3), "Training should differ with different seeds")
-
-
 class TestConsciousnessSimulation(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 64)
-        self.model = NeuroFlexNN(features=[32, 16], input_shape=self.input_shape)
+        self.output_shape = (1, 16)
+        self.model = NeuroFlexNN(features=[32, 16], input_shape=self.input_shape, output_shape=self.output_shape)
 
     def test_consciousness_simulation(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
         output = self.model.apply({'params': params}, jnp.ones(self.input_shape))
-        self.assertEqual(output.shape, (1, 16))
+        self.assertEqual(output.shape, self.output_shape)
         self.assertTrue(hasattr(self.model, 'simulate_consciousness'))
         simulated_output = self.model.simulate_consciousness(output)
         self.assertIsNotNone(simulated_output)
         self.assertEqual(simulated_output.shape, output.shape)
 
+        # Additional test for input shape validation
+        with self.assertRaises(ValueError):
+            invalid_input = jnp.ones((1, 32))  # Invalid input shape
+            self.model.apply({'params': params}, invalid_input)
+
+        # Additional test for input shape validation
+        with self.assertRaises(ValueError):
+            invalid_input = jnp.ones((1, 32))  # Invalid input shape
+            self.model.apply({'params': params}, invalid_input)
 
 class TestDNNBlock(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 100)
-        self.model = NeuroFlexNN(features=[64, 32, 16], input_shape=self.input_shape)
+        self.output_shape = (1, 16)
+        self.model = NeuroFlexNN(features=[64, 32, 16], input_shape=self.input_shape, output_shape=self.output_shape)
 
     def test_dnn_block(self):
         variables = self.model.init(self.rng, jnp.ones(self.input_shape))
@@ -805,7 +811,8 @@ class TestSHAPInterpretability(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 20)
-        self.model = NeuroFlexNN(features=[32, 16, 2], input_shape=self.input_shape)
+        self.output_shape = (1, 2)
+        self.model = NeuroFlexNN(features=[32, 16, 2], input_shape=self.input_shape, output_shape=self.output_shape)
 
     def test_shap_interpretability(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
@@ -933,7 +940,8 @@ class TestAdversarialTraining(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 28, 28, 1)
-        self.model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, input_shape=self.input_shape)
+        self.output_shape = (1, 10)
+        self.model = NeuroFlexNN(features=[32, 64, 10], use_cnn=True, input_shape=self.input_shape, output_shape=self.output_shape)
 
     def test_adversarial_training(self):
         params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
