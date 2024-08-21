@@ -1,24 +1,28 @@
-# NeuroFlex: Advanced Neural Network Framework
+# NeuroFlex: Advanced Neural Network Framework (v0.1.0)
 
-NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
+NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems. Version 0.1.0 introduces exciting new capabilities in generative AI, consciousness simulation, and advanced problem-solving.
 
 ![image](neuroflex-architecture-svg.svg)
 
 ## Latest Updates
 
+- Generative AI capabilities for creative problem-solving
+- Advanced consciousness simulation for cognitive modeling
+- Sentence piece integration for improved natural language processing
+- Self-curing capabilities for enhanced model robustness
+- Advanced math solving with step-by-step explanations
 - Integration of AlphaFold for advanced protein structure prediction
 - Enhanced capabilities for neural protein modeling and drug discovery
 - Quantum Neural Network module for quantum computing integration
 - Improved Brain-Computer Interface (BCI) functionality
-- Advanced cognitive architecture with consciousness simulation
 - Support for multiple Python versions (3.9, 3.10, 3.11, 3.12)
 
 ## Features
 
-- Advanced neural network architectures (CNN, RNN, LSTM, GAN)
+- Advanced neural network architectures (CNN, RNN, LSTM, GAN, Spiking Neural Networks)
 - Integration of JAX, TensorFlow, and PyTorch modules
 - Quantum Neural Network integration
-- Reinforcement learning capabilities
+- Reinforcement learning capabilities with self-curing algorithms
 - Brain-Computer Interface (BCI) integration
 - Fairness constraints and bias mitigation
 - Adversarial training for improved robustness
@@ -30,6 +34,10 @@ NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, desi
 - Neural protein modeling for neuroscience applications
 - Drug discovery support through protein structure analysis
 - Synthetic biology insights from protein folding predictions
+- Generative AI capabilities for problem-solving and content generation
+- Advanced math solving with step-by-step solutions
+- Sentence piece integration for improved NLP tasks
+- Neuromorphic computing with energy-efficient spiking neural networks
 - Compatibility with numpy < 2 and torch 1.11.0
 - Resolved dependency issues for improved stability
 - Successful test runs for neural network components
