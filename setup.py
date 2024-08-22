@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="neuroflex",
-    version="0.1.0",
+    version="0.1.1",
     author="kasinadhsarma",
     author_email="kasinadhsarma@gmail.com",
     description="An advanced neural network framework with interpretability, generalization, robustness, and fairness features",
@@ -31,8 +31,6 @@ setup(
         "tensorflow-cpu",
         "keras",
         "gym",
-        "pytest",
-        "flake8",
         "numpy",
         "scipy",
         "matplotlib",
@@ -54,10 +52,8 @@ setup(
         "ete3",
         "xarray",
         "torch",
-        "git+https://github.com/google-deepmind/alphafold.git"
-        "git+https://github.com/PrithivirajDamodaran/Gramformer.git"
-        # If needed, install alphafold separately or specify a PyPI-compatible version
         "shap",
+        "whisper",
     ],
     extras_require={
         'dev': [
