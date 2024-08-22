@@ -1,35 +1,45 @@
+import jax
 import jax.numpy as jnp
-from typing import List, Dict, Any
-from alphafold.model import model
+import haiku as hk
+from typing import List, Dict, Any, Tuple
+from alphafold.model import modules_multimer, config
+from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
 from alphafold.common import protein
-from alphafold.data import pipeline
-from unittest.mock import MagicMock
+from alphafold.data import pipeline, templates
+from alphafold.data.tools import hhblits, jackhmmer
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 import logging
+import copy
+import ml_collections
+from unittest.mock import MagicMock
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Mock SCOPData
-SCOPData = MagicMock()
-SCOPData.protein_letters_3to1 = {
-    'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
-    'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-    'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
-    'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
-}
+class SCOPData:
+    protein_letters_3to1 = {
+        'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
+        'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+        'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
+        'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+    }
 
-# Mock getDomainBySid function
-def getDomainBySid(sid):
-    """
-    Mock implementation of getDomainBySid.
-    This function is a placeholder and should be replaced with actual implementation if needed.
-    """
-    return MagicMock()
+print("Mock SCOPData is being used in alphafold_integration.py")
+
+# Export SCOPData for use in other modules
+__all__ = ['SCOPData', 'AlphaFoldIntegration']
 
 class AlphaFoldIntegration:
     def __init__(self):
-        self.model_runner = None
+        self.model_apply = None
+        self.model_params = None
         self.feature_dict = None
+        self.msa_runner = None
+        self.template_searcher = None
+        self.config = None  # Will be initialized in setup_model
         logging.info("AlphaFoldIntegration initialized")
 
     def setup_model(self, model_params: Dict[str, Any] = None):
@@ -40,20 +50,75 @@ class AlphaFoldIntegration:
             model_params (Dict[str, Any], optional): Parameters for the AlphaFold model.
                 If None, default parameters will be used.
         """
-        if model_params is None:
-            model_params = {'max_recycling': 3}  # Default parameters
+        logging.info("Setting up AlphaFold model")
 
         try:
-            self.model_runner = model.RunModel(**model_params)
-            logging.info(f"AlphaFold model set up successfully with parameters: {model_params}")
+            if model_params is None:
+                model_params = {'max_recycling': 3, 'model_name': 'model_1'}
+
+            # Initialize the config
+            model_name = model_params.get('model_name', 'model_1')
+            if 'multimer' in model_name:
+                base_config = copy.deepcopy(CONFIG_MULTIMER)
+            else:
+                base_config = copy.deepcopy(CONFIG)
+
+            # Update the base config with model-specific differences
+            if model_name in CONFIG_DIFFS:
+                base_config.update_from_flattened_dict(CONFIG_DIFFS[model_name])
+
+            # Ensure global_config is present and correctly initialized
+            if 'global_config' not in base_config:
+                base_config.global_config = ml_collections.ConfigDict({
+                    'deterministic': False,
+                    'subbatch_size': 4,
+                    'use_remat': False,
+                    'zero_init': True,
+                    'eval_dropout': False,
+                })
+
+            # Update config with any additional parameters
+            base_config.update(model_params)
+
+            self.config = base_config
+
+            def create_model(config):
+                model = modules_multimer.AlphaFold(config)
+                def apply(params, inputs):
+                    return model.apply({'params': params}, **inputs)
+                return model, apply
+
+            model_creator = hk.transform(create_model)
+
+            rng = jax.random.PRNGKey(0)
+            dummy_input = {
+                'aatype': jnp.zeros((1, 256), dtype=jnp.int32),
+                'residue_index': jnp.zeros((1, 256), dtype=jnp.int32),
+                'seq_length': jnp.array([256], dtype=jnp.int32),
+                'template_aatype': jnp.zeros((1, 1, 256), dtype=jnp.int32),
+                'template_all_atom_masks': jnp.zeros((1, 1, 256, 37), dtype=jnp.float32),
+                'template_all_atom_positions': jnp.zeros((1, 1, 256, 37, 3), dtype=jnp.float32),
+                'template_sum_probs': jnp.zeros((1, 1), dtype=jnp.float32),
+                'is_distillation': jnp.array(0, dtype=jnp.int32),
+            }
+            self.model_params = model_creator.init(rng, self.config)
+            _, self.model_apply = model_creator.apply(self.model_params, rng, self.config)
+
+            # Test the model with dummy input
+            _ = self.model_apply(self.model_params, dummy_input)
+            logging.info("AlphaFold model initialized successfully")
+
+            self.msa_runner = jackhmmer.Jackhmmer(binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'))
+            self.template_searcher = hhblits.HHBlits(binary_path=model_params.get('hhblits_binary_path', '/usr/bin/hhblits'))
+            logging.info("MSA runner and template searcher initialized")
+
         except Exception as e:
-            logging.error(f"Failed to set up AlphaFold model: {str(e)}")
-            self.model_runner = None
-            raise ValueError(f"AlphaFold model setup failed. Please check your parameters and AlphaFold installation. Error: {str(e)}")
+            logging.error(f"Error in AlphaFold setup: {str(e)}")
+            raise ValueError(f"Failed to set up AlphaFold model: {str(e)}")
 
     def is_model_ready(self) -> bool:
         """Check if the AlphaFold model is ready for predictions."""
-        return self.model_runner is not None
+        return self.model_apply is not None and self.model_params is not None
 
     def prepare_features(self, sequence: str):
         """
@@ -65,8 +130,32 @@ class AlphaFoldIntegration:
         Returns:
             Dict: Feature dictionary for AlphaFold.
         """
-        self.feature_dict = pipeline.make_sequence_features(sequence)
-        self.feature_dict.update(pipeline.make_msa_features([sequence]))
+        sequence_features = pipeline.make_sequence_features(sequence)
+        msa = self._run_msa(sequence)
+        msa_features = pipeline.make_msa_features(msas=[msa])
+        template_features = self._search_templates(sequence)
+
+        self.feature_dict = {**sequence_features, **msa_features, **template_features}
+
+    def _run_msa(self, sequence: str) -> List[Tuple[str, str]]:
+        """Run MSA and return results."""
+        with open("temp.fasta", "w") as f:
+            SeqIO.write(SeqRecord(Seq(sequence), id="query"), f, "fasta")
+        result = self.msa_runner.query("temp.fasta")
+        return [("query", sequence)] + [(hit.name, hit.sequence) for hit in result.hits]
+
+    def _search_templates(self, sequence: str) -> Dict[str, Any]:
+        """Search for templates and prepare features."""
+        with open("temp.fasta", "w") as f:
+            SeqIO.write(SeqRecord(Seq(sequence), id="query"), f, "fasta")
+        hits = self.template_searcher.query("temp.fasta")
+        templates_result = templates.TemplateHitFeaturizer(
+            mmcif_dir="/path/to/mmcif/files",
+            max_template_date="2021-11-01",
+            max_hits=20,
+            kalign_binary_path="/path/to/kalign"
+        ).get_templates(query_sequence=sequence, hits=hits)
+        return templates_result.features
 
     def predict_structure(self) -> protein.Protein:
         """
@@ -75,10 +164,10 @@ class AlphaFoldIntegration:
         Returns:
             protein.Protein: Predicted protein structure.
         """
-        if self.model_runner is None or self.feature_dict is None:
+        if self.model_apply is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_runner.predict(self.feature_dict)
+        prediction_result = self.model_apply(self.model_params, self.feature_dict)
         return protein.from_prediction(prediction_result)
 
     def get_plddt_scores(self) -> jnp.ndarray:
@@ -88,10 +177,10 @@ class AlphaFoldIntegration:
         Returns:
             jnp.ndarray: Array of pLDDT scores.
         """
-        if self.model_runner is None or self.feature_dict is None:
+        if self.model_apply is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_runner.predict(self.feature_dict)
+        prediction_result = self.model_apply(self.model_params, self.feature_dict)
         return prediction_result['plddt']
 
     def get_predicted_aligned_error(self) -> jnp.ndarray:
@@ -101,8 +190,8 @@ class AlphaFoldIntegration:
         Returns:
             jnp.ndarray: 2D array of predicted aligned errors.
         """
-        if self.model_runner is None or self.feature_dict is None:
+        if self.model_apply is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_runner.predict(self.feature_dict)
+        prediction_result = self.model_apply(self.model_params, self.feature_dict)
         return prediction_result['predicted_aligned_error']
