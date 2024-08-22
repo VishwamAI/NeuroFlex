@@ -4,6 +4,10 @@ from alphafold.model import model
 from alphafold.common import protein
 from alphafold.data import pipeline
 from unittest.mock import MagicMock
+import logging
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Mock SCOPData
 SCOPData = MagicMock()
@@ -26,15 +30,30 @@ class AlphaFoldIntegration:
     def __init__(self):
         self.model_runner = None
         self.feature_dict = None
+        logging.info("AlphaFoldIntegration initialized")
 
-    def setup_model(self, model_params: Dict[str, Any]):
+    def setup_model(self, model_params: Dict[str, Any] = None):
         """
         Set up the AlphaFold model with given parameters.
 
         Args:
-            model_params (Dict[str, Any]): Parameters for the AlphaFold model.
+            model_params (Dict[str, Any], optional): Parameters for the AlphaFold model.
+                If None, default parameters will be used.
         """
-        self.model_runner = model.RunModel(model_params)
+        if model_params is None:
+            model_params = {'max_recycling': 3}  # Default parameters
+
+        try:
+            self.model_runner = model.RunModel(**model_params)
+            logging.info(f"AlphaFold model set up successfully with parameters: {model_params}")
+        except Exception as e:
+            logging.error(f"Failed to set up AlphaFold model: {str(e)}")
+            self.model_runner = None
+            raise ValueError(f"AlphaFold model setup failed. Please check your parameters and AlphaFold installation. Error: {str(e)}")
+
+    def is_model_ready(self) -> bool:
+        """Check if the AlphaFold model is ready for predictions."""
+        return self.model_runner is not None
 
     def prepare_features(self, sequence: str):
         """
