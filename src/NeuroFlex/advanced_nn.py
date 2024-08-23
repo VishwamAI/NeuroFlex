@@ -68,25 +68,15 @@ class NeuroFlexNN(nn.Module):
         self._validate_shapes()
         self.conv_layers = []
         self.bn_layers = []
-        self.dense_layers = []
+        self.dense_layers = nn.Sequential([
+            nn.Dense(feat, dtype=self.dtype, name=f"dense_{i}")
+            for i, feat in enumerate(self.features[:-1])
+        ])
         self.step_count = 0
         self.rng = jax.random.PRNGKey(0)  # Initialize with a default seed
 
         if self.use_cnn:
             self._setup_cnn_layers()
-        self._setup_dense_layers()
-
-        self.final_dense = nn.Dense(self.output_shape[-1], dtype=self.dtype, name="final_dense")
-        if self.use_rl:
-            self.rl_layer = nn.Dense(self.action_dim, dtype=self.dtype, name="rl_layer")
-            self.value_layer = nn.Dense(1, dtype=self.dtype, name="value_layer")
-            self.rl_optimizer = optax.adam(learning_rate=self.rl_learning_rate)
-            self.replay_buffer = ReplayBuffer(100000)  # Default buffer size of 100,000
-            self.rl_epsilon = self.rl_epsilon_start
-
-        if self.use_cnn:
-            self._setup_cnn_layers()
-        self._setup_dense_layers()
 
         self.final_dense = nn.Dense(self.output_shape[-1], dtype=self.dtype, name="final_dense")
         if self.use_rl:
@@ -158,8 +148,6 @@ class NeuroFlexNN(nn.Module):
             else:
                 epsilon = self.rl_epsilon_end + (self.rl_epsilon_start - self.rl_epsilon_end) * \
                           jnp.exp(-self.rl_epsilon_decay * self.step_count)
-                if not hasattr(self, 'rng'):
-                    self.rng = jax.random.PRNGKey(0)
                 self.rng, subkey = jax.random.split(self.rng)
                 x = jax.lax.cond(
                     jax.random.uniform(subkey) < epsilon,
