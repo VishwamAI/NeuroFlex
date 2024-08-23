@@ -13,6 +13,10 @@ from Bio.SeqRecord import SeqRecord
 import logging
 import copy
 import ml_collections
+from unittest.mock import MagicMock
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Mock SCOPData
 class SCOPData:
@@ -36,17 +40,22 @@ class AlphaFoldIntegration:
         self.msa_runner = None
         self.template_searcher = None
         self.config = None  # Will be initialized in setup_model
+        logging.info("AlphaFoldIntegration initialized")
 
-    def setup_model(self, model_params: Dict[str, Any]):
+    def setup_model(self, model_params: Dict[str, Any] = None):
         """
         Set up the AlphaFold model with given parameters.
 
         Args:
-            model_params (Dict[str, Any]): Parameters for the AlphaFold model.
+            model_params (Dict[str, Any], optional): Parameters for the AlphaFold model.
+                If None, default parameters will be used.
         """
         logging.info("Setting up AlphaFold model")
 
         try:
+            if model_params is None:
+                model_params = {'max_recycling': 3, 'model_name': 'model_1'}
+
             # Initialize the config
             model_name = model_params.get('model_name', 'model_1')
             if 'multimer' in model_name:
@@ -106,6 +115,10 @@ class AlphaFoldIntegration:
         except Exception as e:
             logging.error(f"Error in AlphaFold setup: {str(e)}")
             raise ValueError(f"Failed to set up AlphaFold model: {str(e)}")
+
+    def is_model_ready(self) -> bool:
+        """Check if the AlphaFold model is ready for predictions."""
+        return self.model_apply is not None and self.model_params is not None
 
     def prepare_features(self, sequence: str):
         """

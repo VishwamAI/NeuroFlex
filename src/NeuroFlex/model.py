@@ -141,19 +141,23 @@ ete_integration.visualize_tree(tree, "output_tree.png")
 tree_stats = ete_integration.get_tree_statistics(tree)
 
 # Prepare AlphaFold data
-alphafold_integration.setup_model({'max_recycling': 3})  # Add appropriate model parameters
-protein_sequences = [seq for seq in processed_sequences if not bio_integration._is_dna(seq.seq)]
-alphafold_structures = []
-alphafold_plddt_scores = []
-alphafold_pae_scores = []
-for seq in protein_sequences:
-    alphafold_integration.prepare_features(str(seq.seq))
-    structure = alphafold_integration.predict_structure()
-    alphafold_structures.append(structure)
-    plddt_scores = alphafold_integration.get_plddt_scores()
-    pae_scores = alphafold_integration.get_predicted_aligned_error()
-    alphafold_plddt_scores.append(plddt_scores)
-    alphafold_pae_scores.append(pae_scores)
+try:
+    alphafold_integration.setup_model({'max_recycling': 3})
+    protein_sequences = [seq for seq in processed_sequences if not bio_integration._is_dna(seq.seq)]
+    alphafold_structures = []
+    alphafold_plddt_scores = []
+    alphafold_pae_scores = []
+    for seq in protein_sequences:
+        alphafold_integration.prepare_features(str(seq.seq))
+        structure = alphafold_integration.predict_structure()
+        alphafold_structures.append(structure)
+        plddt_scores = alphafold_integration.get_plddt_scores()
+        pae_scores = alphafold_integration.get_predicted_aligned_error()
+        alphafold_plddt_scores.append(plddt_scores)
+        alphafold_pae_scores.append(pae_scores)
+except Exception as e:
+    print(f"Error in AlphaFold integration: {str(e)}")
+    alphafold_structures, alphafold_plddt_scores, alphafold_pae_scores = [], [], []
 
 # Print average scores
 print(f"Average pLDDT score: {np.mean([np.mean(scores) for scores in alphafold_plddt_scores])}")
