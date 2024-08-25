@@ -23,6 +23,9 @@ def test_design_protein(sbi):
     # Initialize the model with training data
     sbi._initialize_protein_design_model(X_train, y_train)
 
+    # Ensure the protein design model is initialized
+    assert hasattr(sbi, 'protein_design_model'), "Protein design model should be initialized"
+
     designed_protein = sbi.design_protein(target_function, length)
 
     assert isinstance(designed_protein, SeqRecord)
@@ -30,8 +33,9 @@ def test_design_protein(sbi):
     assert designed_protein.id == "designed_protein"
     assert "Designed for enzyme" in designed_protein.description
 
-    # Additional assertion to check if the model is trained
-    assert hasattr(sbi, 'protein_design_model'), "Protein design model should be initialized"
+    # Additional assertions to check the designed protein
+    assert isinstance(designed_protein.seq, Seq), "Designed protein sequence should be a Seq object"
+    assert all(aa in "ACDEFGHIKLMNPQRSTVWY" for aa in designed_protein.seq), "Invalid amino acids in designed protein"
 
 # This test case is no longer relevant as the model is now properly initialized
 # and the check for an untrained model has been removed from the design_protein method.
