@@ -18,23 +18,31 @@ from unittest.mock import MagicMock
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Mock SCOPData
-class SCOPData:
-    protein_letters_3to1 = {
-        'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
-        'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-        'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
-        'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
-    }
+# Global variable to track which version of SCOPData is being used
+USING_BIO_SCOP_DATA = False
 
-print("Mock SCOPData is being used in alphafold_integration.py")
+# Conditionally import SCOPData
+try:
+    from Bio.Data import SCOPData
+    USING_BIO_SCOP_DATA = True
+    logging.info("Using SCOPData from Bio.Data")
+except ImportError:
+    # Fallback SCOPData
+    class SCOPData:
+        protein_letters_3to1 = {
+            'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
+            'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+            'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
+            'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+        }
+    logging.info("Using fallback SCOPData in alphafold_integration.py")
 
-# Export SCOPData for use in other modules
-__all__ = ['SCOPData', 'AlphaFoldIntegration']
+# Export AlphaFoldIntegration, SCOPData, and USING_BIO_SCOP_DATA for use in other modules
+__all__ = ['AlphaFoldIntegration', 'SCOPData', 'USING_BIO_SCOP_DATA']
 
 class AlphaFoldIntegration:
     def __init__(self):
-        self.model_apply = None
+        self.model = None
         self.model_params = None
         self.feature_dict = None
         self.msa_runner = None
@@ -81,44 +89,70 @@ class AlphaFoldIntegration:
             base_config.update(model_params)
 
             self.config = base_config
+            logging.debug(f"Config initialized: {self.config}")
 
             def create_model(config):
-                model = modules_multimer.AlphaFold(config)
-                def apply(params, inputs):
-                    return model.apply({'params': params}, **inputs)
-                return model, apply
+                logging.debug("Creating AlphaFold model")
+                try:
+                    model = modules_multimer.AlphaFold(config)
+                    def apply(params, rng, config, **inputs):
+                        logging.debug(f"Applying model with inputs: {inputs.keys()}")
+                        try:
+                            # Ensure 'aatype' is not in inputs
+                            inputs = {k: v for k, v in inputs.items() if k != 'aatype'}
+                            return model.apply({'params': params}, **inputs, rngs={'dropout': rng})
+                        except Exception as e:
+                            logging.error(f"Error applying model: {str(e)}")
+                            raise
+                    return model, apply
+                except Exception as e:
+                    logging.error(f"Error creating AlphaFold model: {str(e)}")
+                    raise
 
             model_creator = hk.transform(create_model)
 
             rng = jax.random.PRNGKey(0)
+            dummy_seq_length = 256
             dummy_input = {
-                'aatype': jnp.zeros((1, 256), dtype=jnp.int32),
-                'residue_index': jnp.zeros((1, 256), dtype=jnp.int32),
-                'seq_length': jnp.array([256], dtype=jnp.int32),
-                'template_aatype': jnp.zeros((1, 1, 256), dtype=jnp.int32),
-                'template_all_atom_masks': jnp.zeros((1, 1, 256, 37), dtype=jnp.float32),
-                'template_all_atom_positions': jnp.zeros((1, 1, 256, 37, 3), dtype=jnp.float32),
+                'msa': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
+                'msa_mask': jnp.ones((1, 1, dummy_seq_length), dtype=jnp.float32),
+                'seq_mask': jnp.ones((1, dummy_seq_length), dtype=jnp.float32),
+                'residue_index': jnp.arange(dummy_seq_length)[None],
+                'template_aatype': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
+                'template_all_atom_masks': jnp.zeros((1, 1, dummy_seq_length, 37), dtype=jnp.float32),
+                'template_all_atom_positions': jnp.zeros((1, 1, dummy_seq_length, 37, 3), dtype=jnp.float32),
                 'template_sum_probs': jnp.zeros((1, 1), dtype=jnp.float32),
                 'is_distillation': jnp.array(0, dtype=jnp.int32),
             }
-            self.model_params = model_creator.init(rng, self.config)
-            _, self.model_apply = model_creator.apply(self.model_params, rng, self.config)
+            logging.debug("Initializing model parameters")
+            try:
+                self.model_params = model_creator.init(rng, self.config)
+                self.model = model_creator.apply
+            except Exception as e:
+                logging.error(f"Error initializing model parameters: {str(e)}")
+                raise ValueError(f"Failed to initialize AlphaFold model parameters: {str(e)}")
 
             # Test the model with dummy input
-            _ = self.model_apply(self.model_params, dummy_input)
-            logging.info("AlphaFold model initialized successfully")
+            logging.debug("Testing model with dummy input")
+            try:
+                _ = self.model(self.model_params, rng, self.config, **dummy_input)
+                logging.info("AlphaFold model initialized and tested successfully")
+            except Exception as e:
+                logging.error(f"Error during model test: {str(e)}")
+                logging.debug(f"Dummy input keys: {dummy_input.keys()}")
+                raise ValueError(f"Failed to test AlphaFold model: {str(e)}")
 
             self.msa_runner = jackhmmer.Jackhmmer(binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'))
             self.template_searcher = hhblits.HHBlits(binary_path=model_params.get('hhblits_binary_path', '/usr/bin/hhblits'))
             logging.info("MSA runner and template searcher initialized")
 
         except Exception as e:
-            logging.error(f"Error in AlphaFold setup: {str(e)}")
+            logging.error(f"Error in AlphaFold setup: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to set up AlphaFold model: {str(e)}")
 
     def is_model_ready(self) -> bool:
         """Check if the AlphaFold model is ready for predictions."""
-        return self.model_apply is not None and self.model_params is not None
+        return self.model is not None and self.model_params is not None
 
     def prepare_features(self, sequence: str):
         """
@@ -164,10 +198,10 @@ class AlphaFoldIntegration:
         Returns:
             protein.Protein: Predicted protein structure.
         """
-        if self.model_apply is None or self.feature_dict is None:
+        if self.model is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_apply(self.model_params, self.feature_dict)
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
         return protein.from_prediction(prediction_result)
 
     def get_plddt_scores(self) -> jnp.ndarray:
@@ -177,10 +211,10 @@ class AlphaFoldIntegration:
         Returns:
             jnp.ndarray: Array of pLDDT scores.
         """
-        if self.model_apply is None or self.feature_dict is None:
+        if self.model is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_apply(self.model_params, self.feature_dict)
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
         return prediction_result['plddt']
 
     def get_predicted_aligned_error(self) -> jnp.ndarray:
@@ -190,8 +224,8 @@ class AlphaFoldIntegration:
         Returns:
             jnp.ndarray: 2D array of predicted aligned errors.
         """
-        if self.model_apply is None or self.feature_dict is None:
+        if self.model is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        prediction_result = self.model_apply(self.model_params, self.feature_dict)
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
         return prediction_result['predicted_aligned_error']
