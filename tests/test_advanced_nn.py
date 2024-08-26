@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, 'src')
 import unittest
 import unittest.mock
 import logging

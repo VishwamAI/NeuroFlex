@@ -140,10 +140,10 @@ class NeuroFlexNN(nn.Module):
 
     def _create_cnn_block(self):
         """Create the CNN block."""
-        def cnn_block(x, train: bool = True):
-            for conv, bn in zip(self.conv_layers, self.bn_layers):
-                x = conv(x)
-                x = bn(x, use_running_average=not train)
+        def cnn_block(x, train: bool = True, variables: Optional[Dict] = None):
+            for i, (conv, bn) in enumerate(zip(self.conv_layers, self.bn_layers)):
+                x = conv(x, variables=variables['conv_layers'][f'conv_{i}'] if variables else None)
+                x = bn(x, use_running_average=not train, variables=variables['bn_layers'][f'bn_{i}'] if variables else None)
                 x = self.activation(x)
                 x = nn.max_pool(x, window_shape=(2,) * self.conv_dim, strides=(2,) * self.conv_dim)
             return x.reshape((x.shape[0], -1))  # Flatten
@@ -174,6 +174,9 @@ class NeuroFlexNN(nn.Module):
             except ValueError as ve:
                 logging.warning(f"Input shape mismatch (attempt {attempt + 1}/{self.max_retries}): {str(ve)}")
                 x = self._attempt_recovery(x, ve)
+            except flax.errors.ApplyScopeInvalidVariablesStructureError as ae:
+                logging.error(f"Invalid variables structure (attempt {attempt + 1}/{self.max_retries}): {str(ae)}")
+                return self._fallback_output(x)
             except Exception as e:
                 logging.warning(f"Error during forward pass (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
                 x = self._attempt_recovery(x, e)
@@ -234,22 +237,24 @@ class NeuroFlexNN(nn.Module):
 
     def _forward(self, x: jnp.ndarray, train: bool, variables: Dict) -> jnp.ndarray:
         """Internal forward pass implementation."""
-        if self.use_cnn:
-            x = self.cnn_block(x, train)
+        params = variables['params']
 
-        for layer in self.dense_layers:
-            x = layer(x)
+        if self.use_cnn:
+            x = self.cnn_block(x, train, variables={'params': params['cnn_block']})
+
+        for i, layer in enumerate(self.dense_layers):
+            x = layer(x, variables={'params': params[f'dense_layers_{i}']})
             x = self.activation(x)
 
         if self.use_rl:
             if self.use_dueling:
-                value = self.value_stream(x)
-                advantage = self.advantage_stream(x)
+                value = self.value_stream(x, variables={'params': params['value_stream']})
+                advantage = self.advantage_stream(x, variables={'params': params['advantage_stream']})
                 x = value + (advantage - jnp.mean(advantage, axis=-1, keepdims=True))
             else:
-                x = self.rl_layer(x)
+                x = self.rl_layer(x, variables={'params': params['rl_layer']})
         else:
-            x = self.final_dense(x)
+            x = self.final_dense(x, variables={'params': params['final_dense']})
 
         return x
 
@@ -343,22 +348,22 @@ class NeuroFlexNN(nn.Module):
             logging.debug(f"Reshaped input shape: {x.shape}")
 
         if self.use_cnn:
-            x = self.cnn_block(x, train)
+            x = self.cnn_block(x, train, variables=variables)
             logging.debug(f"After CNN block shape: {x.shape}")
             if x.ndim != 2:
                 x = x.reshape((x.shape[0], -1))
                 logging.debug(f"Flattened CNN output shape: {x.shape}")
 
-        x = self.dense_layers(x)
+        x = self.dense_layers(x, variables=variables)
         logging.debug(f"After DNN block shape: {x.shape}")
 
         if self.use_rl:
             if self.use_dueling:
-                value = self.value_stream(x)
-                advantages = self.advantage_stream(x)
+                value = self.value_stream(x, variables=variables)
+                advantages = self.advantage_stream(x, variables=variables)
                 q_values = value + (advantages - jnp.mean(advantages, axis=-1, keepdims=True))
             else:
-                q_values = self.rl_layer(x)
+                q_values = self.rl_layer(x, variables=variables)
 
             logging.debug(f"Q-values shape: {q_values.shape}")
 
@@ -377,7 +382,7 @@ class NeuroFlexNN(nn.Module):
             self.step_count.value += 1
             logging.debug(f"RL action shape: {x.shape}, Epsilon: {epsilon:.4f}")
         else:
-            x = self.final_dense(x)
+            x = self.final_dense(x, variables=variables)
             logging.debug(f"Final dense output shape: {x.shape}")
 
         if x.shape != self.output_shape:
