@@ -17,17 +17,20 @@ class ConsciousnessSimulation(nn.Module):
     attention_heads: int = 4
 
     def setup(self):
-        self.layers = [nn.Dense(feat) for feat in self.features]
-        self.output_layer = nn.Dense(self.output_dim)
+        self.dense_layers = [self.param(f'dense_{i}', nn.initializers.xavier_uniform(), (feat,)) for i, feat in enumerate(self.features[:-1])]
+        self.output_layer = self.param('output', nn.initializers.xavier_uniform(), (self.output_dim,))
         self.attention = nn.MultiHeadDotProductAttention(num_heads=self.attention_heads)
         self.working_memory = nn.GRUCell(self.working_memory_size)
-        self.decision_layer = nn.Dense(1)
-        self.metacognition_layer = nn.Dense(1)
+        self.decision_layer = self.param('decision', nn.initializers.xavier_uniform(), (1,))
+        self.metacognition_layer = self.param('metacognition', nn.initializers.xavier_uniform(), (1,))
+        self.thought_layer = self.param('thought', nn.initializers.xavier_uniform(), (self.output_dim,))
 
+    @nn.compact
     def __call__(self, x):
-        for layer in self.layers:
-            x = nn.relu(layer(x))
-        return self.output_layer(x)
+        for i, dense in enumerate(self.dense_layers):
+            x = nn.Dense(features=self.features[i], kernel_init=lambda *_: dense)(x)
+            x = nn.relu(x)
+        return nn.Dense(features=self.output_dim, kernel_init=lambda *_: self.output_layer)(x)
 
     def simulate_consciousness(self, x, working_memory_state=None):
         # Simulate complex cognitive processes
@@ -43,10 +46,10 @@ class ConsciousnessSimulation(nn.Module):
 
         # Simulate decision-making process
         decision_input = jnp.concatenate([cognitive_state, attention_output, new_working_memory], axis=-1)
-        decision = nn.tanh(self.decision_layer(decision_input))
+        decision = nn.tanh(nn.Dense(1)(decision_input, self.decision_layer))
 
         # Simulate metacognition (awareness of own cognitive processes)
-        metacognition = nn.sigmoid(self.metacognition_layer(decision_input))
+        metacognition = nn.sigmoid(nn.Dense(1)(decision_input, self.metacognition_layer))
 
         # Combine for final consciousness state
         consciousness = jnp.concatenate([
@@ -61,7 +64,7 @@ class ConsciousnessSimulation(nn.Module):
 
     def generate_thought(self, consciousness_state):
         # Simulate thought generation based on current consciousness state
-        thought = nn.Dense(self.output_dim)(consciousness_state)
+        thought = nn.Dense(self.output_dim)(consciousness_state, self.thought_layer)
         return nn.softmax(thought)
 
 def create_consciousness_simulation(features: List[int], output_dim: int, working_memory_size: int = 64, attention_heads: int = 4) -> ConsciousnessSimulation:
@@ -77,12 +80,13 @@ def create_consciousness_simulation(features: List[int], output_dim: int, workin
     Returns:
         ConsciousnessSimulation: An instance of the ConsciousnessSimulation class.
     """
-    return ConsciousnessSimulation(
+    model = ConsciousnessSimulation(
         features=features,
         output_dim=output_dim,
         working_memory_size=working_memory_size,
         attention_heads=attention_heads
     )
+    return model
 
 # Example usage
 if __name__ == "__main__":
