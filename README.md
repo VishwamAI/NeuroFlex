@@ -1,48 +1,35 @@
 # NeuroFlex: Advanced Neural Network Framework (v0.1.1)
 
-NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems. Version 0.1.0 introduces exciting new capabilities in generative AI, consciousness simulation, and advanced problem-solving.
+NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
-![image](neuroflex-architecture-svg.svg)
+![NeuroFlex Architecture](neuroflex-architecture-svg.svg)
 
-## Latest Updates
+## Key Features
 
-- Whisper API integration for advanced speech recognition and transcription
-- Improvements and fixes to AlphaFold integration for protein structure prediction
-- Generative AI capabilities for creative problem-solving
+- **Advanced Neural Architectures**: Support for CNN, RNN, LSTM, GAN, and Spiking Neural Networks
+- **Multi-Backend Integration**: Seamless integration with JAX, TensorFlow, and PyTorch
+- **Quantum Computing**: Quantum Neural Network module for next-generation AI
+- **Reinforcement Learning**: Advanced capabilities with enhanced self-curing algorithms
+- **Brain-Computer Interface (BCI)**: Cutting-edge integration for neurotechnology applications
+- **Ethical AI**: Fairness constraints and bias mitigation techniques
+- **Robustness**: Improved adversarial training, interpretability tools (SHAP), and adaptive learning rate adjustment
+- **Bioinformatics**: AlphaFold integration for protein structure prediction and drug discovery
+- **Generative AI**: Creative problem-solving and content generation
+- **Natural Language Processing**: Sentence piece integration and advanced NLP tasks
+- **Neuromorphic Computing**: Energy-efficient spiking neural networks
+- **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability
+
+## Latest Updates (v0.1.2)
+
+- Enhanced self-curing mechanism with adaptive learning rate adjustment
+- Improved model robustness against gradient explosions and local minima
+- Advanced diagnostic checks for model performance and training issues
+- Whisper API integration for advanced speech recognition
+- Enhanced AlphaFold integration for protein structure prediction
 - Advanced consciousness simulation for cognitive modeling
-- Sentence piece integration for improved natural language processing
-- Self-curing capabilities for enhanced model robustness
-- Advanced math solving with step-by-step explanations
-- Integration of AlphaFold for advanced protein structure prediction
-- Enhanced capabilities for neural protein modeling and drug discovery
-- Quantum Neural Network module for quantum computing integration
 - Improved Brain-Computer Interface (BCI) functionality
-- Support for multiple Python versions (3.9, 3.10, 3.11, 3.12)
-
-## Features
-
-- Advanced neural network architectures (CNN, RNN, LSTM, GAN, Spiking Neural Networks)
-- Integration of JAX, TensorFlow, and PyTorch modules
-- Quantum Neural Network integration
-- Reinforcement learning capabilities with self-curing algorithms
-- Brain-Computer Interface (BCI) integration
-- Fairness constraints and bias mitigation
-- Adversarial training for improved robustness
-- Interpretability tools (SHAP)
-- 2D and 3D convolution support
-- Data augmentation techniques
-- Cognitive architecture with consciousness simulation
-- AlphaFold integration for protein structure prediction
-- Neural protein modeling for neuroscience applications
-- Drug discovery support through protein structure analysis
-- Synthetic biology insights from protein folding predictions
-- Generative AI capabilities for problem-solving and content generation
-- Advanced math solving with step-by-step solutions
-- Sentence piece integration for improved NLP tasks
-- Neuromorphic computing with energy-efficient spiking neural networks
-- Compatibility with numpy < 2 and torch 1.11.0
-- Resolved dependency issues for improved stability
-- Successful test runs for neural network components
+- Support for Python 3.9, 3.10, 3.11, 3.12
+- Resolved dependency issues and improved stability
 
 ## Installation
 
@@ -50,67 +37,112 @@ NeuroFlex is a cutting-edge neural network framework built on JAX and Flax, desi
 pip install neuroflex
 ```
 
-## Environment Setup
+## Quick Start Guide
 
-NeuroFlex supports multiple operating systems and Python versions:
+1. **Import NeuroFlex**
 
-- Ubuntu
-- Windows
-- macOS
-- Python 3.9, 3.10, 3.11, 3.12
-
-To set up your environment:
-
-1. Clone the repository: `git clone https://github.com/neuroflex/neuroflex.git`
-2. Create a virtual environment: `python -m venv neuroflex-env`
-3. Activate the environment:
-   - Ubuntu/macOS: `source neuroflex-env/bin/activate`
-   - Windows: `neuroflex-env\Scripts\activate`
-4. Install dependencies: `pip install -r requirements.txt`
-
-## Quick Start
-
+```python
 from neuroflex import NeuroFlexNN, train_model, AlphaFoldIntegration
-
-# Define your model
 ```
+
+2. **Define Your Model**
+
+```python
 model = NeuroFlexNN(
     features=[64, 32, 10],
     use_cnn=True,
     use_rnn=True,
     fairness_constraint=0.1,
-    use_quantum=True,  # Enable quantum neural network
-    use_alphafold=True  # Enable AlphaFold integration
+    use_quantum=True,
+    use_alphafold=True
 )
 ```
-# Initialize AlphaFold integration
-```
+
+3. **Initialize AlphaFold Integration**
+
+```python
 alphafold = AlphaFoldIntegration()
 alphafold.setup_model(model_params={'max_recycling': 3})
-```
-# Predict protein structure
-```
 predicted_structure = alphafold.predict_structure()
 ```
-# Train your model with AlphaFold integration
-```
+
+4. **Train Your Model**
+
+```python
 trained_state, trained_model = train_model(
     model, train_data, val_data,
     num_epochs=10, batch_size=32, learning_rate=1e-3,
     alphafold_structure=predicted_structure
 )
 ```
-# Get pLDDT scores and predicted aligned error
-```
+
+5. **Analyze Results**
+
+```python
 plddt_scores = alphafold.get_plddt_scores()
 predicted_aligned_error = alphafold.get_predicted_aligned_error()
 
 print(f"Average pLDDT score: {plddt_scores.mean()}")
 print(f"Average predicted aligned error: {predicted_aligned_error.mean()}")
 ```
+
+## Advanced Usage
+
+### Quantum Neural Networks
+
+```python
+from neuroflex import QuantumNeuralNetwork
+
+qnn = QuantumNeuralNetwork(num_qubits=4, num_layers=2)
+quantum_output = qnn(input_data)
+```
+
+### Brain-Computer Interface
+
+```python
+from neuroflex import BCIProcessor
+
+bci = BCIProcessor(channels=64, sampling_rate=1000)
+processed_signal = bci.process(raw_signal)
+```
+
+### Generative AI
+
+```python
+from neuroflex import GenerativeAIFramework
+
+gen_ai = GenerativeAIFramework(features=(128, 64), output_dim=10)
+generated_content = gen_ai.generate(input_data)
+```
+
+## Environment Setup
+
+NeuroFlex supports multiple operating systems:
+- Ubuntu
+- Windows
+- macOS
+
+To set up your environment:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/neuroflex/neuroflex.git
+   ```
+2. Create a virtual environment:
+   ```bash
+   python -m venv neuroflex-env
+   ```
+3. Activate the environment:
+   - Ubuntu/macOS: `source neuroflex-env/bin/activate`
+   - Windows: `neuroflex-env\Scripts\activate`
+4. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
 ## Testing
 
-To run tests for different Python versions and operating systems:
+Run tests for different Python versions and operating systems:
 
 ```bash
 pytest tests/
@@ -118,7 +150,7 @@ pytest tests/
 
 ## Documentation
 
-For detailed documentation, please visit our [official documentation](https://neuroflex.readthedocs.io).
+For detailed documentation, visit our [official documentation](https://neuroflex.readthedocs.io).
 
 ## Contributing
 
@@ -132,7 +164,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you use NeuroFlex in your research, please cite:
 
-```
+```bibtex
 @software{neuroflex2024,
   author = {kasinadhsarma},
   title = {NeuroFlex: Advanced Neural Network Framework},
@@ -143,4 +175,4 @@ If you use NeuroFlex in your research, please cite:
 
 ## Contact
 
-For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at kasinadhsarma@gmail.com.
+For questions or feedback, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at kasinadhsarma@gmail.com.

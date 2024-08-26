@@ -118,6 +118,8 @@ def load_bioinformatics_data(file_path):
 class SelfCuringAlgorithm:
     def __init__(self, model):
         self.model = model
+        self.learning_rate = 0.001
+        self.performance_history = []
 
     def diagnose(self):
         issues = []
@@ -127,6 +129,10 @@ class SelfCuringAlgorithm:
             issues.append("Model performance is below threshold")
         if not hasattr(self.model, 'last_update') or (time.time() - self.model.last_update > 86400):
             issues.append("Model hasn't been updated in 24 hours")
+        if hasattr(self.model, 'gradient_norm') and self.model.gradient_norm > 10:
+            issues.append("Gradient explosion detected")
+        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+            issues.append("Model is stuck in local minimum")
         return issues
 
     def heal(self, issues):
@@ -137,22 +143,55 @@ class SelfCuringAlgorithm:
                 self.improve_model()
             elif issue == "Model hasn't been updated in 24 hours":
                 self.update_model()
+            elif issue == "Gradient explosion detected":
+                self.handle_gradient_explosion()
+            elif issue == "Model is stuck in local minimum":
+                self.escape_local_minimum()
 
     def train_model(self):
         print("Training model...")
         # Actual training logic would go here
         self.model.is_trained = True
         self.model.last_update = time.time()
+        self.update_performance()
 
     def improve_model(self):
         print("Improving model performance...")
         # Logic to improve model performance would go here
-        self.model.performance = 0.9  # Placeholder improvement
+        self.model.performance = min(self.model.performance * 1.1, 1.0)  # Increase performance by 10%, max 1.0
+        self.update_performance()
 
     def update_model(self):
         print("Updating model...")
         # Logic to update the model with new data would go here
         self.model.last_update = time.time()
+        self.update_performance()
+
+    def handle_gradient_explosion(self):
+        print("Handling gradient explosion...")
+        self.learning_rate *= 0.5  # Reduce learning rate
+        # Additional logic to handle gradient explosion (e.g., gradient clipping)
+
+    def escape_local_minimum(self):
+        print("Attempting to escape local minimum...")
+        self.learning_rate *= 2  # Increase learning rate
+        # Additional logic to escape local minimum (e.g., add noise to parameters)
+
+    def update_performance(self):
+        # Update performance history
+        self.performance_history.append(self.model.performance)
+        if len(self.performance_history) > 100:
+            self.performance_history.pop(0)
+
+    def adjust_learning_rate(self):
+        # Implement adaptive learning rate adjustment
+        if len(self.performance_history) > 10:
+            recent_performance = self.performance_history[-10:]
+            if all(x < y for x, y in zip(recent_performance, recent_performance[1:])):
+                self.learning_rate *= 1.1  # Increase learning rate if consistently improving
+            elif all(x > y for x, y in zip(recent_performance, recent_performance[1:])):
+                self.learning_rate *= 0.9  # Decrease learning rate if consistently worsening
+        return self.learning_rate
 
 class NeuroFlex:
     def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
