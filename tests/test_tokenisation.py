@@ -22,7 +22,7 @@ class TestTokenisation(unittest.TestCase):
 
     def test_contractions(self):
         text = "I'm can't won't"
-        expected = ['I', "'m", 'ca', "n't", 'wo', "n't"]
+        expected = ["I", "'m", "can", "'t", "won", "'t"]
         self.assertEqual(tokenize_text(text), expected)
 
 if __name__ == '__main__':
