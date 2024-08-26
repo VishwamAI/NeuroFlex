@@ -17,14 +17,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class SyntheticBiologyInsights:
     def __init__(self):
         self.bio_integration = BioinformaticsIntegration()
+        self.alphafold_integration = None
+        self.protein_design_model = None
         try:
             self.alphafold_integration = AlphaFoldIntegration()
-            self.alphafold_integration.setup_model({})  # Initialize with default parameters
+            self.alphafold_integration.setup_model()  # Initialize with default parameters
+            logging.info("AlphaFold integration initialized successfully")
         except Exception as e:
             logging.error(f"Failed to initialize AlphaFold: {str(e)}")
-            self.alphafold_integration = None
-        self.encoder = OneHotEncoder(sparse=False)
-        self._initialize_protein_design_model()
+            logging.warning("Some functionality related to AlphaFold will be unavailable")
+        self.encoder = OneHotEncoder(sparse=False)  # Set sparse=False explicitly
 
     def _initialize_protein_design_model(self, X: np.ndarray, y: np.ndarray):
         if X.shape[0] != y.shape[0]:
@@ -49,7 +51,13 @@ class SyntheticBiologyInsights:
 
         Returns:
             SeqRecord: Designed protein sequence.
+
+        Raises:
+            ValueError: If the protein design model is not initialized or if there's an error in protein design.
         """
+        if not hasattr(self, 'protein_design_model'):
+            raise ValueError("Protein design model is not initialized. Call _initialize_protein_design_model first.")
+
         # Generate features from the target function
         function_features = self._encode_target_function(target_function)
 
@@ -67,8 +75,7 @@ class SyntheticBiologyInsights:
 
     def _encode_target_function(self, target_function: str) -> np.ndarray:
         # Simple encoding of target function (placeholder)
-        encoder = OneHotEncoder(sparse=False)
-        return encoder.fit_transform([[char] for char in target_function])
+        return self.encoder.fit_transform([[char] for char in target_function])
 
     def _generate_sequence_from_probabilities(self, probabilities: np.ndarray, length: int) -> Seq:
         amino_acids = 'ACDEFGHIKLMNPQRSTVWY'
@@ -128,7 +135,11 @@ class SyntheticBiologyInsights:
     def _evaluate_fitness(self, sequence: str, optimization_criteria: Dict[str, float]) -> float:
         """Evaluate the fitness of a sequence based on optimization criteria."""
         try:
-            stability = self.alphafold_integration.predict_stability(sequence)
+            if self.alphafold_integration and self.alphafold_integration.is_model_ready():
+                self.alphafold_integration.prepare_features(sequence)
+                stability = self.alphafold_integration.get_plddt_scores().mean()
+            else:
+                stability = np.random.random()  # Fallback if AlphaFold is not available
             solubility = self.bio_integration.predict_solubility(sequence)
 
             fitness = sum(

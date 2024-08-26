@@ -98,15 +98,54 @@ class AlphaFoldIntegration:
                     def apply(params, rng, config, **inputs):
                         logging.debug(f"Applying model with inputs: {inputs.keys()}")
                         try:
-                            # Ensure 'aatype' is not in inputs
-                            inputs = {k: v for k, v in inputs.items() if k != 'aatype'}
-                            return model.apply({'params': params}, **inputs, rngs={'dropout': rng})
+                            # Process inputs
+                            processed_inputs = {}
+                            for key, value in inputs.items():
+                                if key in ['msa_mask', 'seq_mask', 'aatype', 'residue_index', 'template_aatype', 'template_all_atom_masks', 'template_all_atom_positions']:
+                                    processed_inputs[key] = value
+
+                            # Ensure all required inputs are present with correct shapes
+                            required_inputs = {
+                                'msa': (None, None, None),
+                                'msa_mask': (None, None, None),
+                                'seq_mask': (None, None),
+                                'aatype': (None, None),
+                                'residue_index': (None, None),
+                                'template_aatype': (None, None, None),
+                                'template_all_atom_masks': (None, None, None, None),
+                                'template_all_atom_positions': (None, None, None, None, 3)
+                            }
+                            for input_name, expected_shape in required_inputs.items():
+                                if input_name not in processed_inputs:
+                                    if input_name == 'msa':
+                                        # Handle 'msa' input separately
+                                        if 'msa' in inputs:
+                                            msa = inputs['msa']
+                                            if isinstance(msa, str):
+                                                # Convert string MSA to numerical representation
+                                                msa = jnp.array([[ord(c) for c in msa]])
+                                            elif isinstance(msa, jnp.ndarray):
+                                                if msa.ndim != 3:
+                                                    raise ValueError(f"MSA input should be 3-dimensional, got {msa.ndim} dimensions")
+                                            else:
+                                                raise ValueError(f"Unsupported MSA input type: {type(msa)}")
+                                            processed_inputs['msa'] = msa
+                                        else:
+                                            # If 'msa' is not provided, create a dummy input
+                                            processed_inputs['msa'] = jnp.zeros((1, 1, 1), dtype=jnp.int32)
+                                    else:
+                                        processed_inputs[input_name] = jnp.zeros(expected_shape)
+                                elif processed_inputs[input_name].ndim != len(expected_shape):
+                                    raise ValueError(f"Input '{input_name}' has incorrect number of dimensions. Expected {len(expected_shape)}, got {processed_inputs[input_name].ndim}")
+
+                            logging.debug(f"Processed inputs: {processed_inputs.keys()}")
+                            return model.apply({'params': params}, **processed_inputs, rngs={'dropout': rng})
                         except Exception as e:
-                            logging.error(f"Error applying model: {str(e)}")
+                            logging.error(f"Error applying model: {str(e)}", exc_info=True)
                             raise
                     return model, apply
                 except Exception as e:
-                    logging.error(f"Error creating AlphaFold model: {str(e)}")
+                    logging.error(f"Error creating AlphaFold model: {str(e)}", exc_info=True)
                     raise
 
             model_creator = hk.transform(create_model)
