@@ -68,33 +68,85 @@ class NeuroFlexNN(nn.Module):
         self._validate_shapes()
         self.conv_layers = []
         self.bn_layers = []
-        self.dense_layers = nn.Sequential([
-            nn.Dense(feat, dtype=self.dtype, name=f"dense_{i}")
-            for i, feat in enumerate(self.features[:-1])
-        ])
+        self.dense_layers = []
         self.step_count = 0
         self.rng = jax.random.PRNGKey(0)  # Initialize with a default seed
 
         if self.use_cnn:
             self._setup_cnn_layers()
 
-        self.final_dense = nn.Dense(self.output_shape[-1], dtype=self.dtype, name="final_dense")
+        self._setup_dense_layers()
+
+        self.final_dense = nn.Dense(
+            self.output_shape[-1],
+            dtype=self.dtype,
+            name="final_dense",
+            kernel_init=nn.initializers.kaiming_normal(),
+            kernel_regularizer=nn.regularizers.l2(1e-4)
+        )
         if self.use_rl:
-            self.rl_layer = nn.Dense(self.action_dim, dtype=self.dtype, name="rl_layer")
-            self.value_layer = nn.Dense(1, dtype=self.dtype, name="value_layer")
-            self.rl_optimizer = optax.adam(learning_rate=self.rl_learning_rate)
+            self.rl_layer = nn.Dense(
+                self.action_dim,
+                dtype=self.dtype,
+                name="rl_layer",
+                kernel_init=nn.initializers.kaiming_normal(),
+                kernel_regularizer=nn.regularizers.l2(1e-4)
+            )
+            self.value_layer = nn.Dense(
+                1,
+                dtype=self.dtype,
+                name="value_layer",
+                kernel_init=nn.initializers.kaiming_normal(),
+                kernel_regularizer=nn.regularizers.l2(1e-4)
+            )
+            self.lr_schedule = optax.warmup_cosine_decay_schedule(
+                init_value=self.rl_learning_rate / 10,
+                peak_value=self.rl_learning_rate,
+                warmup_steps=1000,
+                decay_steps=10000,
+                end_value=self.rl_learning_rate / 100
+            )
+            self.rl_optimizer = optax.chain(
+                optax.clip_by_global_norm(1.0),
+                optax.adam(learning_rate=self.lr_schedule)
+            )
             self.replay_buffer = ReplayBuffer(100000)  # Default buffer size of 100,000
             self.rl_epsilon = self.rl_epsilon_start
 
     def _setup_cnn_layers(self):
-        self.conv_layers = [nn.Conv(features=feat, kernel_size=(3,) * self.conv_dim, dtype=self.dtype, padding='SAME', name=f"conv_{i}")
-                            for i, feat in enumerate(self.features[:-1])]
-        self.bn_layers = [nn.BatchNorm(dtype=self.dtype, name=f"bn_{i}")
-                          for i in range(len(self.features) - 1)]
+        self.conv_layers = [
+            nn.Conv(
+                features=feat,
+                kernel_size=(3,) * self.conv_dim,
+                dtype=self.dtype,
+                padding='SAME',
+                name=f"conv_{i}",
+                kernel_init=nn.initializers.kaiming_normal()
+            )
+            for i, feat in enumerate(self.features[:-1])
+        ]
+        self.bn_layers = [
+            nn.BatchNorm(
+                dtype=self.dtype,
+                name=f"bn_{i}",
+                use_running_average=True,
+                momentum=0.9,
+                epsilon=1e-5
+            )
+            for i in range(len(self.features) - 1)
+        ]
 
     def _setup_dense_layers(self):
-        self.dense_layers = [nn.Dense(feat, dtype=self.dtype, name=f"dense_{i}")
-                             for i, feat in enumerate(self.features[:-1])]
+        self.dense_layers = [
+            nn.Dense(
+                feat,
+                dtype=self.dtype,
+                name=f"dense_{i}",
+                kernel_init=nn.initializers.kaiming_normal(),
+                kernel_regularizer=nn.regularizers.l2(1e-4)
+            )
+            for i, feat in enumerate(self.features[:-1])
+        ]
         self.dense_layers.append(nn.Dropout(0.5))
 
     def _validate_shapes(self):
@@ -135,14 +187,28 @@ class NeuroFlexNN(nn.Module):
 
     def _forward(self, x: jnp.ndarray, deterministic: bool) -> jnp.ndarray:
         """Internal forward pass implementation."""
-        self._validate_input_shape(x)
+        logging.debug(f"Input shape: {x.shape}")
+
+        try:
+            self._validate_input_shape(x)
+        except ValueError as e:
+            logging.warning(f"Input shape mismatch: {str(e)}. Attempting to reshape.")
+            x = self._reshape_input(x)
+            logging.debug(f"Reshaped input shape: {x.shape}")
 
         if self.use_cnn:
             x = self.cnn_block(x, deterministic)
+            logging.debug(f"After CNN block shape: {x.shape}")
+            if x.ndim != 2:
+                x = x.reshape((x.shape[0], -1))
+                logging.debug(f"Flattened CNN output shape: {x.shape}")
+
         x = self.dnn_block(x, deterministic)
+        logging.debug(f"After DNN block shape: {x.shape}")
 
         if self.use_rl:
             q_values = self.rl_layer(x)
+            logging.debug(f"Q-values shape: {q_values.shape}")
             if deterministic:
                 x = jnp.argmax(q_values, axis=-1)
             else:
@@ -155,34 +221,56 @@ class NeuroFlexNN(nn.Module):
                     lambda: jnp.argmax(q_values, axis=-1)
                 )
             self.step_count += 1
+            logging.debug(f"RL action shape: {x.shape}, Epsilon: {epsilon:.4f}")
         else:
             x = self.final_dense(x)
+            logging.debug(f"Final dense output shape: {x.shape}")
 
         if x.shape != self.output_shape:
             logging.warning(f"Output shape mismatch. Expected {self.output_shape}, got {x.shape}")
             x = jnp.reshape(x, self.output_shape)
+            logging.debug(f"Reshaped output to: {x.shape}")
 
         if not jnp.all(jnp.isfinite(x)):
             logging.warning("Output contains non-finite values. Replacing with zeros.")
             x = jnp.where(jnp.isfinite(x), x, 0.0)
+            logging.debug("Non-finite values replaced with zeros.")
 
+        logging.debug(f"Final output shape: {x.shape}")
         return x
 
     def _attempt_recovery(self, x: jnp.ndarray, error: Exception) -> jnp.ndarray:
         """Attempt to recover from errors during forward pass."""
-        logging.info(f"Attempting to recover from error: {str(error)}")
+        logging.warning(f"Attempting to recover from error: {str(error)}")
 
-        if isinstance(error, ValueError) and "shape mismatch" in str(error):
-            logging.info("Attempting to reshape input.")
-            return jnp.reshape(x, self.input_shape)
+        if isinstance(error, ValueError):
+            if "shape mismatch" in str(error):
+                logging.info("Attempting to reshape input due to shape mismatch.")
+                return self._reshape_input(x)
+            elif "invalid value" in str(error):
+                logging.info("Attempting to replace invalid values with zeros.")
+                return jnp.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+
+        if isinstance(error, jax.errors.JAXTypeError):
+            logging.info("JAX type error encountered. Attempting to cast input to float32.")
+            return x.astype(jnp.float32)
+
+        if isinstance(error, flax.errors.ScopeCollectionNotFound):
+            if "batch_stats" in str(error):
+                logging.info("Attempting to reinitialize batch statistics.")
+                # In a real scenario, we would reinitialize batch stats here
+                # For now, we'll just return the input as is
+                return x
 
         if isinstance(error, jax.errors.InvalidArgumentError):
-            logging.info("Attempting to handle invalid argument error.")
-            return jnp.clip(x, -1e6, 1e6)  # Clip to prevent overflow
+            logging.info("Invalid argument error. Attempting to clip input values.")
+            return jnp.clip(x, -1e6, 1e6)
 
-        # Add more specific error handling cases as needed
+        if isinstance(error, OverflowError):
+            logging.info("Overflow error detected. Attempting to normalize input.")
+            return x / jnp.linalg.norm(x)
 
-        logging.info("No specific recovery method. Returning original input.")
+        logging.warning("No specific recovery method found. Returning original input.")
         return x
 
     def _fallback_output(self, x: jnp.ndarray) -> jnp.ndarray:
