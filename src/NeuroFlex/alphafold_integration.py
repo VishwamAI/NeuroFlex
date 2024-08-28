@@ -35,7 +35,8 @@ except ImportError:
             'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
             'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
         }
-    logging.info("Using fallback SCOPData in alphafold_integration.py")
+    USING_BIO_SCOP_DATA = False
+    logging.warning("Failed to import SCOPData from Bio.Data. Using fallback SCOPData in alphafold_integration.py")
 
 # Export AlphaFoldIntegration, SCOPData, and USING_BIO_SCOP_DATA for use in other modules
 __all__ = ['AlphaFoldIntegration', 'SCOPData', 'USING_BIO_SCOP_DATA']
