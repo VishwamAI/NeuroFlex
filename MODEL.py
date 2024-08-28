@@ -13,7 +13,6 @@ from NeuroFlex.alphafold_integration import AlphaFoldIntegration
 from NeuroFlex.xarray_integration import XarrayIntegration
 from NeuroFlex.quantum_nn_module import QuantumNeuralNetwork
 from NeuroFlex.tokenisation import tokenize_text
-from NeuroFlex.correctgrammer import correct_grammar
 
 # Define your model
 class SelfCuringAlgorithm:
@@ -80,7 +79,7 @@ class NeuroFlex:
 
     def process_text(self, text):
         """
-        Process the input text by correcting grammar and tokenizing.
+        Process the input text by tokenizing.
 
         Args:
             text (str): The input text to be processed.
@@ -88,8 +87,7 @@ class NeuroFlex:
         Returns:
             List[str]: A list of tokens from the processed text.
         """
-        corrected_text = correct_grammar(text)
-        tokens = tokenize_text(corrected_text)
+        tokens = tokenize_text(text)
         return tokens
 
 model = NeuroFlex(

@@ -204,5 +204,26 @@ class TestTokenizer(unittest.TestCase):
         expected_tokens = ['This', 'is', 'a', 'test', 'sentence', '.']
         self.assertEqual(self.tokenizer.tokenize(text), expected_tokens)
 
+    def test_tokenize_punctuation(self):
+        text = "Hello, world! How are you? I'm fine; thanks."
+        self.mock_sp.EncodeAsPieces.return_value = ['▁Hello', ',', '▁world', '!', '▁How', '▁are', '▁you', '?', '▁I', "'m", '▁fine', ';', '▁thanks', '.']
+        tokens = self.tokenizer.tokenize(text)
+        expected_tokens = ['Hello', ',', 'world', '!', 'How', 'are', 'you', '?', 'I', "'m", 'fine', ';', 'thanks', '.']
+        self.assertEqual(tokens, expected_tokens)
+
+    def test_tokenize_capitalization(self):
+        text = "HELLO World. This IS a TEST."
+        self.mock_sp.EncodeAsPieces.return_value = ['▁HELLO', '▁World', '.', '▁This', '▁IS', '▁a', '▁TEST', '.']
+        tokens = self.tokenizer.tokenize(text)
+        expected_tokens = ['HELLO', 'World', '.', 'This', 'IS', 'a', 'TEST', '.']
+        self.assertEqual(tokens, expected_tokens)
+
+    def test_tokenize_special_characters(self):
+        text = "Email: user@example.com, Website: https://www.example.com"
+        self.mock_sp.EncodeAsPieces.return_value = ['▁Email', ':', '▁user', '@', 'example', '.', 'com', ',', '▁Website', ':', '▁https', '://', 'www', '.', 'example', '.', 'com']
+        tokens = self.tokenizer.tokenize(text)
+        expected_tokens = ['Email', ':', 'user', '@', 'example', '.', 'com', ',', 'Website', ':', 'https', '://', 'www', '.', 'example', '.', 'com']
+        self.assertEqual(tokens, expected_tokens)
+
 if __name__ == '__main__':
     unittest.main()
