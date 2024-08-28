@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Sequence, Callable
 import gym
 from flax.training import train_state
 import optax
@@ -10,25 +10,59 @@ from collections import deque
 import random
 import numpy as np
 import time
+from functools import partial
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class ReplayBuffer:
-    def __init__(self, capacity: int):
-        self.buffer = deque(maxlen=capacity)
+class PrioritizedReplayBuffer:
+    def __init__(self, capacity: int, alpha: float = 0.6, beta: float = 0.4, beta_increment: float = 0.001):
+        self.capacity = capacity
+        self.buffer = []
+        self.priorities = np.zeros(capacity, dtype=np.float32)
+        self.alpha = alpha
+        self.beta = beta
+        self.beta_increment = beta_increment
+        self.max_priority = 1.0
+        self.next_index = 0
 
     def add(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+        experience = (state, action, reward, next_state, done)
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(experience)
+        else:
+            self.buffer[self.next_index] = experience
+        self.priorities[self.next_index] = self.max_priority
+        self.next_index = (self.next_index + 1) % self.capacity
 
     def sample(self, batch_size: int) -> Dict[str, np.ndarray]:
-        states, actions, rewards, next_states, dones = zip(*random.sample(self.buffer, batch_size))
+        if len(self.buffer) < self.capacity:
+            probs = self.priorities[:len(self.buffer)] ** self.alpha
+        else:
+            probs = self.priorities ** self.alpha
+        probs /= probs.sum()
+
+        indices = np.random.choice(len(self.buffer), batch_size, p=probs)
+        samples = [self.buffer[idx] for idx in indices]
+
+        weights = (len(self.buffer) * probs[indices]) ** (-self.beta)
+        weights /= weights.max()
+        self.beta = min(1.0, self.beta + self.beta_increment)
+
+        states, actions, rewards, next_states, dones = zip(*samples)
         return {
             'observations': np.array(states),
             'actions': np.array(actions),
             'rewards': np.array(rewards),
             'next_observations': np.array(next_states),
-            'dones': np.array(dones, dtype=np.float32)
+            'dones': np.array(dones, dtype=np.float32),
+            'weights': weights,
+            'indices': indices
         }
+
+    def update_priorities(self, indices: np.ndarray, priorities: np.ndarray):
+        for idx, priority in zip(indices, priorities):
+            self.priorities[idx] = priority
+        self.max_priority = max(self.max_priority, np.max(priorities))
 
     def __len__(self):
         return len(self.buffer)
@@ -36,16 +70,36 @@ class ReplayBuffer:
 class RLAgent(nn.Module):
     features: List[int]
     action_dim: int
+    is_training: bool = True
+    use_double_dqn: bool = True
 
     @nn.compact
-    def __call__(self, x):
-        for feat in self.features:
-            x = nn.Dense(feat)(x)
+    def __call__(self, x, train: bool = None):
+        if train is None:
+            train = self.is_training
+
+        for i, feat in enumerate(self.features[:-1]):
+            x = nn.Dense(feat, name=f'dense_{i}')(x)
+            x = nn.LayerNorm(name=f'layer_norm_{i}')(x)  # Replace BatchNorm with LayerNorm
             x = nn.relu(x)
-        return nn.Dense(self.action_dim)(x)
+
+        # Dueling DQN architecture
+        x = nn.relu(nn.Dense(self.features[-1], name='final_dense')(x))
+        state_value = nn.Dense(1, name='state_value')(x)
+        advantage = nn.Dense(self.action_dim, name='advantage')(x)
+
+        return state_value + (advantage - jnp.mean(advantage, axis=-1, keepdims=True))
 
     def create_target(self):
-        return RLAgent(features=self.features, action_dim=self.action_dim)
+        return RLAgent(features=self.features, action_dim=self.action_dim, use_double_dqn=self.use_double_dqn)
+
+    def set_training(self, is_training: bool):
+        self.is_training = is_training
+
+    def initialize_layer_stats(self, rng, input_shape):
+        dummy_input = jnp.ones((1,) + input_shape)
+        variables = self.init(rng, dummy_input, train=True)
+        return variables.get('params', {})
 
 class RLEnvironment:
     def __init__(self, env_name: str):
@@ -61,19 +115,45 @@ class RLEnvironment:
         obs, reward, terminated, truncated, info = self.env.step(action)
         return jnp.array(obs), reward, terminated, truncated, info
 
+from flax.training import train_state
+from dataclasses import dataclass
+
+@dataclass
+class ExtendedTrainState:
+    train_state: train_state.TrainState
+    batch_stats: dict
+    apply_fn: Callable
+
 def create_train_state(rng, model, dummy_input, learning_rate=1e-3):
     if isinstance(dummy_input, tuple):
         dummy_input = dummy_input[0]  # Extract observation from tuple
     dummy_input = jnp.array(dummy_input)  # Ensure input is a JAX array
-    params = model.init(rng, dummy_input[None, ...])['params']
+    variables = model.init(rng, dummy_input[None, ...])
+    params, batch_stats = variables['params'], variables.get('batch_stats', {})
     tx = optax.adam(learning_rate)
-    return train_state.TrainState.create(
+    base_train_state = train_state.TrainState.create(
         apply_fn=model.apply, params=params, tx=tx)
+    return ExtendedTrainState(train_state=base_train_state, batch_stats=batch_stats, apply_fn=model.apply)
 
-@jax.jit
-def select_action(state: train_state.TrainState, observation: jnp.ndarray) -> int:
-    action_values = state.apply_fn({'params': state.params}, observation)
-    return jnp.argmax(action_values)
+def select_action(state: ExtendedTrainState, observation: jnp.ndarray) -> int:
+    logging.debug(f"select_action input - state: {state}, observation shape: {observation.shape}")
+
+    action_values, updated_batch_stats = state.train_state.apply_fn(
+        {'params': state.train_state.params, 'batch_stats': state.batch_stats},
+        observation[None, ...],
+        mutable=['batch_stats'],
+        train=False
+    )
+    logging.debug(f"Action values: {action_values}, Updated batch stats: {updated_batch_stats}")
+
+    # Update the batch_stats in the ExtendedTrainState directly
+    state.batch_stats = updated_batch_stats['batch_stats']
+    logging.debug(f"Updated state batch_stats: {state.batch_stats}")
+
+    selected_action = jnp.argmax(action_values[0])
+    logging.debug(f"Selected action: {selected_action}")
+
+    return selected_action
 
 def train_rl_agent(
     agent: RLAgent,
@@ -96,7 +176,9 @@ def train_rl_agent(
     validation_threshold: float = 180.0,
     seed: int = 0,
     improvement_threshold: float = 1.005,
-    max_training_time: int = 36000
+    max_training_time: int = 36000,
+    n_step_returns: int = 3,
+    double_dqn: bool = True
 ) -> Tuple[train_state.TrainState, List[float], Dict[str, Any]]:
     rng = jax.random.PRNGKey(seed)
     logging.info(f"Initializing RL agent training with seed {seed}")
@@ -118,8 +200,8 @@ def train_rl_agent(
         )
         state = create_train_state(rng, agent, dummy_obs, tx)
         target_state = create_train_state(rng, agent, dummy_obs, tx)
-        replay_buffer = ReplayBuffer(buffer_size)
-        logging.info(f"Initialized agent, target network, and replay buffer with size {buffer_size}")
+        replay_buffer = PrioritizedReplayBuffer(buffer_size)
+        logging.info(f"Initialized agent, target network, and prioritized replay buffer with size {buffer_size}")
         logging.info(f"Agent architecture: {agent}")
         logging.info(f"Training parameters: LR={learning_rate}, Gamma={gamma}, Epsilon={epsilon_start}->{epsilon_end}")
         logging.info(f"Episodes={num_episodes}, Max steps={max_steps}, Batch size={batch_size}")
@@ -128,18 +210,29 @@ def train_rl_agent(
         raise RuntimeError(f"Failed to initialize RL agent: {str(e)}")
 
     @jax.jit
-    def update_step(state: train_state.TrainState, target_state: train_state.TrainState, batch: Dict[str, jnp.ndarray]):
+    def update_step(state: train_state.TrainState, target_state: train_state.TrainState, batch: Dict[str, jnp.ndarray], importance_weights: jnp.ndarray, double_dqn: bool = True):
         def loss_fn(params):
-            q_values = state.apply_fn({'params': params}, batch['observations'])
-            next_q_values = target_state.apply_fn({'params': target_state.params}, batch['next_observations'])
-            next_actions = jnp.argmax(state.apply_fn({'params': params}, batch['next_observations']), axis=1)
-            targets = batch['rewards'] + gamma * next_q_values[jnp.arange(batch_size), next_actions] * (1 - batch['dones'])
-            loss = jnp.mean(optax.huber_loss(q_values[jnp.arange(batch_size), batch['actions']], targets))
-            return loss
+            q_values, new_model_state = state.apply_fn({'params': params, 'batch_stats': state.batch_stats}, batch['observations'], mutable=['batch_stats'])
+            next_q_values_online, _ = state.apply_fn({'params': params, 'batch_stats': state.batch_stats}, batch['next_observations'], mutable=['batch_stats'])
+            next_q_values_target, _ = target_state.apply_fn({'params': target_state.params, 'batch_stats': target_state.batch_stats}, batch['next_observations'], mutable=False)
 
-        grad_fn = jax.value_and_grad(loss_fn)
-        loss, grads = grad_fn(state.params)
-        return state.apply_gradients(grads=grads), loss
+            if double_dqn:
+                next_actions = jnp.argmax(next_q_values_online, axis=1)
+                next_q_values = next_q_values_target[jnp.arange(batch_size), next_actions]
+            else:
+                next_q_values = jnp.max(next_q_values_target, axis=1)
+
+            targets = batch['rewards'] + gamma * next_q_values * (1 - batch['dones'])
+            td_errors = q_values[jnp.arange(batch_size), batch['actions']] - targets
+            losses = optax.huber_loss(q_values[jnp.arange(batch_size), batch['actions']], targets)
+            loss = jnp.mean(importance_weights * losses)
+            return loss, (td_errors, new_model_state)
+
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+        (loss, (td_errors, new_model_state)), grads = grad_fn(state.params)
+        new_state = state.apply_gradients(grads=grads)
+        new_state = new_state.replace(batch_stats=new_model_state['batch_stats'])
+        return new_state, loss, td_errors
 
     episode_rewards, shaped_rewards, recent_losses = [], [], []
     epsilon, best_average_reward = epsilon_start, float('-inf')
