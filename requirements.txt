@@ -35,4 +35,3 @@ git+https://github.com/google-deepmind/alphafold.git
 shap
 sentencepiece
 nltk
-git+https://github.com/PrithivirajDamodaran/Gramformer.git
