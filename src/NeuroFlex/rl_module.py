@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Callable
 import gym
 from flax.training import train_state
 import optax
@@ -14,6 +14,7 @@ import heapq
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -70,33 +71,49 @@ class PrioritizedReplayBuffer:
 class RLAgent(nn.Module):
     features: List[int]
     action_dim: int
+    dtype: Any = jnp.float32
+    activation: Callable = nn.relu
+    backend: str = 'jax'
 
     @nn.compact
     def __call__(self, x):
-        for feat in self.features:
-            x = nn.Dense(feat)(x)
-            x = nn.relu(x)
-        return nn.Dense(self.action_dim)(x)
+        if self.backend == 'jax':
+            for feat in self.features:
+                x = nn.Dense(feat, dtype=self.dtype)(x)
+                x = self.activation(x)
+            return nn.Dense(self.action_dim, dtype=self.dtype)(x)
+        else:
+            for feat in self.features:
+                x = nn.Linear(x.shape[-1], feat)(x)
+                x = self.activation(x)
+            return nn.Linear(self.features[-1], self.action_dim)(x)
 
     def create_target(self):
-        return RLAgent(features=self.features, action_dim=self.action_dim)
+        return RLAgent(features=self.features, action_dim=self.action_dim, dtype=self.dtype, activation=self.activation, backend=self.backend)
 
 class HierarchicalRLAgent(nn.Module):
     features: List[int]
     action_dims: List[int]
     num_levels: int
+    dtype: Any = jnp.float32
+    activation: Callable = nn.relu
+    backend: str = 'jax'
 
     @nn.compact
     def __call__(self, x):
         outputs = []
         for level in range(self.num_levels):
-            sub_agent = RLAgent(features=self.features, action_dim=self.action_dims[level])
-            outputs.append(sub_agent(x))
-            x = jnp.concatenate([x, outputs[-1]], axis=-1)
+            sub_agent = RLAgent(features=self.features, action_dim=self.action_dims[level], dtype=self.dtype, activation=self.activation, backend=self.backend)
+            output = sub_agent(x)
+            outputs.append(output)
+            if self.backend == 'jax':
+                x = jnp.concatenate([x, output], axis=-1)
+            else:
+                x = torch.cat([x, output], dim=-1)
         return outputs
 
     def create_target(self):
-        return HierarchicalRLAgent(features=self.features, action_dims=self.action_dims, num_levels=self.num_levels)
+        return HierarchicalRLAgent(features=self.features, action_dims=self.action_dims, num_levels=self.num_levels, dtype=self.dtype, activation=self.activation, backend=self.backend)
 
 class RLEnvironment:
     def __init__(self, env_name: str):
