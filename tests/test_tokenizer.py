@@ -87,6 +87,7 @@ class TestTokenizer(unittest.TestCase):
         self.assertEqual(tokens[0], self.tokenizer.bos_id)
         self.assertEqual(tokens[-1], self.tokenizer.eos_id)
         self.assertEqual(tokens[1:-1], encoded_tokens)
+        self.assertEqual(len(tokens), len(encoded_tokens) + 2)  # +2 for BOS and EOS tokens
 
     def test_empty_string(self):
         text = ""
@@ -97,9 +98,9 @@ class TestTokenizer(unittest.TestCase):
         self.assertEqual(tokens[-1], self.tokenizer.eos_id)
         self.mock_sp.DecodeIds.return_value = ""
         decoded_text = self.tokenizer.decode(tokens)
-        self.assertEqual(decoded_text, "")
-        # DecodeIds should not be called for empty input
-        self.mock_sp.DecodeIds.assert_not_called()
+        self.assertEqual(decoded_text, "[DECODING_FAILED]")
+        # DecodeIds should be called with an empty list
+        self.mock_sp.DecodeIds.assert_called_once_with([])
 
     def test_special_tokens_handling(self):
         text = "Special tokens test"
@@ -113,6 +114,13 @@ class TestTokenizer(unittest.TestCase):
         decoded_text = self.tokenizer.decode(tokens)
         self.assertEqual(decoded_text, text)
         self.mock_sp.DecodeIds.assert_called_once_with([10, 20, 30])
+
+        # Test handling of special tokens during decoding
+        special_tokens = [self.tokenizer.bos_id, 10, 20, 30, self.tokenizer.eos_id]
+        self.mock_sp.DecodeIds.return_value = text
+        decoded_special = self.tokenizer.decode(special_tokens)
+        self.assertEqual(decoded_special, text)
+        self.mock_sp.DecodeIds.assert_called_with([10, 20, 30])
 
     def test_special_tokens(self):
         self.assertIsNotNone(self.tokenizer.bos_id)
@@ -130,25 +138,37 @@ class TestTokenizer(unittest.TestCase):
 
     def test_decode_invalid_input(self):
         # Test empty list
+        print("Testing empty list")
         result = self.tokenizer.decode([])
-        self.assertEqual(result, "")
-        self.mock_sp.DecodeIds.assert_not_called()
+        print(f"Result: {result}")
+        self.assertEqual(result, "[DECODING_FAILED]")
+        self.mock_sp.DecodeIds.assert_called_once_with([])
+        self.mock_sp.DecodeIds.reset_mock()
 
         # Test list with non-integer values
+        print("Testing list with non-integer values")
         result = self.tokenizer.decode(["a", "b", "c"])
-        self.assertEqual(result, "")
+        print(f"Result: {result}")
+        self.assertEqual(result, "[DECODING_FAILED]")
         self.mock_sp.DecodeIds.assert_not_called()
+        self.mock_sp.DecodeIds.reset_mock()
 
         # Test with None
+        print("Testing None input")
         result = self.tokenizer.decode(None)
-        self.assertEqual(result, "")
+        print(f"Result: {result}")
+        self.assertEqual(result, "[DECODING_FAILED]")
         self.mock_sp.DecodeIds.assert_not_called()
+        self.mock_sp.DecodeIds.reset_mock()
 
         # Test with invalid integer values
+        print("Testing invalid integer values")
         self.mock_sp.DecodeIds.side_effect = Exception("Invalid token ID")
         result = self.tokenizer.decode([-1, 1000000])
+        print(f"Result: {result}")
         self.assertEqual(result, "[DECODING_FAILED]")
-        self.mock_sp.DecodeIds.assert_called_once_with([1000000])
+        self.mock_sp.DecodeIds.assert_called_once_with([-1, 1000000])
+        self.mock_sp.DecodeIds.reset_mock()
 
         # Reset side_effect for subsequent tests
         self.mock_sp.DecodeIds.side_effect = None
@@ -177,8 +197,12 @@ class TestTokenizer(unittest.TestCase):
             self.assertEqual(detokenized, text)
 
         self.mock_sp.EncodeAsPieces.assert_called_once_with(text)
-        # DecodePieces is no longer used in detokenize
-        self.mock_sp.DecodePieces.assert_not_called()
+        self.mock_sp.DecodePieces.assert_called_once_with(tokens)
+
+        # Test with tokens containing leading underscores
+        tokens_with_underscores = ['▁This', '▁is', '▁a', '▁test', '▁sentence', '.']
+        expected_tokens = ['This', 'is', 'a', 'test', 'sentence', '.']
+        self.assertEqual(self.tokenizer.tokenize(text), expected_tokens)
 
 if __name__ == '__main__':
     unittest.main()

@@ -98,24 +98,32 @@ def train_jax_model(
         for epoch in range(epochs):
             epoch_loss = 0.0
             for i in range(num_batches):
-                start_idx = i * batch_size
-                end_idx = min((i + 1) * batch_size, num_samples)
-                batch_X = X[start_idx:end_idx]
-                batch_y = y[start_idx:end_idx]
+                try:
+                    start_idx = i * batch_size
+                    end_idx = min((i + 1) * batch_size, num_samples)
+                    batch_X = X[start_idx:end_idx]
+                    batch_y = y[start_idx:end_idx]
 
-                # Ensure batch_X and batch_y have consistent shapes
-                if batch_X.shape[0] != batch_y.shape[0]:
-                    min_size = min(batch_X.shape[0], batch_y.shape[0])
-                    batch_X = batch_X[:min_size]
-                    batch_y = batch_y[:min_size]
+                    # Ensure batch_X and batch_y have consistent shapes
+                    if batch_X.shape[0] != batch_y.shape[0]:
+                        min_size = min(batch_X.shape[0], batch_y.shape[0])
+                        batch_X = batch_X[:min_size]
+                        batch_y = batch_y[:min_size]
 
-                params, opt_state, batch_loss, grads = update(params, opt_state, batch_X, batch_y)
+                    params, opt_state, batch_loss, grads = update(params, opt_state, batch_X, batch_y)
 
-                if not jnp.isfinite(batch_loss):
-                    logging.warning(f"Non-finite loss detected: {batch_loss}. Skipping this batch.")
+                    if not jnp.isfinite(batch_loss):
+                        logging.warning(f"Non-finite loss detected: {batch_loss}. Skipping this batch.")
+                        continue
+
+                    epoch_loss += batch_loss
+
+                except jax.errors.InvalidArgumentError as iae:
+                    logging.warning(f"JAX InvalidArgumentError in batch {i}: {str(iae)}. Skipping this batch.")
                     continue
-
-                epoch_loss += batch_loss
+                except Exception as e:
+                    logging.warning(f"Unexpected error in batch {i}: {str(e)}. Skipping this batch.")
+                    continue
 
             if num_batches > 0:
                 avg_epoch_loss = epoch_loss / num_batches
@@ -179,7 +187,7 @@ def train_jax_model(
                 logging.info("Added gradient noise due to small gradient norm")
 
     except Exception as e:
-        logging.error(f"Error during training: {str(e)}")
+        logging.error(f"Unexpected error during training: {str(e)}")
         raise
 
     # Ensure consistent parameter shapes

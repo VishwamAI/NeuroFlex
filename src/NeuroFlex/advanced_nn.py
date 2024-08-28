@@ -7,7 +7,8 @@ from jax import Array
 from dataclasses import field
 from functools import partial
 import optax
-from .rl_module import ReplayBuffer, create_train_state, select_action
+import jax.errors
+from .rl_module import PrioritizedReplayBuffer, create_train_state, select_action
 
 class NeuroFlexNN(nn.Module):
     """
@@ -83,7 +84,7 @@ class NeuroFlexNN(nn.Module):
             self.rl_layer = nn.Dense(self.action_dim, dtype=self.dtype, name="rl_layer")
             self.value_layer = nn.Dense(1, dtype=self.dtype, name="value_layer")
             self.rl_optimizer = optax.adam(learning_rate=self.rl_learning_rate)
-            self.replay_buffer = ReplayBuffer(100000)  # Default buffer size of 100,000
+            self.replay_buffer = PrioritizedReplayBuffer(100000)  # Default buffer size of 100,000
             self.rl_epsilon = self.rl_epsilon_start
 
     def _setup_cnn_layers(self):
@@ -258,7 +259,7 @@ class AdvancedNNComponents:
         self.epsilon = None
 
     def initialize_rl_components(self, buffer_size: int, learning_rate: float, epsilon_start: float):
-        self.replay_buffer = ReplayBuffer(buffer_size)
+        self.replay_buffer = PrioritizedReplayBuffer(buffer_size)
         self.optimizer = optax.adam(learning_rate)
         self.epsilon = epsilon_start
 

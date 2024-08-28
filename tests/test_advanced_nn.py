@@ -3,6 +3,7 @@ import logging
 import jax
 import jax.numpy as jnp
 from jax import random, jit
+import jax.errors
 from flax import linen as nn
 from flax.training import train_state
 import gym
