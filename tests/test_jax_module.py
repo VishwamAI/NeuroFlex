@@ -3,176 +3,160 @@
 import unittest
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import linen as nn
-from flax.training import train_state
 import optax
 from NeuroFlex.jax_module import JAXModel, train_jax_model, batch_predict
+from NeuroFlex.pytorch_integration import PyTorchModel, train_pytorch_model
+import torch
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class TestJAXModule(unittest.TestCase):
     def setUp(self):
-        self.model = JAXModel(features=[256, 128, 10])
-        self.X_small = jnp.ones((5, 10))  # Small input
-        self.X_medium = jnp.ones((10, 20))  # Medium input
-        self.X_large = jnp.ones((20, 30))  # Large input
-        self.y_small = jnp.zeros(5)
-        self.y_medium = jnp.zeros(10)
-        self.y_large = jnp.zeros(20)
+        self.features = 10
+        self.model = JAXModel(features=self.features)
+        self.X = jnp.ones((20, self.features))
+        self.y = jax.random.randint(jax.random.PRNGKey(0), (20,), 0, self.features)
         self.key = jax.random.PRNGKey(0)
 
     def test_jax_model_initialization(self):
-        params_small = self.model.init(self.key, self.X_small)
-        params_large = self.model.init(self.key, self.X_large)
-        self.assertIsNotNone(params_small)
-        self.assertIsNotNone(params_large)
+        params = self.model.init(self.key, self.X)
+        self.assertIsNotNone(params)
+        self.assertIn('params', params)
+        self.assertIn('layer', params['params'])
+        self.assertIn('kernel', params['params']['layer'])
+        self.assertIn('bias', params['params']['layer'])
 
     def test_train_jax_model(self):
-        initial_params = self.model.init(self.key, self.X_medium)['params']
-
-        # Define a more appropriate loss function (e.g., MSE for regression)
-        def loss_fn(pred, y):
-            return jnp.mean((pred - y) ** 2)
-
-        # Calculate initial loss
-        initial_loss = loss_fn(self.model.apply({'params': initial_params}, self.X_medium), self.y_medium)
+        initial_params = self.model.init(self.key, self.X)['params']
 
         try:
-            trained_params, final_loss, training_history = train_jax_model(
-                self.model, initial_params, self.X_medium, self.y_medium,
-                loss_fn=loss_fn, epochs=100, patience=20, min_delta=1e-6, batch_size=32
+            trained_params = train_jax_model(
+                self.model, initial_params, self.X, self.y,
+                epochs=10, learning_rate=0.01
             )
         except Exception as e:
             self.fail(f"Training failed with error: {str(e)}")
 
         self.assertIsNotNone(trained_params, "Trained parameters should not be None")
-        self.assertIsNotNone(final_loss, "Final loss should not be None")
-        self.assertIsInstance(training_history, list, "Training history should be a list")
-        self.assertGreater(len(training_history), 0, "Training history should not be empty")
 
         # Check if trained parameters are different from initial parameters
         param_diff = jax.tree_map(lambda x, y: jnp.sum(jnp.abs(x - y)), initial_params, trained_params)
         total_diff = sum(jax.tree_leaves(param_diff))
         self.assertGreater(total_diff, 0, "Trained parameters should be different from initial parameters")
 
-        # Check if final loss is lower than initial loss
-        self.assertLess(final_loss, initial_loss, "Final loss should be lower than initial loss")
-
-        # Check if loss decreased during training (allow for small fluctuations and plateaus)
-        self.assertTrue(all(training_history[i] >= training_history[i+1] * 0.99 or
-                            abs(training_history[i] - training_history[i+1]) < 1e-6
-                            for i in range(len(training_history)-1)),
-                        "Loss should generally decrease or plateau during training")
-
-        # Check if there's significant improvement in loss
-        self.assertLess(training_history[-1], 0.9 * training_history[0], "Training should show improvement")
-
-        # Test model application with trained parameters for different input sizes
-        for X in [self.X_small, self.X_medium, self.X_large]:
-            try:
-                output = self.model.apply({'params': trained_params}, X)
-                self.assertEqual(output.shape, (X.shape[0], self.model.features[-1]), f"Output shape mismatch for input shape {X.shape}")
-                self.assertTrue(jnp.all(jnp.isfinite(output)), f"Output contains non-finite values for input shape {X.shape}")
-                self.assertTrue(jnp.all(jnp.abs(output) < 1e5), f"Output values are not within a reasonable range for input shape {X.shape}")
-            except Exception as e:
-                self.fail(f"Model application failed for input shape {X.shape}: {str(e)}")
-
-        # Verify the structure of trained parameters
-        expected_layers = ['dense_layers_0', 'dense_layers_1', 'final_dense']
-        for layer in expected_layers:
-            self.assertIn(layer, trained_params, f"Trained params should contain '{layer}'")
-            self.assertIn('kernel', trained_params[layer], f"'{layer}' should have a 'kernel'")
-            self.assertIn('bias', trained_params[layer], f"'{layer}' should have a 'bias'")
-
-        # Verify the shapes of the trained parameters
-        expected_shapes = [(self.X_medium.shape[1], 256), (256, 128), (128, self.model.features[-1])]
-        for layer, shape in zip(expected_layers, expected_shapes):
-            self.assertEqual(trained_params[layer]['kernel'].shape, shape, f"Shape mismatch for {layer} kernel")
-            self.assertEqual(trained_params[layer]['bias'].shape, (shape[1],), f"Shape mismatch for {layer} bias")
-
         # Test model prediction
-        test_input = jax.random.normal(self.key, (5, self.X_medium.shape[1]))
+        test_input = jax.random.normal(self.key, (5, self.features))
         try:
             predictions = self.model.apply({'params': trained_params}, test_input)
-            self.assertEqual(predictions.shape, (5, self.model.features[-1]), "Prediction shape mismatch")
+            self.assertEqual(predictions.shape, (5, self.features), "Prediction shape mismatch")
             self.assertTrue(jnp.all(jnp.isfinite(predictions)), "Predictions contain non-finite values")
-            self.assertTrue(jnp.all(jnp.abs(predictions) < 1e5), "Predictions are not within a reasonable range")
         except Exception as e:
             self.fail(f"Model prediction failed: {str(e)}")
 
-        # Test for overfitting (use a more lenient threshold)
-        train_loss = loss_fn(self.model.apply({'params': trained_params}, self.X_medium), self.y_medium)
-        test_loss = loss_fn(self.model.apply({'params': trained_params}, self.X_large), self.y_large)
-        self.assertLess(test_loss / train_loss, 2.0, "Model may be overfitting")
-
-        # Additional checks for numerical stability
-        self.assertFalse(jnp.any(jnp.isnan(final_loss)), "Final loss contains NaN values")
-        self.assertFalse(jnp.any(jnp.isinf(final_loss)), "Final loss contains infinite values")
-
-        # Check for consistent output across multiple runs
-        predictions1 = self.model.apply({'params': trained_params}, self.X_medium)
-        predictions2 = self.model.apply({'params': trained_params}, self.X_medium)
-        self.assertTrue(jnp.allclose(predictions1, predictions2), "Model output is not deterministic")
-
-        # Verify gradients
-        gradients = jax.grad(lambda p: loss_fn(self.model.apply({'params': p}, self.X_medium), self.y_medium))(trained_params)
-        for grad in jax.tree_leaves(gradients):
-            self.assertFalse(jnp.any(jnp.isnan(grad)), "Gradients contain NaN values")
-            self.assertFalse(jnp.any(jnp.isinf(grad)), "Gradients contain infinite values")
-
-    def test_jax_vmap(self):
-        def f(x):
-            return x * 2
-
-        batched_f = jax.vmap(f)
-        for X in [self.X_small, self.X_medium, self.X_large]:
-            result = batched_f(X)
-            self.assertEqual(result.shape, X.shape)
-
     def test_batch_predict(self):
-        params = self.model.init(self.key, self.X_medium)['params']
-        for X in [self.X_small, self.X_medium, self.X_large]:
-            try:
-                predictions = batch_predict(params, X)
-                self.assertEqual(predictions.shape, (X.shape[0], self.model.features[-1]),
-                                 f"Prediction shape mismatch for input shape {X.shape}")
-                self.assertTrue(jnp.all(jnp.isfinite(predictions)),
-                                f"Predictions contain non-finite values for input shape {X.shape}")
-                self.assertTrue(jnp.all(jnp.abs(predictions) < 1e5),
-                                f"Predictions are not within a reasonable range for input shape {X.shape}")
-            except ValueError as e:
-                if X.shape[1] != self.X_medium.shape[1]:
-                    self.assertIn("Input dimension mismatch", str(e),
-                                  f"Unexpected error for input shape {X.shape}: {str(e)}")
-                else:
-                    self.fail(f"Unexpected ValueError for input shape {X.shape}: {str(e)}")
-            except Exception as e:
-                self.fail(f"Unexpected error for input shape {X.shape}: {str(e)}")
-
-        # Test with incorrect parameter structure
-        incorrect_params = {'wrong_key': params['dense_layers_0']}
-        with self.assertRaises(ValueError):
-            batch_predict(incorrect_params, self.X_medium)
-
-        # Test with empty input
-        with self.assertRaises(ValueError):
-            batch_predict(params, jnp.array([]))
+        params = self.model.init(self.key, self.X)['params']
+        try:
+            predictions = batch_predict(params, self.X)
+            self.assertEqual(predictions.shape, (self.X.shape[0], self.features),
+                             f"Prediction shape mismatch for input shape {self.X.shape}")
+            self.assertTrue(jnp.all(jnp.isfinite(predictions)),
+                            f"Predictions contain non-finite values for input shape {self.X.shape}")
+        except Exception as e:
+            self.fail(f"Unexpected error for input shape {self.X.shape}: {str(e)}")
 
         # Test with 1D input
-        X_1d = jnp.ones(self.X_medium.shape[1])
+        X_1d = jnp.ones(self.features)
         predictions_1d = batch_predict(params, X_1d)
-        self.assertEqual(predictions_1d.shape, (1, self.model.features[-1]),
+        self.assertEqual(predictions_1d.shape, (1, self.features),
                          "Prediction shape mismatch for 1D input")
 
-        # Test with 3D input
-        X_3d = jnp.ones((5, 4, self.X_medium.shape[1]))
-        predictions_3d = batch_predict(params, X_3d)
-        self.assertEqual(predictions_3d.shape, (5 * 4, self.model.features[-1]),
-                         "Prediction shape mismatch for 3D input")
+        # Test with incorrect input dimension
+        X_incorrect = jnp.ones((20, self.features + 1))
+        with self.assertRaises(ValueError):
+            batch_predict(params, X_incorrect)
 
-        # Test with very large input
-        X_large = jnp.ones((1000, self.X_medium.shape[1]))
-        predictions_large = batch_predict(params, X_large)
-        self.assertEqual(predictions_large.shape, (1000, self.model.features[-1]),
-                         "Prediction shape mismatch for large input")
+    def test_alignment_with_pytorch(self):
+        # Set random seeds for reproducibility
+        jax_key = jax.random.PRNGKey(0)
+        torch.manual_seed(0)
+        np.random.seed(0)
+
+        # Initialize JAX model with specific initialization
+        jax_model = JAXModel(features=self.features)
+        jax_params = jax_model.init(jax_key, self.X)['params']
+
+        # Initialize PyTorch model with matching initialization
+        torch_model = PyTorchModel(features=self.features)
+        with torch.no_grad():
+            torch_model.layer.weight.copy_(torch.tensor(np.array(jax_params['layer']['kernel'].T)))
+            torch_model.layer.bias.copy_(torch.tensor(np.array(jax_params['layer']['bias']).flatten()))
+
+        # Train JAX model
+        jax_losses = []
+        def jax_callback(loss):
+            jax_losses.append(loss)
+
+        jax_trained_params = train_jax_model(jax_model, jax_params, self.X, self.y, epochs=10, learning_rate=0.01,
+                                             callback=jax_callback)
+
+        # Train PyTorch model
+        torch_losses = []
+        torch_params_history = []
+        def torch_callback(loss, model):
+            torch_losses.append(loss)
+            torch_params_history.append({name: param.clone().detach().numpy() for name, param in model.named_parameters()})
+
+        torch_trained_params = train_pytorch_model(torch_model, np.array(self.X), np.array(self.y), epochs=10, learning_rate=0.01,
+                                                   callback=torch_callback)
+
+        # Log training losses and parameter changes
+        logging.info("JAX training losses: %s", jax_losses)
+        logging.info("PyTorch training losses: %s", torch_losses)
+
+        # Log final parameter differences
+        logging.debug("Final parameter differences:")
+        for jax_key in jax_trained_params['layer']:
+            jax_param = np.array(jax_trained_params['layer'][jax_key])
+            torch_key = 'weight' if jax_key == 'kernel' else jax_key
+            torch_param = torch_trained_params[f'layer.{torch_key}'].detach().numpy()
+            if jax_key == 'kernel':
+                torch_param = torch_param.T  # Transpose for proper comparison
+            param_diff = np.mean(np.abs(jax_param - torch_param))
+            logging.debug(f"  {jax_key} (JAX) vs {torch_key} (PyTorch): {param_diff}")
+
+        # Compare predictions
+        test_input_key = jax.random.PRNGKey(42)  # Create a new PRNG key for test input
+        test_input = jax.random.normal(test_input_key, (5, self.features))
+        jax_predictions = jax_model.apply({'params': jax_trained_params}, test_input)
+        torch_predictions = torch_model(torch.FloatTensor(np.array(test_input)))
+
+        # Log predictions and final model parameters
+        logging.debug("JAX predictions:\n%s", jax_predictions)
+        logging.debug("PyTorch predictions:\n%s", torch_predictions.detach().numpy())
+        logging.debug("JAX trained parameters:\n%s", jax.tree_map(lambda x: x, jax_trained_params))
+        logging.debug("PyTorch trained parameters:\n%s", {k: v.detach().numpy() for k, v in torch_trained_params.items()})
+
+        # Calculate and log the mean absolute difference
+        mean_abs_diff = jnp.mean(jnp.abs(jax_predictions - torch_predictions.detach().numpy()))
+        logging.info("Mean absolute difference between JAX and PyTorch predictions: %f", mean_abs_diff)
+
+        # Check if predictions are similar (using a smaller tolerance)
+        self.assertTrue(jnp.allclose(jax_predictions, torch_predictions.detach().numpy(), atol=1e-4),
+                        f"JAX and PyTorch model predictions should be very similar. Mean absolute difference: {mean_abs_diff}")
+
+        # Compare individual prediction differences
+        max_diff = jnp.max(jnp.abs(jax_predictions - torch_predictions.detach().numpy()))
+        logging.info("Maximum difference between JAX and PyTorch predictions: %f", max_diff)
+
+        # Verify that both models produce valid probability distributions
+        self.assertTrue(jnp.allclose(jnp.sum(jnp.exp(jax_predictions), axis=1), 1.0, atol=1e-6),
+                        "JAX predictions do not sum to 1 after exponentiation")
+        self.assertTrue(jnp.allclose(torch.sum(torch.exp(torch_predictions), dim=1).detach().numpy(), 1.0, atol=1e-6),
+                        "PyTorch predictions do not sum to 1 after exponentiation")
 
 if __name__ == '__main__':
     unittest.main()

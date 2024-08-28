@@ -22,7 +22,6 @@ from .quantum_nn_module import QuantumNeuralNetwork
 from .rl_module import RLAgent, RLEnvironment, train_rl_agent
 from .advanced_nn import NeuroFlexNN
 from .tokenisation import tokenize_text
-from .correctgrammer import correct_grammar
 from .tokenizer import Tokenizer
 from .destroy_button import DestroyButton
 
@@ -62,7 +61,6 @@ __all__ = [
     'train_rl_agent',
     'NeuroFlexNN',
     'tokenize_text',
-    'correct_grammar',
     'Tokenizer',
     'DestroyButton',
 ]
