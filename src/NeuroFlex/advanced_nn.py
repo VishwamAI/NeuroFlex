@@ -97,8 +97,40 @@ class NeuroFlexNN(nn.Module):
                 kernel_init=nn.initializers.kaiming_normal()
             )
 
-        # Initialize params attribute
+        # Initialize params attribute using Flax's parameter management system
         self.params = self.param('params', self._init_params)
+
+    def _init_params(self, key):
+        """Initialize the parameters of the neural network."""
+        params = {}
+        dummy_input = jnp.ones((1,) + self.input_shape[1:], dtype=self.dtype)
+
+        if self.use_cnn:
+            for i, feat in enumerate(self.features[:-1]):
+                key, subkey = jax.random.split(key)
+                kernel_shape = (3,) * self.conv_dim + (dummy_input.shape[-1] if i == 0 else self.features[i-1], feat)
+                params[f'conv_layers_{i}'] = {
+                    'kernel': jax.random.normal(subkey, kernel_shape) * 0.02,
+                    'bias': jnp.zeros((feat,))
+                }
+            dummy_input = dummy_input.reshape((1, -1))  # Flatten for dense layers
+
+        for i, feat in enumerate(self.features):
+            key, subkey = jax.random.split(key)
+            input_dim = dummy_input.shape[-1] if i == 0 else self.features[i-1]
+            params[f'dense_layers_{i}'] = {
+                'kernel': jax.random.normal(subkey, (input_dim, feat)) * 0.02,
+                'bias': jnp.zeros((feat,))
+            }
+
+        if not self.use_rl:
+            key, subkey = jax.random.split(key)
+            params['final_dense'] = {
+                'kernel': jax.random.normal(subkey, (self.features[-1], self.output_shape[-1])) * 0.02,
+                'bias': jnp.zeros((self.output_shape[-1],))
+            }
+
+        return params
 
     def _init_params(self, key):
         """Initialize the parameters of the neural network."""

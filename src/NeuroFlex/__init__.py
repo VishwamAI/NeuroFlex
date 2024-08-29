@@ -15,8 +15,7 @@ from .xarray_integration import XarrayIntegration
 from .bioinformatics_integration import BioinformaticsIntegration
 from .scikit_bio_integration import ScikitBioIntegration
 from .ete_integration import ETEIntegration
-# from .alphafold_integration import AlphaFoldIntegration
-from .detectron2_integration import Detectron2Integration
+# Removed: from .alphafold_integration import AlphaFoldIntegration
 from .vision_transformer import VisionTransformer
 from .quantum_nn_module import QuantumNeuralNetwork
 from .rl_module import RLAgent, RLEnvironment, train_rl_agent
@@ -52,8 +51,7 @@ __all__ = [
     'BioinformaticsIntegration',
     'ScikitBioIntegration',
     'ETEIntegration',
-    # 'AlphaFoldIntegration',
-    'Detectron2Integration',
+    # Removed: 'AlphaFoldIntegration',
     'VisionTransformer',
     'QuantumNeuralNetwork',
     'RLAgent',

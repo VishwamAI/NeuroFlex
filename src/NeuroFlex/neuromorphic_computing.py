@@ -68,49 +68,125 @@ class NeuromorphicComputing(nn.Module):
     threshold: float = 1.0
     reset_potential: float = 0.0
     leak_factor: float = 0.9
+    dtype: jnp.dtype = jnp.float32
+    learning_rate: float = 0.01
 
     def setup(self):
-        self.model = SpikingNeuralNetwork(num_neurons=self.num_neurons,
-                                          threshold=self.threshold,
-                                          reset_potential=self.reset_potential,
-                                          leak_factor=self.leak_factor)
-        logging.info(f"Initialized NeuromorphicComputing with {len(self.num_neurons)} layers")
+        self.model = SpikingNeuralNetwork(
+            num_neurons=self.num_neurons,
+            threshold=self.threshold,
+            reset_potential=self.reset_potential,
+            leak_factor=self.leak_factor
+        )
+        self.optimizer = optax.adam(learning_rate=self.learning_rate)
+        self.initialized = False  # Flag to track initialization status
+        self.variables = None  # Store model variables
+        logging.info(f"NeuromorphicComputing setup complete with {len(self.num_neurons)} layers")
 
-    def __call__(self, inputs, membrane_potentials=None):
-        return self.model(inputs, membrane_potentials)
+    def __call__(self, inputs: jnp.ndarray, rng_key: jnp.ndarray, membrane_potentials: Optional[List[jnp.ndarray]] = None) -> Tuple[jnp.ndarray, List[jnp.ndarray]]:
+        if not self.initialized:
+            raise RuntimeError("NeuromorphicComputing model is not initialized. Call init_model() first.")
 
-    def init_model(self, rng, input_shape):
-        dummy_input = jnp.zeros(input_shape)
-        membrane_potentials = [jnp.zeros(input_shape[:-1] + (n,)) for n in self.num_neurons]
-        # Ensure consistent shapes between inputs and membrane potentials
-        if dummy_input.shape[1] != membrane_potentials[0].shape[1]:
-            dummy_input = jnp.reshape(dummy_input, (-1, membrane_potentials[0].shape[1]))
-        return self.init(rng, dummy_input, membrane_potentials)
+        try:
+            inputs = self._preprocess_inputs(inputs)
+            membrane_potentials = self._initialize_or_preprocess_membrane_potentials(inputs, membrane_potentials)
 
-    @jax.jit
-    def forward(self, params, inputs, membrane_potentials):
-        return self.apply(params, inputs, membrane_potentials)
+            noise_key, threshold_key, model_key = jax.random.split(rng_key, 3)
+            membrane_potentials = self._add_noise_to_membrane_potentials(membrane_potentials, noise_key)
+            dynamic_threshold = self._get_dynamic_threshold(threshold_key)
 
-    def train_step(self, params, inputs, targets, membrane_potentials, optimizer):
+            outputs, new_membrane_potentials = self.model.apply(
+                self.variables,
+                inputs,
+                membrane_potentials,
+                rngs={'dropout': model_key},
+                threshold=dynamic_threshold
+            )
+            outputs = self._add_noise_to_outputs(outputs, model_key)
+            outputs = self._ensure_2d_output(outputs)
+
+            return outputs, new_membrane_potentials
+        except ValueError as e:
+            logging.error(f"ValueError in NeuromorphicComputing.__call__: {str(e)}")
+            self.handle_error(e)
+        except Exception as e:
+            logging.error(f"Unexpected error in NeuromorphicComputing.__call__: {str(e)}")
+            self.handle_error(e)
+
+    def _preprocess_inputs(self, inputs: jnp.ndarray) -> jnp.ndarray:
+        if len(inputs.shape) == 1:
+            return jnp.expand_dims(inputs, axis=0)
+        elif len(inputs.shape) > 2:
+            return jnp.reshape(inputs, (-1, inputs.shape[-1]))
+        return inputs
+
+    def _initialize_or_preprocess_membrane_potentials(self, inputs: jnp.ndarray, membrane_potentials: Optional[List[jnp.ndarray]]) -> List[jnp.ndarray]:
+        if membrane_potentials is None:
+            return [jnp.zeros((inputs.shape[0], n), dtype=self.dtype) for n in self.num_neurons]
+        return [jnp.broadcast_to(mp, (inputs.shape[0], mp.shape[-1])) for mp in membrane_potentials]
+
+    def _add_noise_to_membrane_potentials(self, membrane_potentials: List[jnp.ndarray], noise_key: jnp.ndarray) -> List[jnp.ndarray]:
+        noise_factor = 1e-2
+        return [
+            mp + jax.random.normal(noise_key, mp.shape, dtype=self.dtype) * noise_factor
+            for mp in membrane_potentials
+        ]
+
+    def _get_dynamic_threshold(self, threshold_key: jnp.ndarray) -> float:
+        threshold_noise = jax.random.uniform(threshold_key, (), minval=-0.1, maxval=0.1)
+        return self.threshold + threshold_noise
+
+    def _add_noise_to_outputs(self, outputs: jnp.ndarray, model_key: jnp.ndarray) -> jnp.ndarray:
+        output_noise_key, _ = jax.random.split(model_key)
+        noise_factor = 1e-2
+        return outputs + jax.random.normal(output_noise_key, outputs.shape, dtype=self.dtype) * noise_factor
+
+    def _ensure_2d_output(self, outputs: jnp.ndarray) -> jnp.ndarray:
+        if len(outputs.shape) == 1:
+            return jnp.expand_dims(outputs, axis=0)
+        elif len(outputs.shape) > 2:
+            return jnp.reshape(outputs, (-1, outputs.shape[-1]))
+        return outputs
+
+    def init_model(self, rng: jnp.ndarray, input_shape: Tuple[int, ...]) -> None:
+        try:
+            dummy_input = jnp.zeros(input_shape, dtype=self.dtype)
+            dummy_input = self._preprocess_inputs(dummy_input)
+            dummy_membrane_potentials = [jnp.zeros((dummy_input.shape[0], n), dtype=self.dtype) for n in self.num_neurons]
+
+            self.init_variables = self.init(rng, dummy_input, rng, dummy_membrane_potentials)
+            self.opt_state = self.optimizer.init(self.init_variables['params'])
+            self.variables = self.init_variables  # Set variables attribute
+            logging.info(f"Model initialized with parameters. Params shape: {jax.tree_map(lambda x: x.shape, self.init_variables['params'])}")
+            logging.debug(f"Full params structure: {jax.tree_map(lambda x: x.shape, self.init_variables['params'])}")
+            self.initialized = True  # Set initialization flag
+        except Exception as e:
+            logging.error(f"Error during model initialization: {str(e)}")
+            self.initialized = False
+            raise
+
+    def train_step(self, inputs: jnp.ndarray, targets: jnp.ndarray, rng_key: jnp.ndarray) -> Tuple[dict, float]:
         def loss_fn(params):
-            outputs, new_membrane_potentials = self.forward(params, inputs, membrane_potentials)
-            return jnp.mean((outputs - targets) ** 2), new_membrane_potentials
+            rng_key_step, rng_key_noise = jax.random.split(rng_key)
+            noisy_inputs = inputs + jax.random.normal(rng_key_noise, inputs.shape, dtype=self.dtype) * 0.01
+            outputs, _ = self.apply({'params': params}, noisy_inputs, rng_key_step)
+            return jnp.mean((outputs - targets) ** 2)
 
-        (loss, new_membrane_potentials), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
-        updates, optimizer_state = optimizer.update(grads, optimizer.state)
-        params = optax.apply_updates(params, updates)
-        optimizer = optimizer.replace(state=optimizer_state)
-        return params, loss, new_membrane_potentials, optimizer
+        loss, grads = jax.value_and_grad(loss_fn)(self.variables['params'])
+        updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
+        self.variables['params'] = optax.apply_updates(self.variables['params'], updates)
+        return self.variables['params'], loss
 
     @staticmethod
     def handle_error(e: Exception) -> None:
         logging.error(f"Error in NeuromorphicComputing: {str(e)}")
-        if isinstance(e, jax.errors.JAXException):
-            logging.error("JAX-specific error occurred. Check JAX configuration and input shapes.")
-        elif isinstance(e, ValueError):
+        if isinstance(e, ValueError):
             logging.error("Value error occurred. Check input data and model parameters.")
+        elif isinstance(e, TypeError):
+            logging.error("Type error occurred. Ensure all inputs have correct types and shapes.")
         else:
             logging.error("Unexpected error occurred. Please review the stack trace for more information.")
+        logging.debug(f"Error details: {e}", exc_info=True)
         raise
 
 def create_neuromorphic_model(num_neurons: List[int]) -> NeuromorphicComputing:
