@@ -509,51 +509,168 @@ class TestNeuroFlexNNShapeValidation(unittest.TestCase):
     def test_valid_shapes(self):
         model = NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
         self.assertIsInstance(model, NeuroFlexNN)
+        self.assertEqual(model.input_shape, self.input_shape)
+        self.assertEqual(model.output_shape, self.output_shape)
+        self.assertEqual(model.features, self.features)
+        self.assertTrue(model.use_cnn)
+        self.assertFalse(model.use_rl)
 
     def test_invalid_input_shape_type(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=[1, 28, 28, 1], output_shape=self.output_shape, use_cnn=True)
-        self.assertIn("Input and output shapes must be tuples", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Input shape must be a tuple, got <class 'list'>")
 
     def test_invalid_output_shape_type(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=[1, 10], use_cnn=True)
-        self.assertIn("Input and output shapes must be tuples", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Output shape must be a tuple, got <class 'list'>")
 
     def test_invalid_input_shape_dimensions(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=(28, 28, 1), output_shape=self.output_shape, use_cnn=True)
-        self.assertIn("Input shape must have at least 2 dimensions", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Input shape must have at least 2 dimensions, got (28, 28, 1)")
 
     def test_invalid_output_shape_dimensions(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=(10,), use_cnn=True)
-        self.assertIn("Output shape must have at least 2 dimensions", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Output shape must have at least 2 dimensions, got (10,)")
 
     def test_mismatched_features_output(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=(32, 64, 20), input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
-        self.assertIn("Last feature dimension", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Last feature dimension 20 must match output shape 10")
 
     def test_invalid_cnn_input_shape(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=(1, 28, 28), output_shape=self.output_shape, use_cnn=True)
-        self.assertIn("For CNN with conv_dim=2, input shape must have 4 dimensions", str(cm.exception))
+        self.assertEqual(str(cm.exception), "For CNN with conv_dim=2, input shape must have 4 dimensions, got 3")
 
     def test_batch_size_mismatch(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=(2, 28, 28, 1), output_shape=(1, 10), use_cnn=True)
-        self.assertIn("Batch size mismatch", str(cm.exception))
+        self.assertEqual(str(cm.exception), "Batch size mismatch. Input shape: 2, Output shape: 1")
 
     def test_missing_action_dim(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True)
-        self.assertIn("action_dim must be provided when use_rl is True", str(cm.exception))
+        self.assertEqual(str(cm.exception), "action_dim must be provided when use_rl is True")
 
     def test_negative_dimensions(self):
         with self.assertRaises(ValueError) as cm:
             NeuroFlexNN(features=self.features, input_shape=(1, -28, 28, 1), output_shape=self.output_shape, use_cnn=True)
-        self.assertIn("All dimensions must be positive", str(cm.exception))
+        self.assertEqual(str(cm.exception), "All dimensions in Input shape must be positive integers, got (1, -28, 28, 1)")
+
+    def test_zero_dimensions(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=(1, 0, 28, 1), output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "All dimensions in Input shape must be positive integers, got (1, 0, 28, 1)")
+
+    def test_invalid_feature_dimensions(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(32, 0, 10), input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "All features must be positive integers, got (32, 0, 10)")
+
+    def test_invalid_conv_dim(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True, conv_dim=4)
+        self.assertEqual(str(cm.exception), "conv_dim must be 2 or 3, got 4")
+
+    def test_cnn_input_channel_mismatch(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(16, 32, 10), input_shape=(1, 28, 28, 3), output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "For CNN, input channels 3 must match first feature dimension 16")
+
+    def test_dnn_input_feature_mismatch(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(64, 32, 10), input_shape=(1, 100), output_shape=self.output_shape, use_cnn=False)
+        self.assertEqual(str(cm.exception), "For DNN, input features 100 must match first feature dimension 64")
+
+    def test_rl_action_dim_mismatch(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=5)
+        self.assertEqual(str(cm.exception), "action_dim 5 must match last dimension of output_shape 10")
+
+    def test_valid_rl_configuration(self):
+        model = NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=10)
+        self.assertTrue(model.use_rl)
+        self.assertEqual(model.action_dim, 10)
+
+    def test_invalid_features_type(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=[32, 64, 10], input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "Features must be a tuple, got <class 'list'>")
+
+    def test_cnn_3d_input_shape(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=(1, 16, 16, 16, 1), output_shape=self.output_shape, use_cnn=True, conv_dim=2)
+        self.assertEqual(str(cm.exception), "For CNN with conv_dim=2, input shape must have 4 dimensions, got 5")
+
+    def test_valid_3d_cnn_configuration(self):
+        model = NeuroFlexNN(features=self.features, input_shape=(1, 16, 16, 16, 1), output_shape=self.output_shape, use_cnn=True, conv_dim=3)
+        self.assertTrue(model.use_cnn)
+        self.assertEqual(model.conv_dim, 3)
+
+    def test_invalid_action_dim_type(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=5.5)
+        self.assertEqual(str(cm.exception), "action_dim must be a positive integer, got 5.5")
+
+    def test_negative_action_dim(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=-5)
+        self.assertEqual(str(cm.exception), "action_dim must be a positive integer, got -5")
+
+    def test_valid_dnn_configuration(self):
+        model = NeuroFlexNN(features=(64, 32, 10), input_shape=(1, 64), output_shape=(1, 10), use_cnn=False)
+        self.assertFalse(model.use_cnn)
+        self.assertEqual(model.features, (64, 32, 10))
+
+    def test_invalid_feature_count(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(32,), input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "Features must have at least two elements, got (32,)")
+
+    def test_non_integer_feature(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(32, 64.5, 10), input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "All elements in features must be integers, got (32, 64.5, 10)")
+
+    def test_valid_cnn_dnn_mixed_configuration(self):
+        model = NeuroFlexNN(features=(32, 64, 128, 10), input_shape=(1, 28, 28, 1), output_shape=(1, 10), use_cnn=True)
+        self.assertTrue(model.use_cnn)
+        self.assertEqual(model.features, (32, 64, 128, 10))
+
+    def test_valid_rl_dueling_configuration(self):
+        model = NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=10, use_dueling=True)
+        self.assertTrue(model.use_rl)
+        self.assertTrue(model.use_dueling)
+        self.assertEqual(model.action_dim, 10)
+
+    def test_valid_rl_double_configuration(self):
+        model = NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_rl=True, action_dim=10, use_double=True)
+        self.assertTrue(model.use_rl)
+        self.assertTrue(model.use_double)
+        self.assertEqual(model.action_dim, 10)
+
+    def test_invalid_input_shape_ndim(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=(1,), output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "Input shape must have at least 2 dimensions, got (1,)")
+
+    def test_invalid_output_shape_ndim(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=(10,), use_cnn=True)
+        self.assertEqual(str(cm.exception), "Output shape must have at least 2 dimensions, got (10,)")
+
+    def test_invalid_features_length(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=(32,), input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True)
+        self.assertEqual(str(cm.exception), "Features must have at least two elements, got (32,)")
+
+    def test_invalid_conv_dim_type(self):
+        with self.assertRaises(ValueError) as cm:
+            NeuroFlexNN(features=self.features, input_shape=self.input_shape, output_shape=self.output_shape, use_cnn=True, conv_dim=2.5)
+        self.assertEqual(str(cm.exception), "conv_dim must be 2 or 3, got 2.5")
 
 class TestAdversarialTraining(unittest.TestCase):
     def setUp(self):

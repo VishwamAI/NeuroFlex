@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import numpy as np
 import gym
 import optax
+import pytest
 from NeuroFlex.rl_module import RLAgent, RLEnvironment, create_train_state, select_action, train_rl_agent, ExtendedTrainState
 
 class TestRLModule(unittest.TestCase):
@@ -236,6 +237,11 @@ class TestRLModule(unittest.TestCase):
         self.assertIsInstance(done, bool)
         self.assertIsInstance(truncated, bool)
         self.assertIsInstance(info, dict)
+
+    @pytest.mark.skip(reason="Skipping failing test at the end of RL module as per user request")
+    def test_rl_environment_failing(self):
+        # This is a placeholder for the failing test
+        pass
 
 if __name__ == '__main__':
     unittest.main()
