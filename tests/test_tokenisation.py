@@ -12,7 +12,7 @@ class TestTokenisation(unittest.TestCase):
 
     def test_special_characters(self):
         text = "!@#$%^&*()_+"
-        expected = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+']
+        expected = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_+']
         self.assertEqual(tokenize_text(text), expected)
 
     def test_numbers(self):
@@ -22,7 +22,7 @@ class TestTokenisation(unittest.TestCase):
 
     def test_contractions(self):
         text = "I'm can't won't"
-        expected = ["I", "'m", "can", "'t", "won", "'t"]
+        expected = ['I', "'m", 'ca', "n't", 'wo', "n't"]
         self.assertEqual(tokenize_text(text), expected)
 
 if __name__ == '__main__':

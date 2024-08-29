@@ -18,7 +18,7 @@ def test_design_protein(sbi):
 
     # Prepare training data
     X_train = np.random.rand(100, 10)
-    y_train = np.random.rand(100)
+    y_train = np.random.rand(100, 20)  # Update to 20 columns for amino acid probabilities
 
     # Initialize the model with training data
     sbi._initialize_protein_design_model(X_train, y_train)

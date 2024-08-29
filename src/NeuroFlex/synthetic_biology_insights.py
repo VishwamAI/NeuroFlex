@@ -10,6 +10,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputRegressor
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,20 +27,28 @@ class SyntheticBiologyInsights:
         except Exception as e:
             logging.error(f"Failed to initialize AlphaFold: {str(e)}")
             logging.warning("Some functionality related to AlphaFold will be unavailable")
-        self.encoder = OneHotEncoder(sparse=False)  # Set sparse=False explicitly
+        self.encoder = OneHotEncoder(sparse_output=False)  # Set sparse_output=False explicitly
 
     def _initialize_protein_design_model(self, X: np.ndarray, y: np.ndarray):
         if X.shape[0] != y.shape[0]:
             raise ValueError("X and y must have the same number of samples")
 
-        self.protein_design_model = RandomForestRegressor(n_estimators=100, random_state=42)
+        # Ensure y has 20 columns, one for each amino acid probability
+        if y.shape[1] != 20:
+            raise ValueError("y must have 20 columns, one for each amino acid probability")
+
+        base_estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+        self.protein_design_model = MultiOutputRegressor(base_estimator)
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         self.protein_design_model.fit(X_train, y_train)
-        test_score = self.protein_design_model.score(X_test, y_test)
-        logging.info(f"Protein design model initialized. Test score: {test_score}")
 
-        if test_score < 0.5:
-            logging.warning("Low test score. Consider providing more or better quality training data.")
+        test_scores = self.protein_design_model.score(X_test, y_test)
+        avg_test_score = np.mean(test_scores)
+        logging.info(f"Protein design model initialized. Average test score: {avg_test_score:.4f}")
+
+        if avg_test_score < 0.5:
+            logging.warning("Low average test score. Consider providing more or better quality training data.")
 
     def design_protein(self, target_function: str, length: int) -> SeqRecord:
         """
@@ -61,12 +70,19 @@ class SyntheticBiologyInsights:
         # Generate features from the target function
         function_features = self._encode_target_function(target_function)
 
+        # Debug print to check the shape of encoded features
+        logging.debug(f"Encoded features shape: {function_features.shape}")
+
         try:
             # Use the model to predict amino acid probabilities
             aa_probabilities = self.protein_design_model.predict(function_features.reshape(1, -1))
 
+            # Ensure aa_probabilities is a 2D array with shape (1, 20)
+            if aa_probabilities.shape != (1, 20):
+                raise ValueError(f"Unexpected shape of aa_probabilities: {aa_probabilities.shape}. Expected (1, 20).")
+
             # Generate sequence based on probabilities
-            designed_sequence = self._generate_sequence_from_probabilities(aa_probabilities, length)
+            designed_sequence = self._generate_sequence_from_probabilities(aa_probabilities[0], length)
 
             return SeqRecord(designed_sequence, id="designed_protein", description=f"Designed for {target_function}")
         except Exception as e:
@@ -75,11 +91,25 @@ class SyntheticBiologyInsights:
 
     def _encode_target_function(self, target_function: str) -> np.ndarray:
         # Simple encoding of target function (placeholder)
-        return self.encoder.fit_transform([[char] for char in target_function])
+        encoded = self.encoder.fit_transform([[char] for char in target_function])
+        # Ensure we return exactly 10 features
+        if encoded.shape[1] >= 10:
+            return encoded[:1, :10]  # Return first row, first 10 columns
+        else:
+            # Pad to 10 features if less than 10
+            return np.pad(encoded[:1, :], ((0, 0), (0, 10 - encoded.shape[1])), mode='constant')
 
     def _generate_sequence_from_probabilities(self, probabilities: np.ndarray, length: int) -> Seq:
         amino_acids = 'ACDEFGHIKLMNPQRSTVWY'
-        sequence = ''.join(np.random.choice(list(amino_acids), p=probabilities.flatten(), size=length))
+        logging.debug(f"Original probabilities shape: {probabilities.shape}")
+        logging.debug(f"Original probabilities sum: {np.sum(probabilities)}")
+        normalized_probabilities = probabilities.flatten() / np.sum(probabilities)
+        logging.debug(f"Normalized probabilities shape: {normalized_probabilities.shape}")
+        logging.debug(f"Normalized probabilities sum: {np.sum(normalized_probabilities)}")
+        logging.debug(f"Number of amino acids: {len(amino_acids)}")
+        if len(normalized_probabilities) != len(amino_acids):
+            raise ValueError(f"Number of probabilities ({len(normalized_probabilities)}) does not match number of amino acids ({len(amino_acids)})")
+        sequence = ''.join(np.random.choice(list(amino_acids), p=normalized_probabilities, size=length))
         return Seq(sequence)
 
     def optimize_protein(self, protein_sequence: SeqRecord, optimization_criteria: Dict[str, float]) -> SeqRecord:
@@ -125,7 +155,7 @@ class SyntheticBiologyInsights:
 
     def _mutate_sequence(self, sequence: str, mutation_rate: float = 0.01) -> str:
         """Mutate a given sequence with a specified mutation rate."""
-        amino_acids = 'ACDEFGHIKLMNPQRSTVWY'
+        amino_acids = list('ACDEFGHIKLMNPQRSTVWY')
         mutated_sequence = ''.join(
             np.random.choice(amino_acids) if np.random.random() < mutation_rate else aa
             for aa in sequence

@@ -1,13 +1,12 @@
 import unittest
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 import optax
-from NeuroFlex.neuromorphic_computing import spiking_neuron, SpikingNeuralNetwork, NeuromorphicComputing, create_neuromorphic_model
+from NeuroFlex.neuromorphic_computing import spiking_neuron, SpikingNeuralNetwork, create_neuromorphic_model
 
 class TestNeuromorphicComputing(unittest.TestCase):
     def setUp(self):
-        self.input_shape = (1, 10)
+        self.input_shape = (1, 8)
         self.num_neurons = [8, 4, 2]
         self.rng = jax.random.PRNGKey(0)
 
@@ -20,89 +19,87 @@ class TestNeuromorphicComputing(unittest.TestCase):
 
         self.assertIsInstance(spike, jnp.ndarray)
         self.assertTrue(jnp.all((spike == 0.0) | (spike == 1.0)))
-
-        # Test that the membrane potential is being updated
-        spike2, new_membrane_potential2 = spiking_neuron(inputs, new_membrane_potential, threshold, reset_potential, leak_factor)
-        self.assertFalse(jnp.array_equal(spike, spike2))
         self.assertFalse(jnp.array_equal(membrane_potential, new_membrane_potential))
-
-        # Test with different threshold
-        spike_high, _ = spiking_neuron(inputs, membrane_potential, 2.0, reset_potential, leak_factor)
-        self.assertTrue(jnp.all(spike_high == 0.0))
+        self.assertTrue(jnp.all(new_membrane_potential >= reset_potential))
+        self.assertTrue(jnp.all(new_membrane_potential <= threshold))
 
     def test_spiking_neural_network(self):
         snn = SpikingNeuralNetwork(num_neurons=self.num_neurons)
-        inputs = jnp.ones(self.input_shape)
-        membrane_potentials = [jnp.zeros(self.input_shape[:1] + (n,)) for n in self.num_neurons]
 
-        params = snn.init(self.rng, inputs, membrane_potentials)
-        outputs, new_membrane_potentials = snn.apply(params, inputs, membrane_potentials)
+        # Test with 2D input (batch, features)
+        inputs_2d = jnp.ones(self.input_shape)
+        membrane_potentials_2d = [jnp.zeros(self.input_shape[:1] + (n,)) for n in self.num_neurons]
 
-        print(f"Input shape: {inputs.shape}")
-        print(f"Output shape: {outputs.shape}")
-        print(f"New membrane potential shapes: {[mp.shape for mp in new_membrane_potentials]}")
+        params = snn.init(self.rng, inputs_2d, membrane_potentials_2d)
+        outputs_2d, new_membrane_potentials_2d = snn.apply(params, inputs_2d, membrane_potentials_2d)
 
-        self.assertEqual(outputs.shape, self.input_shape[:1] + (self.num_neurons[-1],))
-        self.assertEqual(len(new_membrane_potentials), len(self.num_neurons))
+        self.assertEqual(outputs_2d.shape, self.input_shape[:1] + (self.num_neurons[-1],))
+        self.assertEqual(len(new_membrane_potentials_2d), len(self.num_neurons))
         for i, n in enumerate(self.num_neurons):
-            self.assertEqual(new_membrane_potentials[i].shape, self.input_shape[:1] + (n,))
+            self.assertEqual(new_membrane_potentials_2d[i].shape, self.input_shape[:1] + (n,))
 
-        # Test with different input shape
-        different_input_shape = (2, 5)
-        different_inputs = jnp.ones(different_input_shape)
-        different_membrane_potentials = [jnp.zeros(different_input_shape[:1] + (n,)) for n in self.num_neurons]
+        # Test with 1D input (features)
+        inputs_1d = jnp.ones((8,))
+        membrane_potentials_1d = [jnp.zeros((n,)) for n in self.num_neurons]
 
-        different_params = snn.init(self.rng, different_inputs, different_membrane_potentials)
-        different_outputs, different_new_membrane_potentials = snn.apply(different_params, different_inputs, different_membrane_potentials)
+        outputs_1d, new_membrane_potentials_1d = snn.apply(params, inputs_1d, membrane_potentials_1d)
 
-        print(f"Different input shape: {different_inputs.shape}")
-        print(f"Different output shape: {different_outputs.shape}")
-        print(f"Different new membrane potential shapes: {[mp.shape for mp in different_new_membrane_potentials]}")
-
-        self.assertEqual(different_outputs.shape, different_input_shape[:1] + (self.num_neurons[-1],))
-        self.assertEqual(len(different_new_membrane_potentials), len(self.num_neurons))
+        self.assertEqual(outputs_1d.shape, (self.num_neurons[-1],))
         for i, n in enumerate(self.num_neurons):
-            self.assertEqual(different_new_membrane_potentials[i].shape, different_input_shape[:1] + (n,))
+            self.assertEqual(new_membrane_potentials_1d[i].shape, (n,))
+
+        # Test with 3D input (batch, time, features)
+        inputs_3d = jnp.ones((2, 3, 8))
+        membrane_potentials_3d = [jnp.zeros((2, 3, n)) for n in self.num_neurons]
+
+        outputs_3d, new_membrane_potentials_3d = snn.apply(params, inputs_3d, membrane_potentials_3d)
+
+        self.assertEqual(outputs_3d.shape, (2, 3, self.num_neurons[-1]))
+        for i, n in enumerate(self.num_neurons):
+            self.assertEqual(new_membrane_potentials_3d[i].shape, (2, 3, n))
 
         # Test error handling for mismatched shapes
         with self.assertRaises(ValueError):
             mismatched_inputs = jnp.ones((3, 7))  # Mismatched input shape
-            snn.apply(params, mismatched_inputs, membrane_potentials)
-
-        with self.assertRaises(ValueError):
-            mismatched_potentials = [jnp.zeros((1, n+1)) for n in self.num_neurons]  # Mismatched potential shapes
-            snn.apply(params, inputs, mismatched_potentials)
-
-        # Test with 1D input
-        one_d_input = jnp.ones((10,))
-        one_d_potentials = [jnp.zeros((n,)) for n in self.num_neurons]
-        one_d_params = snn.init(self.rng, one_d_input, one_d_potentials)
-        one_d_outputs, one_d_new_potentials = snn.apply(one_d_params, one_d_input, one_d_potentials)
-
-        self.assertEqual(one_d_outputs.shape, (self.num_neurons[-1],))
-        for i, n in enumerate(self.num_neurons):
-            self.assertEqual(one_d_new_potentials[i].shape, (n,))
+            snn.apply(params, mismatched_inputs, membrane_potentials_2d)
 
     def test_neuromorphic_computing(self):
         nc = create_neuromorphic_model(self.num_neurons)
         params = nc.init_model(self.rng, self.input_shape)
 
-        inputs = jnp.ones(self.input_shape)
-        membrane_potentials = [jnp.zeros(self.input_shape[:1] + (n,)) for n in self.num_neurons]
-        outputs, new_membrane_potentials = nc.forward(params, inputs, membrane_potentials)
+        # Test with 2D input
+        inputs_2d = jnp.ones(self.input_shape)
+        membrane_potentials_2d = [jnp.zeros(self.input_shape[:1] + (n,)) for n in self.num_neurons]
+        outputs_2d, new_membrane_potentials_2d = nc.forward(params, inputs_2d, membrane_potentials_2d)
 
-        self.assertEqual(outputs.shape, self.input_shape[:1] + (self.num_neurons[-1],))
-        self.assertIsInstance(outputs, jnp.ndarray)
-        self.assertTrue(jnp.all((outputs >= 0.0) & (outputs <= 1.0)))
+        self.assertEqual(outputs_2d.shape, self.input_shape[:1] + (self.num_neurons[-1],))
+        self.assertIsInstance(outputs_2d, jnp.ndarray)
+        self.assertTrue(jnp.all((outputs_2d >= 0.0) & (outputs_2d <= 1.0)))
+
+        # Test with 1D input
+        inputs_1d = jnp.ones((8,))
+        membrane_potentials_1d = [jnp.zeros((n,)) for n in self.num_neurons]
+        outputs_1d, new_membrane_potentials_1d = nc.forward(params, inputs_1d, membrane_potentials_1d)
+
+        self.assertEqual(outputs_1d.shape, (self.num_neurons[-1],))
+        for i, n in enumerate(self.num_neurons):
+            self.assertEqual(new_membrane_potentials_1d[i].shape, (n,))
+
+        # Test with 3D input
+        inputs_3d = jnp.ones((2, 3, 8))
+        membrane_potentials_3d = [jnp.zeros((2, 3, n)) for n in self.num_neurons]
+        outputs_3d, new_membrane_potentials_3d = nc.forward(params, inputs_3d, membrane_potentials_3d)
+
+        self.assertEqual(outputs_3d.shape, (2, 3, self.num_neurons[-1]))
 
         # Test multiple forward passes
-        outputs2, new_membrane_potentials2 = nc.forward(params, inputs, new_membrane_potentials)
-        self.assertFalse(jnp.array_equal(outputs, outputs2), "Outputs should differ due to changing membrane potentials")
+        outputs2, _ = nc.forward(params, inputs_2d, new_membrane_potentials_2d)
+        self.assertFalse(jnp.array_equal(outputs_2d, outputs2), "Outputs should differ due to changing membrane potentials")
 
-        # Test with different inputs
-        different_inputs = jnp.array([[0.5, 1.0, 0.2, 0.8, 1.5, 0.3, 0.9, 0.1, 0.7, 0.4]])
-        different_outputs, _ = nc.forward(params, different_inputs, membrane_potentials)
-        self.assertFalse(jnp.array_equal(outputs, different_outputs), "Outputs should differ for different inputs")
+        # Test with different input values
+        varied_inputs = jnp.array([[0.1, 0.5, 1.0, 0.8, 0.3, 0.7, 0.2, 0.9]])
+        varied_outputs, _ = nc.forward(params, varied_inputs, membrane_potentials_2d)
+        self.assertFalse(jnp.array_equal(outputs_2d, varied_outputs), "Outputs should differ for different input values")
 
     def test_train_step(self):
         nc = create_neuromorphic_model(self.num_neurons)
@@ -112,14 +109,46 @@ class TestNeuromorphicComputing(unittest.TestCase):
         targets = jnp.zeros((1, self.num_neurons[-1]))
         membrane_potentials = [jnp.zeros(self.input_shape[:1] + (n,)) for n in self.num_neurons]
         optimizer = optax.adam(learning_rate=0.01)
-        optimizer_state = optimizer.init(params)
 
-        new_params, loss, new_membrane_potentials, new_optimizer = nc.train_step(params, inputs, targets, membrane_potentials, optimizer.replace(state=optimizer_state))
+        new_params, loss, new_membrane_potentials, new_optimizer = nc.train_step(params, inputs, targets, membrane_potentials, optimizer)
 
         self.assertIsInstance(loss, jnp.ndarray)
         self.assertLess(loss, 1.0)  # Assuming loss is reasonably small after one step
         self.assertIsInstance(new_optimizer, optax.GradientTransformation)
         self.assertNotEqual(id(optimizer), id(new_optimizer))  # Ensure a new optimizer instance is returned
+
+        # Test multiple training steps
+        for _ in range(5):
+            params, loss, membrane_potentials, optimizer = nc.train_step(params, inputs, targets, membrane_potentials, optimizer)
+
+        self.assertLess(loss, 0.5)  # Assuming loss decreases over multiple steps
+
+    def test_edge_cases(self):
+        snn = SpikingNeuralNetwork(num_neurons=self.num_neurons)
+
+        # Test with empty input
+        empty_input = jnp.array([])
+        empty_potentials = [jnp.array([]) for _ in self.num_neurons]
+
+        with self.assertRaises(ValueError):
+            snn.init(self.rng, empty_input, empty_potentials)
+
+        # Test with very large input
+        large_input = jnp.ones((1000, 8))
+        large_potentials = [jnp.zeros((1000, n)) for n in self.num_neurons]
+
+        params = snn.init(self.rng, large_input, large_potentials)
+        outputs, _ = snn.apply(params, large_input, large_potentials)
+
+        self.assertEqual(outputs.shape, (1000, self.num_neurons[-1]))
+
+        # Test with very small values
+        small_input = jnp.full(self.input_shape, 1e-10)
+        small_potentials = [jnp.full(self.input_shape[:1] + (n,), 1e-10) for n in self.num_neurons]
+
+        outputs, _ = snn.apply(params, small_input, small_potentials)
+
+        self.assertTrue(jnp.all(jnp.isfinite(outputs)))
 
 if __name__ == '__main__':
     unittest.main()

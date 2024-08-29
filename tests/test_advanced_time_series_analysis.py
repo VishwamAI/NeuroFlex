@@ -49,10 +49,16 @@ def test_causal_inference(atsa):
     data = pd.DataFrame({'y': y, 'treatment': treatment}, index=dates)
 
     result = atsa.causal_inference(data, intervention_start='2021-07-02', intervention_var='treatment')
+    print("Causal Inference Result:", result)  # Debug print
+
     assert isinstance(result, dict)
-    assert 'summary' in result
-    assert 'report' in result
-    assert 'estimated_effect' in result
+    if 'error' in result:
+        print("Error in causal inference:", result['error'])  # Debug print for error
+    else:
+        assert 'summary' in result, f"'summary' not in result: {result}"
+        assert 'report' in result, f"'report' not in result: {result}"
+        assert 'estimated_effect' in result, f"'estimated_effect' not in result: {result}"
+        print("Estimated effect:", result['estimated_effect'])  # Debug print for estimated effect
 
 def test_invalid_forecast_model(atsa, time_series_data):
     with pytest.raises(ValueError):

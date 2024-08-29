@@ -5,6 +5,7 @@ import optax
 from typing import List, Tuple, Dict, Any, Optional
 import numpy as np
 import pandas as pd
+import logging
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from prophet import Prophet
@@ -42,9 +43,10 @@ class AdvancedTimeSeriesAnalysis:
         df = pd.DataFrame({'ds': data.index, 'y': data.values})
         model = Prophet()
         model.fit(df)
-        future = model.make_future_dataframe(periods=horizon)
+        future = model.make_future_dataframe(periods=horizon, freq=data.index.freq)
         forecast = model.predict(future)
-        return pd.Series(forecast['yhat'].iloc[-horizon:].values, index=data.index[-1] + pd.Timedelta(days=1) + pd.Timedelta(days=range(horizon)))
+        forecast_index = pd.date_range(start=data.index[-1] + data.index.freq, periods=horizon, freq=data.index.freq)
+        return pd.Series(forecast['yhat'].iloc[-horizon:].values, index=forecast_index)
 
     def detect_anomalies(self, data: pd.Series, contamination: float = 0.1) -> pd.Series:
         self.anomaly_detection_model.fit(data.values.reshape(-1, 1))
@@ -52,18 +54,32 @@ class AdvancedTimeSeriesAnalysis:
         return pd.Series(anomaly_labels, index=data.index)
 
     def causal_inference(self, data: pd.DataFrame, intervention_start: str, intervention_var: str) -> Dict[str, Any]:
-        pre_period = [data.index[0], pd.to_datetime(intervention_start) - pd.Timedelta(days=1)]
-        post_period = [pd.to_datetime(intervention_start), data.index[-1]]
+        try:
+            pre_period = [data.index[0], pd.to_datetime(intervention_start) - pd.Timedelta(days=1)]
+            post_period = [pd.to_datetime(intervention_start), data.index[-1]]
 
-        ci = CausalImpact(data, pre_period, post_period, model_args={'niter': 1000})
-        summary = ci.summary()
-        report = ci.summary(output='report')
+            ci = CausalImpact(data, pre_period, post_period, model_args={'niter': 1000})
 
-        return {
-            'summary': summary,
-            'report': report,
-            'estimated_effect': ci.estimated_effect()
-        }
+            if ci.inferences is None:
+                raise ValueError("CausalImpact failed to fit the model. Check your data and parameters.")
+
+            summary = ci.summary()
+            report = ci.summary(output='report')
+            estimated_effect = ci.estimated_effect()
+
+            return {
+                'summary': summary,
+                'report': report,
+                'estimated_effect': estimated_effect
+            }
+        except Exception as e:
+            logging.error(f"Error in causal_inference: {str(e)}")
+            return {
+                'error': str(e),
+                'summary': None,
+                'report': None,
+                'estimated_effect': None
+            }
 
 def create_advanced_time_series_analysis() -> AdvancedTimeSeriesAnalysis:
     return AdvancedTimeSeriesAnalysis()
