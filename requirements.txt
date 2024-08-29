@@ -35,3 +35,10 @@ git+https://github.com/google-deepmind/alphafold.git
 shap
 sentencepiece
 nltk
+PyQt5
+prophet
+pytorch_lightning
+pyod
+einops
+causalimpact
+torchvision
