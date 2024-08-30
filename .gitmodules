@@ -1,3 +1,6 @@
 [submodule "AIF360"]
 	path = AIF360
 	url = https://github.com/Trusted-AI/AIF360.git
+[submodule "latent-diffusion"]
+	path = latent-diffusion
+	url = https://github.com/CompVis/latent-diffusion.git
