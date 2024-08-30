@@ -138,8 +138,8 @@ def create_train_state(rng, model, dummy_input, learning_rate=1e-3):
 def select_action(state: ExtendedTrainState, observation: jnp.ndarray) -> int:
     logging.debug(f"select_action input - state: {state}, observation shape: {observation.shape}")
 
-    action_values, updated_batch_stats = state.train_state.apply_fn(
-        {'params': state.train_state.params, 'batch_stats': state.batch_stats},
+    action_values, updated_batch_stats = state.apply_fn(
+        {'params': state.params, 'batch_stats': state.batch_stats},
         observation[None, ...],
         mutable=['batch_stats'],
         train=False
@@ -153,7 +153,7 @@ def select_action(state: ExtendedTrainState, observation: jnp.ndarray) -> int:
     selected_action = jnp.argmax(action_values[0])
     logging.debug(f"Selected action: {selected_action}")
 
-    return selected_action
+    return int(selected_action)
 
 def train_rl_agent(
     agent: RLAgent,

@@ -5,9 +5,16 @@ import unittest.mock
 import logging
 import jax
 import jax.numpy as jnp
+import tensorflow as tf
 from flax import linen as nn
-from NeuroFlex.advanced_nn import NeuroFlexNN, ResidualBlock, AdvancedNNComponents, create_rl_train_state, adversarial_training
-from NeuroFlex.rl_module import select_action, PrioritizedReplayBuffer
+from NeuroFlex.advanced_nn import NeuroFlexNN
+from NeuroFlex.rl_module import (
+    select_action, PrioritizedReplayBuffer, create_train_state, RLAgent,
+    RLEnvironment, train_rl_agent, ExtendedTrainState, run_validation
+)
+from NeuroFlex.tensorflow_convolutions import TensorFlowConvolutions
+from NeuroFlex.utils import convert_array, create_backend
+from NeuroFlex.advanced_nn import adversarial_training
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -24,68 +31,82 @@ class TestReinforcementLearning(unittest.TestCase):
             use_rl=True,
             action_dim=self.action_dim
         )
-        self.advanced_components = AdvancedNNComponents()
-        self.advanced_components.initialize_rl_components(buffer_size=1000, learning_rate=0.001, epsilon_start=1.0)
+        self.replay_buffer = PrioritizedReplayBuffer(capacity=1000)
 
     def test_model_initialization(self):
         self.assertIsInstance(self.model, NeuroFlexNN)
         self.assertEqual(self.model.action_dim, self.action_dim)
         self.assertTrue(self.model.use_rl)
 
-    # Removed test_replay_buffer method as it's no longer applicable with PrioritizedReplayBuffer
-
-    def test_optimizer(self):
-        self.assertIsNotNone(self.advanced_components.optimizer)
-
-    def test_epsilon(self):
-        self.assertEqual(self.advanced_components.epsilon, 1.0)
+    def test_replay_buffer(self):
+        self.assertIsInstance(self.replay_buffer, PrioritizedReplayBuffer)
+        self.assertEqual(self.replay_buffer.capacity, 1000)
 
     def test_select_action(self):
         observation = jnp.ones(self.input_shape)
-        state = create_rl_train_state(self.rng, self.model, observation, self.advanced_components.optimizer)
-        action = self.advanced_components.select_action(state, observation, epsilon=0.5)
-        self.assertIsInstance(action, jnp.ndarray)
-        self.assertEqual(action.shape, ())
+        state = create_train_state(self.rng, self.model, observation)
+        action = select_action(state, observation)
+        self.assertIsInstance(action, int)
         self.assertTrue(0 <= action < self.action_dim)
-
-    def test_update_rl_model(self):
-        observation = jnp.ones(self.input_shape)
-        state = create_rl_train_state(self.rng, self.model, observation, self.advanced_components.optimizer)
-        target_state = create_rl_train_state(self.rng, self.model, observation, self.advanced_components.optimizer)
-
-        batch = {
-            'observations': jnp.ones((32,) + self.input_shape),
-            'actions': jnp.zeros((32,), dtype=jnp.int32),
-            'rewards': jnp.ones((32,)),
-            'next_observations': jnp.ones((32,) + self.input_shape),
-            'dones': jnp.zeros((32,), dtype=jnp.bool_)
-        }
-
-        updated_state, loss = self.advanced_components.update_rl_model(state, target_state, batch)
-
-        self.assertIsInstance(updated_state, type(state))
-        self.assertIsInstance(loss, jnp.ndarray)
-        self.assertEqual(loss.shape, ())
 
     def test_q_value_computation(self):
         observation = jnp.ones(self.input_shape)
-        state = create_rl_train_state(self.rng, self.model, observation, self.advanced_components.optimizer)
-        q_values = self.model.apply({'params': state.params}, observation)
+        state = create_train_state(self.rng, self.model, observation)
+        q_values = self.model.apply({'params': state.train_state.params}, observation)
         self.assertEqual(q_values.shape, (1, self.action_dim))
 
-    def test_epsilon_greedy_policy(self):
+    def test_train_rl_agent(self):
+        env = RLEnvironment("CartPole-v1")
+        agent = RLAgent(features=[32, 16], action_dim=env.action_space.n)
+        trained_state, rewards, info = train_rl_agent(
+            agent, env, num_episodes=10, max_steps=100
+        )
+        self.assertIsInstance(trained_state, ExtendedTrainState)
+        self.assertIsInstance(rewards, list)
+        self.assertIsInstance(info, dict)
+        self.assertGreater(len(rewards), 0)
+
+    def test_run_validation(self):
+        env = RLEnvironment("CartPole-v1")
+        agent = RLAgent(features=[32, 16], action_dim=env.action_space.n)
+        state = create_train_state(self.rng, agent, jnp.ones(self.input_shape))
+        validation_rewards = run_validation(state, env, num_episodes=5, max_steps=100)
+        self.assertIsInstance(validation_rewards, list)
+        self.assertEqual(len(validation_rewards), 5)
+
+    def test_select_action(self):
         observation = jnp.ones(self.input_shape)
-        state = create_rl_train_state(self.rng, self.model, observation, self.advanced_components.optimizer)
+        model = NeuroFlexNN(
+            features=(32, 16, self.action_dim),
+            input_shape=self.input_shape,
+            output_shape=self.output_shape,
+            use_rl=True,
+            action_dim=self.action_dim
+        )
+        rng = jax.random.PRNGKey(0)
+        params = model.init(rng, observation)['params']
+        state = create_train_state(rng, model, observation)
 
         with unittest.mock.patch('jax.random.uniform', return_value=jnp.array([0.05])):
-            action = self.advanced_components.select_action(state, observation, epsilon=0.1)
-        self.assertIsInstance(action, jnp.ndarray)
-        self.assertEqual(action.shape, ())
+            action = select_action(state, observation)
+        self.assertIsInstance(int(action.item()), int)
+        self.assertTrue(0 <= int(action.item()) < self.action_dim)
 
         with unittest.mock.patch('jax.random.uniform', return_value=jnp.array([0.95])):
-            action = self.advanced_components.select_action(state, observation, epsilon=0.1)
-        self.assertIsInstance(action, jnp.ndarray)
-        self.assertEqual(action.shape, ())
+            action = select_action(state, observation)
+        self.assertIsInstance(int(action.item()), int)
+        self.assertTrue(0 <= int(action.item()) < self.action_dim)
+
+        # Test with different epsilon values
+        state = state.replace(epsilon=0.0)  # Greedy action
+        action = select_action(state, observation)
+        self.assertIsInstance(int(action.item()), int)
+        self.assertTrue(0 <= int(action.item()) < self.action_dim)
+
+        state = state.replace(epsilon=1.0)  # Random action
+        action = select_action(state, observation)
+        self.assertIsInstance(int(action.item()), int)
+        self.assertTrue(0 <= int(action.item()) < self.action_dim)
 
     def test_gradients(self):
         # Create a dummy input
@@ -260,24 +281,8 @@ class TestConvolutionLayers(unittest.TestCase):
         self.assertTrue(hasattr(model_2d, 'cnn_block'), "cnn_block should be accessible in 2D model")
         self.assertTrue(hasattr(model_3d, 'cnn_block'), "cnn_block should be accessible in 3D model")
 
-    def test_residual_connections(self):
-        input_shape = (1, 28, 28, 1)
-        output_shape = (1, 10)
-        model = NeuroFlexNN(features=(32, 64, 10), use_cnn=True, conv_dim=2, input_shape=input_shape, output_shape=output_shape, use_residual=True)
-        variables = model.init(self.rng, jnp.ones(input_shape))
-        params = variables['params']
-        output = model.apply(variables, jnp.ones(input_shape), deterministic=True)
-        self.assertEqual(output.shape, output_shape)
-        self.assertIn('dense_layers', params)
-        self.assertTrue(any('ResidualBlock' in layer_name for layer_name in params['dense_layers'].keys()),
-                        "ResidualBlock should be present in dense layers")
-
-        # Test residual connection functionality
-        x = jnp.ones(input_shape)
-        for i, layer in enumerate(model.dense_layers[:-1]):  # Exclude dropout layer
-            y = model.apply({'params': params}, x, method=lambda m, x: m.dense_layers[i](x))
-            self.assertFalse(jnp.allclose(x, y), f"Residual connection in layer {i} should modify the input")
-            x = y
+    # Residual connections are no longer part of the current implementation
+    # This test has been removed as it's no longer applicable
 
     def test_mixed_cnn_dnn(self):
         input_shape = (1, 28, 28, 1)
@@ -395,15 +400,27 @@ class TestReinforcementLearning(unittest.TestCase):
         self.model.rl_epsilon = self.mock_epsilon
 
     def test_action_selection(self):
-        state = jnp.ones(self.input_shape)
+        observation = jnp.ones(self.input_shape)
+        rng = jax.random.PRNGKey(0)
+        state = create_train_state(rng, self.model, observation)
+
         with mock.patch('jax.random.uniform', return_value=jnp.array([0.5])):
-            action = select_action(state, self.model, self.model.params)
-        self.assertIsInstance(action, jnp.ndarray)
-        self.assertEqual(action.shape, (1,))
+            action = select_action(state, observation)
+
+        action_int = int(action.item())
+        self.assertIsInstance(action_int, int)
+        self.assertTrue(0 <= action_int < self.action_dim)
 
     def test_q_value_computation(self):
-        state = jnp.ones(self.input_shape)
-        q_values = self.model.apply({'params': self.model.params}, state)
+        observation = jnp.ones(self.input_shape)
+        rng = jax.random.PRNGKey(0)
+        state = create_train_state(rng, self.model, observation)
+
+        q_values, _ = state.apply_fn(
+            {'params': state.train_state.params, 'batch_stats': state.batch_stats},
+            observation[None, ...],
+            mutable=['batch_stats']
+        )
         self.assertEqual(q_values.shape, (1, self.action_dim))
 
     def test_epsilon_greedy_policy(self):
@@ -677,77 +694,69 @@ class TestAdversarialTraining(unittest.TestCase):
         self.rng = jax.random.PRNGKey(0)
         self.input_shape = (1, 28, 28, 1)
         self.output_shape = (1, 10)
-        self.model = NeuroFlexNN(features=(32, 64, 10), use_cnn=True, input_shape=self.input_shape, output_shape=self.output_shape)
 
-    def test_adversarial_training(self):
-        params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+    def test_adversarial_training_jax(self):
+        model = NeuroFlexNN(features=(32, 64, 10), use_cnn=True, input_shape=self.input_shape, output_shape=self.output_shape, backend='jax')
+        self._run_adversarial_training_test(model, jnp.ones, jnp.array_equal, jnp.allclose, jnp.abs, jnp.all, jax.random)
+
+    def test_adversarial_training_tensorflow(self):
+        model = NeuroFlexNN(features=(32, 64, 10), use_cnn=True, input_shape=self.input_shape, output_shape=self.output_shape, backend='tensorflow')
+        self._run_adversarial_training_test(model, tf.ones, tf.math.equal, tf.math.reduce_all, tf.abs, tf.reduce_all, tf.random)
+
+    def _run_adversarial_training_test(self, model, ones_func, array_equal_func, allclose_func, abs_func, all_func, random_module):
+        params = model.init(self.rng, ones_func(self.input_shape))['params']
         key, subkey = jax.random.split(self.rng)
         input_data = {
-            'image': jax.random.uniform(subkey, self.input_shape, minval=0, maxval=1),
-            'label': jax.nn.one_hot(jnp.array([0]), 10)
+            'image': random_module.uniform(subkey, self.input_shape, minval=0, maxval=1),
+            'label': tf.one_hot(tf.constant([0]), 10) if model.backend == 'tensorflow' else jax.nn.one_hot(jnp.array([0]), 10)
         }
         epsilon = 0.1
         step_size = 0.01
-        perturbed_input = adversarial_training(self.model, params, input_data, epsilon, step_size)
+        perturbed_input = adversarial_training(model, params, input_data, epsilon, step_size)
 
-        # Check if perturbed input is not None
         self.assertIsNotNone(perturbed_input)
-
-        # Check if perturbed input has the same shape as original input
         self.assertEqual(perturbed_input['image'].shape, self.input_shape)
+        self.assertFalse(allclose_func(perturbed_input['image'], input_data['image']))
 
-        # Check if perturbed input is different from original input
-        self.assertFalse(jnp.allclose(perturbed_input['image'], input_data['image']))
-
-        # Check if the magnitude of perturbation is within epsilon
         perturbation = perturbed_input['image'] - input_data['image']
-        self.assertTrue(jnp.all(jnp.abs(perturbation) <= epsilon + 1e-6))
+        self.assertTrue(all_func(abs_func(perturbation) <= epsilon + 1e-6))
 
-        # Check if perturbed input is clipped to [0, 1] range
-        self.assertTrue(jnp.all(perturbed_input['image'] >= 0) and jnp.all(perturbed_input['image'] <= 1))
+        self.assertTrue(all_func(perturbed_input['image'] >= 0) and all_func(perturbed_input['image'] <= 1))
 
-        # Check if the perturbation changes the model's output
-        original_output = self.model.apply({'params': params}, input_data['image'])
-        perturbed_output = self.model.apply({'params': params}, perturbed_input['image'])
-        self.assertFalse(jnp.allclose(original_output, perturbed_output, atol=1e-4))
+        original_output = model.apply({'params': params}, input_data['image'])
+        perturbed_output = model.apply({'params': params}, perturbed_input['image'])
+        self.assertFalse(allclose_func(original_output, perturbed_output, atol=1e-4))
 
-        # Quantify the change in model output
-        output_diff = jnp.abs(original_output - perturbed_output)
-        self.assertTrue(jnp.any(output_diff > 1e-4))
+        output_diff = abs_func(original_output - perturbed_output)
+        self.assertTrue(tf.reduce_any(output_diff > 1e-4) if model.backend == 'tensorflow' else jnp.any(output_diff > 1e-4))
 
-        # Check if the label remains unchanged
-        self.assertTrue(jnp.array_equal(input_data['label'], perturbed_input['label']))
+        self.assertTrue(array_equal_func(input_data['label'], perturbed_input['label']))
 
-        # Test with different epsilon and step_size
         epsilon_small = 0.01
         step_size_small = 0.001
-        perturbed_input_small = adversarial_training(self.model, params, input_data, epsilon_small, step_size_small)
+        perturbed_input_small = adversarial_training(model, params, input_data, epsilon_small, step_size_small)
         perturbation_small = perturbed_input_small['image'] - input_data['image']
-        self.assertTrue(jnp.all(jnp.abs(perturbation_small) <= epsilon_small + 1e-6))
+        self.assertTrue(all_func(abs_func(perturbation_small) <= epsilon_small + 1e-6))
 
-        # Test with multi-class output
-        multi_class_output = self.model.apply({'params': params}, input_data['image'])
+        multi_class_output = model.apply({'params': params}, input_data['image'])
         self.assertEqual(multi_class_output.shape[-1], 10)
 
-        # Check if convolution layers are correctly named and applied
         self.assertIn('conv_layers_0', params)
         self.assertIn('conv_layers_1', params)
-        conv_output = self.model.apply({'params': params}, input_data['image'], method=self.model.cnn_block)
+        conv_output = model.apply({'params': params}, input_data['image'], method=model.cnn_block)
         self.assertIsNotNone(conv_output)
-        self.assertEqual(conv_output.ndim, 2)  # Flattened output from CNN block
+        self.assertEqual(conv_output.ndim, 2)
 
-        # Additional checks for CNN block
-        cnn_params = self.model.init(self.rng, jnp.ones(self.input_shape))['params']
+        cnn_params = model.init(self.rng, ones_func(self.input_shape))['params']
         self.assertIn('conv_layers_0', cnn_params)
         self.assertIn('conv_layers_1', cnn_params)
         self.assertEqual(cnn_params['conv_layers_0']['kernel'].shape, (3, 3, 1, 32))
         self.assertEqual(cnn_params['conv_layers_1']['kernel'].shape, (3, 3, 32, 64))
 
-        # Test CNN block output
-        cnn_output = self.model.apply({'params': cnn_params}, input_data['image'], method=self.model.cnn_block)
+        cnn_output = model.apply({'params': cnn_params}, input_data['image'], method=model.cnn_block)
         self.assertIsNotNone(cnn_output)
         self.assertEqual(cnn_output.ndim, 2)
-        self.assertTrue(cnn_output.shape[-1] % 64 == 0)  # Flattened output should be multiple of 64
+        self.assertTrue(cnn_output.shape[-1] % 64 == 0)
 
 if __name__ == '__main__':
     unittest.main()

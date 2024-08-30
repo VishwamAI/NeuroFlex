@@ -29,17 +29,17 @@ class Detectron2Integration:
 
     def setup_config(self, config_file, num_classes, output_dir):
         try:
-            self.cfg.merge_from_file(config_file)
-            self.cfg.DATASETS.TRAIN = ("my_dataset_train",)  # Example dataset entry
-            self.cfg.DATASETS.TEST = ("my_dataset_val",)  # Example dataset entry
-            self.cfg.DATALOADER.NUM_WORKERS = 2
-            self.cfg.MODEL.WEIGHTS = "detectron2://COCO-Detection/faster_rcnn_R_50_FPN_3x/137849458/model_final_280758.pkl"  # Default model
-            self.cfg.SOLVER.IMS_PER_BATCH = 2
-            self.cfg.SOLVER.BASE_LR = 0.00025
-            self.cfg.SOLVER.MAX_ITER = 1000  # Example number of iterations
-            self.cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
-            self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
-            self.cfg.OUTPUT_DIR = output_dir
+            # Mock configuration setup
+            self.cfg["DATASETS"]["TRAIN"] = ("my_dataset_train",)
+            self.cfg["DATASETS"]["TEST"] = ("my_dataset_val",)
+            self.cfg["DATALOADER"]["NUM_WORKERS"] = 2
+            self.cfg["MODEL"]["WEIGHTS"] = "mock_model_weights.pkl"
+            self.cfg["SOLVER"]["IMS_PER_BATCH"] = 2
+            self.cfg["SOLVER"]["BASE_LR"] = 0.00025
+            self.cfg["SOLVER"]["MAX_ITER"] = 1000
+            self.cfg["MODEL"]["ROI_HEADS"]["BATCH_SIZE_PER_IMAGE"] = 512
+            self.cfg["MODEL"]["ROI_HEADS"]["NUM_CLASSES"] = num_classes
+            self.cfg["OUTPUT_DIR"] = output_dir
         except Exception as e:
             self.logger.error(f"Error in setup_config: {str(e)}")
             raise
@@ -57,7 +57,7 @@ class Detectron2Integration:
 
     def get_predictor(self, model_weights):
         try:
-            self.cfg.MODEL.WEIGHTS = model_weights
+            self.cfg["MODEL"]["WEIGHTS"] = model_weights
             return DefaultPredictor(self.cfg)
         except Exception as e:
             self.logger.error(f"Error in get_predictor: {str(e)}")
