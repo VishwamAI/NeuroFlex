@@ -43,7 +43,7 @@ class TestAdvancedMathSolving(unittest.TestCase):
     def test_error_handling(self):
         with self.assertRaises(ValueError):
             self.math_solver.generate_problem(0)  # Invalid difficulty
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             self.math_solver.solve_problem("invalid problem")
 
 if __name__ == '__main__':
