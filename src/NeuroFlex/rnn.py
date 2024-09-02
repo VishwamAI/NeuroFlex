@@ -1,56 +1,45 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
+import functools
 
-class RNNCell(nn.Module):
+class LRNNCell(nn.Module):
     features: int
     activation: Callable = nn.tanh
 
     @nn.compact
-    def __call__(self, carry, x):
-        h, = carry
+    def __call__(self, h, x):
+        input_size = h.shape[-1] + x.shape[-1]
         combined = jnp.concatenate([h, x], axis=-1)
-        new_h = self.activation(nn.Dense(self.features)(combined))
-        return (new_h,), new_h
+        new_h = self.activation(nn.Dense(self.features, kernel_init=nn.initializers.xavier_uniform())(combined))
+        return new_h, new_h
 
-class RNNModule(nn.Module):
+class LRNN(nn.Module):
     features: Tuple[int, ...]
     activation: Callable = nn.tanh
 
     @nn.compact
-    def __call__(self, x, initial_state=None):
+    def __call__(self, x):
         batch_size, seq_len, input_dim = x.shape
 
-        if initial_state is None:
-            initial_state = self.initialize_carry(batch_size)
+        # Create a list of LRNNCell instances, one for each layer
+        cells = [LRNNCell(features=feat, activation=self.activation) for feat in self.features]
 
-        def scan_fn(carry, x):
-            new_carry = []
-            for i, (h, cell) in enumerate(zip(carry, self.cells)):
-                h, y = cell(h, x)
-                new_carry.append(h)
-                x = y  # Use the output of the cell as input for the next cell
-            return tuple(new_carry), x
+        # Initial hidden state for each layer
+        h = [jnp.zeros((batch_size, feat)) for feat in self.features]
 
-        self.cells = [RNNCell(feat, self.activation, name=f'rnn_cell_{i}')
-                      for i, feat in enumerate(self.features)]
+        # Process the input sequence
+        for t in range(seq_len):
+            x_t = x[:, t, :]
+            for i, cell in enumerate(cells):
+                h[i], _ = cell(h[i], x_t if i == 0 else h[i-1])
+            if t == 0:
+                y = h[-1][:, None, :]
+            else:
+                y = jnp.concatenate([y, h[-1][:, None, :]], axis=1)
 
-        ScanRNN = nn.scan(
-            scan_fn,
-            variable_broadcast="params",
-            split_rngs={"params": False},
-            in_axes=1,
-            out_axes=1,
-        )
-
-        final_carry, outputs = ScanRNN()(initial_state, x)
-        final_state = jnp.concatenate([c[0] for c in final_carry], axis=-1)
-
-        return outputs, final_state
-
-    def initialize_carry(self, batch_size):
-        return tuple((jnp.zeros((batch_size, feat)),) for feat in self.features)
+        return y, h[-1]
 
 def create_rnn_block(features: Tuple[int, ...], activation: Callable = nn.tanh):
-    return RNNModule(features=features, activation=activation)
+    return LRNN(features=features, activation=activation)
