@@ -1,64 +1,66 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from typing import Callable, Optional
+from typing import Tuple, List
 
 class LSTMModule(nn.Module):
     hidden_size: int
     num_layers: int = 1
     dropout: float = 0.0
-    activation: Callable = nn.tanh
-    recurrent_activation: Callable = nn.sigmoid
     dtype: jnp.dtype = jnp.float32
 
     @nn.compact
     def __call__(self, inputs, initial_state=None, train: bool = True):
         batch_size, seq_len, input_size = inputs.shape
 
+        # Create LSTM cells for each layer
+        lstm_cells = [nn.LSTMCell(features=self.hidden_size) for _ in range(self.num_layers)]
+
         if initial_state is None:
             initial_state = self.initialize_state(batch_size)
 
-        def lstm_step(carry, x):
-            h, c = carry
-            new_h, new_c = [], []
-            for layer in range(self.num_layers):
-                lstm_state = LSTMCell(
-                    hidden_size=self.hidden_size,
-                    activation=self.activation,
-                    recurrent_activation=self.recurrent_activation,
-                    dtype=self.dtype
-                )(x, (h[layer], c[layer]))
-                x = lstm_state[0]
-                if layer < self.num_layers - 1 and train:
-                    x = nn.Dropout(rate=self.dropout)(x, deterministic=not train)
-                new_h.append(lstm_state[0])
-                new_c.append(lstm_state[1])
-            return (new_h, new_c), x
+        # Process through LSTM layers
+        current_input = inputs
+        final_states = []
 
-        initial_carry = initial_state
-        (final_h, final_c), outputs = jax.lax.scan(lstm_step, initial_carry, inputs.swapaxes(0, 1))
+        for layer in range(self.num_layers):
+            layer_state = initial_state[layer]
+            layer_outputs = []
 
-        return outputs.swapaxes(0, 1), (final_h, final_c)
+            for t in range(seq_len):
+                # Get input for this time step
+                x_t = current_input[:, t, :]
 
-    def initialize_state(self, batch_size):
-        return (
-            [jnp.zeros((batch_size, self.hidden_size), dtype=self.dtype) for _ in range(self.num_layers)],
-            [jnp.zeros((batch_size, self.hidden_size), dtype=self.dtype) for _ in range(self.num_layers)]
-        )
+                # Apply LSTM cell
+                layer_state, y_t = lstm_cells[layer](layer_state, x_t)
 
-class LSTMCell(nn.Module):
-    hidden_size: int
-    activation: Callable = nn.tanh
-    recurrent_activation: Callable = nn.sigmoid
-    dtype: jnp.dtype = jnp.float32
+                # Store output
+                layer_outputs.append(y_t)
 
-    @nn.compact
-    def __call__(self, inputs, carry):
-        h, c = carry
-        gates = nn.Dense(4 * self.hidden_size, dtype=self.dtype)(jnp.concatenate([inputs, h], axis=-1))
-        i, f, g, o = jnp.split(gates, 4, axis=-1)
+            # Stack time steps
+            layer_output = jnp.stack(layer_outputs, axis=1)
 
-        new_c = self.recurrent_activation(f) * c + self.recurrent_activation(i) * self.activation(g)
-        new_h = self.recurrent_activation(o) * self.activation(new_c)
+            # Store final state for this layer
+            final_states.append(layer_state)
 
-        return new_h, new_c
+            # Set up input for next layer
+            current_input = layer_output
+
+            # Apply dropout between layers if specified
+            if self.dropout > 0.0 and train and layer < self.num_layers - 1:
+                current_input = nn.Dropout(rate=self.dropout)(current_input, deterministic=not train)
+
+        # Ensure outputs is an array and has the correct shape
+        outputs = jnp.asarray(current_input)
+        final_h, final_c = zip(*final_states)
+        final_h = jnp.stack(final_h)
+        final_c = jnp.stack(final_c)
+
+        return outputs, (final_h, final_c)
+
+    def initialize_state(self, batch_size) -> List[Tuple[jnp.ndarray, jnp.ndarray]]:
+        return [
+            (jnp.zeros((batch_size, self.hidden_size), dtype=self.dtype),
+             jnp.zeros((batch_size, self.hidden_size), dtype=self.dtype))
+            for _ in range(self.num_layers)
+        ]
