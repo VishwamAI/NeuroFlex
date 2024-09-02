@@ -14,7 +14,11 @@ import numpy as np
 from .rl_module import PrioritizedReplayBuffer, create_train_state, select_action, RLAgent
 from .tensorflow_convolutions import TensorFlowConvolutions
 from .utils import create_backend, convert_array, get_activation_function
-
+from .cnn import create_cnn_block
+from .rnn import create_rnn_block
+from .gan import GAN
+from .vae import VAE
+from .lstm import LSTMModule
 
 class NeuroFlexNN(nn.Module):
     """
@@ -90,7 +94,7 @@ class NeuroFlexNN(nn.Module):
             self.problem_encoder = nn.Dense(self.features[0], dtype=self.dtype)
             self.step_decoder = nn.Dense(self.features[-1], dtype=self.dtype)
             if self.use_calculation_annotations:
-                self.annotation_processor = nn.LSTMCell(self.features[0])
+                self.annotation_processor = LSTMModule(hidden_size=self.features[0], num_layers=1, dtype=self.dtype)
 
         if self.use_rl:
             if self.use_dueling:
@@ -101,7 +105,12 @@ class NeuroFlexNN(nn.Module):
         else:
             self.final_dense = nn.Dense(self.output_shape[-1], dtype=self.dtype)
 
-        self.step_generator = nn.LSTMCell(features=self.features[-1], dtype=self.dtype)
+        self.step_generator = LSTMModule(hidden_size=self.features[-1], num_layers=1, dtype=self.dtype)
+
+        self.rnn_block = create_rnn_block(features=self.features, dtype=self.dtype, activation=self.activation)
+        self.gan_block = GAN(latent_dim=self.features[-1], generator_features=self.features,
+                             discriminator_features=reversed(self.features), output_shape=self.output_shape)
+        self.vae_block = VAE(latent_dim=self.features[-1], hidden_dims=self.features)
 
     def __call__(self, x: jnp.ndarray, train: bool = True) -> jnp.ndarray:
         """
@@ -142,8 +151,12 @@ class NeuroFlexNN(nn.Module):
 
     def _create_cnn_block(self) -> nn.Module:
         """Create and return the CNN block."""
-        # Implementation of CNN block creation
-        pass
+        return create_cnn_block(
+            features=self.features,
+            conv_dim=self.conv_dim,
+            dtype=self.dtype,
+            activation=self.activation
+        )
 
     def _validate_shapes(self):
         """Validate the input and output shapes."""
