@@ -6,11 +6,8 @@ import gym
 from gym import spaces
 import optax
 import logging
-from collections import deque
-import random
 import numpy as np
 import time
-from functools import partial
 import dataclasses
 from .extended_train_state import ExtendedTrainState
 import scipy.signal
@@ -20,15 +17,6 @@ gamma = 0.99
 lam = 0.95
 value_loss_coef = 0.5
 entropy_coef = 0.01
-
-# Constants for enhanced self-curing algorithms
-self_curing_threshold = 0.1
-self_curing_interval = 1000
-
-# Constants for adaptive learning rate adjustment
-initial_learning_rate = 1e-3
-min_learning_rate = 1e-5
-learning_rate_decay = 0.99
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -101,11 +89,11 @@ class Actor(nn.Module):
     @nn.compact
     def __call__(self, x):
         for i, feat in enumerate(self.features):
-            x = nn.Dense(feat, name=f'dense_{i}')(x)
-            x = nn.LayerNorm(name=f'layer_norm_{i}')(x)
+            x = nn.Dense(feat, name=f'Dense_{i}', kernel_init=nn.initializers.he_normal())(x)
+            x = nn.LayerNorm(name=f'LayerNorm_{i}')(x)
             x = nn.relu(x)
 
-        logits = nn.Dense(self.action_dim, name='policy_logits')(x)
+        logits = nn.Dense(self.action_dim, name='policy_logits', kernel_init=nn.initializers.he_normal())(x)
         return logits
 
 class Critic(nn.Module):
@@ -114,37 +102,29 @@ class Critic(nn.Module):
     @nn.compact
     def __call__(self, x):
         for i, feat in enumerate(self.features):
-            x = nn.Dense(feat, name=f'dense_{i}')(x)
-            x = nn.LayerNorm(name=f'layer_norm_{i}')(x)
+            x = nn.Dense(
+                feat,
+                name=f'Dense_{i}',
+                kernel_init=nn.initializers.he_normal()
+            )(x)
+            x = nn.LayerNorm(name=f'LayerNorm_{i}')(x)
             x = nn.relu(x)
 
-        value = nn.Dense(1, name='value')(x)
+        value = nn.Dense(
+            1,
+            name='value',
+            kernel_init=nn.initializers.he_normal()
+        )(x)
         return value
 
 class RLAgent(nn.Module):
     action_dim: int
-    features: List[int]
-    learning_rate: float = 1e-4
-    adaptive_lr_threshold: float = 0.01
-    self_curing_threshold: float = 0.8
+    features: List[int] = dataclasses.field(default_factory=lambda: [256, 256, 256])
 
     def setup(self):
         logging.info(f"Setting up RLAgent with action_dim: {self.action_dim}, features: {self.features}")
         self.actor = Actor(self.action_dim, self.features)
         self.critic = Critic(self.features)
-
-        # Implement Optax-based optimization with learning rate scheduling
-        lr_schedule = optax.exponential_decay(
-            init_value=self.learning_rate,
-            transition_steps=1000,
-            decay_rate=0.9
-        )
-        self.optimizer = optax.chain(
-            optax.clip_by_global_norm(1.0),
-            optax.adam(learning_rate=lr_schedule)
-        )
-
-        self.performance_history = []
         logging.info(f"RLAgent setup complete. Actor: {self.actor}, Critic: {self.critic}")
         logging.debug(f"Actor structure: {self.actor.tabulate(jax.random.PRNGKey(0), jnp.ones((1, self.features[0])))}")
         logging.debug(f"Critic structure: {self.critic.tabulate(jax.random.PRNGKey(0), jnp.ones((1, self.features[0])))}")
@@ -166,48 +146,37 @@ class RLAgent(nn.Module):
         dummy_input = jnp.ones((1,) + input_shape)
         variables = self.init(rng, dummy_input)
         params = variables['params']
-        params = self._structure_params(params)
         self._check_params_structure(params)
         logging.info(f"RLAgent parameters initialized. Structure: {jax.tree_map(lambda x: x.shape, params)}")
         logging.debug(f"Actor params structure: {jax.tree_map(lambda x: x.shape, params['actor'])}")
         logging.debug(f"Critic params structure: {jax.tree_map(lambda x: x.shape, params['critic'])}")
         return params
 
-    def _structure_params(self, params):
-        structured_params = {'actor': {}, 'critic': {}}
-        for key, value in params.items():
-            if key.startswith('actor'):
-                structured_params['actor'][key.replace('actor_', '')] = value
-            elif key.startswith('critic'):
-                structured_params['critic'][key.replace('critic_', '')] = value
-            elif key in ['actor', 'critic']:
-                structured_params[key] = value
-            else:
-                logging.warning(f"Unexpected key in params: {key}")
-
-        # Ensure 'Dense_0' is present in both actor and critic
-        for module in ['actor', 'critic']:
-            if not structured_params[module]:
-                logging.error(f"{module} params are empty")
-            elif 'Dense_0' not in structured_params[module]:
-                logging.error(f"'Dense_0' not found in {module} params")
-
-        return structured_params
-
     def _check_params_structure(self, params):
         if 'actor' not in params or 'critic' not in params:
             logging.error(f"Model initialization failed. Params keys: {params.keys()}")
             raise ValueError("Model initialization did not create 'actor' and 'critic' submodules")
+
         for submodule in ['actor', 'critic']:
             if not isinstance(params[submodule], dict):
                 logging.error(f"{submodule} params is not a dictionary. Type: {type(params[submodule])}")
                 raise ValueError(f"{submodule} initialization did not return a dictionary for params")
-            if not params[submodule]:
-                logging.error(f"{submodule} params dictionary is empty")
-                raise ValueError(f"{submodule} initialization resulted in an empty dictionary")
             if 'Dense_0' not in params[submodule]:
                 logging.error(f"'Dense_0' not found in {submodule} params. Keys: {params[submodule].keys()}")
                 raise ValueError(f"{submodule} initialization did not create expected layer structure")
+
+    def _structure_params(self, params):
+        logging.info("Structuring RLAgent parameters")
+        if 'actor' not in params or 'critic' not in params:
+            logging.error(f"Invalid params structure. Keys: {params.keys()}")
+            raise ValueError("Params must contain 'actor' and 'critic' keys")
+
+        structured_params = {
+            'actor': params['actor'],
+            'critic': params['critic']
+        }
+        logging.debug(f"Structured params: {jax.tree_map(lambda x: x.shape, structured_params)}")
+        return structured_params
 
     @property
     def actor_params(self):
@@ -223,28 +192,6 @@ class RLAgent(nn.Module):
             return None
         return self.params['critic']
 
-    def update_learning_rate(self):
-        if len(self.performance_history) > 1:
-            performance_change = self.performance_history[-1] - self.performance_history[-2]
-            if abs(performance_change) < self.adaptive_lr_threshold:
-                self.learning_rate *= 1.1
-                logging.info(f"Increasing learning rate to {self.learning_rate}")
-            else:
-                self.learning_rate *= 0.9
-                logging.info(f"Decreasing learning rate to {self.learning_rate}")
-            self.optimizer = optax.adam(self.learning_rate)
-
-    def self_curing_check(self):
-        if len(self.performance_history) > 0 and self.performance_history[-1] < self.self_curing_threshold:
-            logging.warning("Performance below threshold. Initiating self-curing mechanism.")
-            self.reset_weights()
-
-    def reset_weights(self):
-        logging.info("Resetting weights as part of self-curing mechanism")
-        rng = jax.random.PRNGKey(int(time.time()))
-        self.params = self.initialize_params(rng, (self.features[0],))
-        self.optimizer = optax.adam(self.learning_rate)
-
 class RLEnvironment:
     def __init__(self, env_name: str, seed: int = 42):
         self.env = gym.make(env_name)
@@ -252,26 +199,42 @@ class RLEnvironment:
         self.action_space = self.env.action_space
         self.seed = seed
         self.env.reset(seed=self.seed)
+        self.episode_step = 0
+        self.max_episode_steps = self.env._max_episode_steps  # Get max steps from env
 
     def reset(self) -> Tuple[jnp.ndarray, Dict]:
         observation, info = self.env.reset(seed=self.seed)
+        self.episode_step = 0
+        logging.info(f"Environment reset. Initial observation: {observation}")
         return jnp.array(observation), info
 
     def step(self, action: int) -> Tuple[jnp.ndarray, float, bool, bool, Dict]:
         obs, reward, terminated, truncated, info = self.env.step(action)
-        return jnp.array(obs), reward, terminated, truncated, info
+        self.episode_step += 1
+        done = terminated or truncated or (self.episode_step >= self.max_episode_steps)
+        logging.debug(f"Step {self.episode_step}: Action={action}, Reward={reward}, Done={done}")
+        return jnp.array(obs), reward, done, truncated, info
 
-def create_train_state(rng, model, dummy_input, policy_tx, value_tx):
+    def is_episode_done(self, done: bool, truncated: bool) -> bool:
+        episode_done = done or truncated or (self.episode_step >= self.max_episode_steps)
+        if episode_done:
+            logging.info(f"Episode completed after {self.episode_step} steps.")
+        return episode_done
+
+def create_train_state(rng, model, dummy_input, tx):
     if isinstance(dummy_input, tuple):
         dummy_input = dummy_input[0]  # Extract observation from tuple
     dummy_input = jnp.array(dummy_input)  # Ensure input is a JAX array
-    logging.info(f"Dummy input shape: {dummy_input.shape}")
+    logging.info(f"Creating train state with dummy input shape: {dummy_input.shape}")
 
     try:
         variables = model.init(rng, dummy_input[None, ...])
         logging.info(f"Model initialization successful. Variables keys: {variables.keys()}")
+        logging.debug(f"Full variables structure: {jax.tree_map(lambda x: x.shape, variables)}")
     except Exception as e:
         logging.error(f"Error initializing model: {str(e)}")
+        logging.error(f"Model structure: {model}")
+        logging.error(f"RNG key: {rng}")
         raise ValueError(f"Failed to initialize model: {str(e)}")
 
     if 'params' not in variables:
@@ -279,8 +242,12 @@ def create_train_state(rng, model, dummy_input, policy_tx, value_tx):
         raise ValueError("Model initialization did not return 'params'")
 
     params = variables['params']
-    logging.info(f"Initialized model parameters structure: {jax.tree_map(lambda x: x.shape, params)}")
-    logging.debug(f"Full params structure: {params}")
+    logging.info(f"Initial params structure: {jax.tree_map(lambda x: x.shape, params)}")
+    logging.debug(f"Initial params content: {params}")
+
+    params = model._structure_params(params)  # Use the _structure_params method to structure the params
+    logging.info(f"Structured model parameters: {jax.tree_map(lambda x: x.shape, params)}")
+    logging.debug(f"Structured params content: {params}")
 
     if not isinstance(params, dict):
         logging.error(f"Params is not a dictionary. Type: {type(params)}")
@@ -292,33 +259,47 @@ def create_train_state(rng, model, dummy_input, policy_tx, value_tx):
 
     logging.info(f"Actor params structure: {jax.tree_map(lambda x: x.shape, params['actor'])}")
     logging.info(f"Critic params structure: {jax.tree_map(lambda x: x.shape, params['critic'])}")
+    logging.debug(f"Actor params content: {params['actor']}")
+    logging.debug(f"Critic params content: {params['critic']}")
 
     # Add assertions to ensure 'actor' and 'critic' are properly structured
-    assert isinstance(params['actor'], dict), "'actor' params should be a dictionary"
-    assert isinstance(params['critic'], dict), "'critic' params should be a dictionary"
-    assert 'dense_0' in params['actor'], f"'actor' params should contain 'dense_0'. Keys: {params['actor'].keys()}"
-    assert 'dense_0' in params['critic'], f"'critic' params should contain 'dense_0'. Keys: {params['critic'].keys()}"
+    assert isinstance(params['actor'], dict), f"'actor' params should be a dictionary, got {type(params['actor'])}"
+    assert isinstance(params['critic'], dict), f"'critic' params should be a dictionary, got {type(params['critic'])}"
+    assert 'Dense_0' in params['actor'], f"'actor' params should contain 'Dense_0'. Keys: {params['actor'].keys()}"
+    assert 'Dense_0' in params['critic'], f"'critic' params should contain 'Dense_0'. Keys: {params['critic'].keys()}"
 
     def apply_fn(params, x, method=None):
         logging.debug(f"apply_fn called with method: {method}")
         if method == 'actor_forward':
-            return model.apply({'params': params['actor']}, x, method=model.actor_forward)
+            actor_params = params['actor'] if 'actor' in params else params
+            logging.debug(f"Actor forward pass with params: {jax.tree_map(lambda x: x.shape, actor_params)}")
+            return model.apply(actor_params, x, method=model.actor_forward)
         elif method == 'critic_forward':
-            return model.apply({'params': params['critic']}, x, method=model.critic_forward)
+            critic_params = params['critic'] if 'critic' in params else params
+            logging.debug(f"Critic forward pass with params: {jax.tree_map(lambda x: x.shape, critic_params)}")
+            return model.apply(critic_params, x, method=model.critic_forward)
         else:
-            return model.apply({'params': params}, x)
+            logging.debug(f"Full model forward pass with params: {jax.tree_map(lambda x: x.shape, params)}")
+            return model.apply(params, x)
 
     try:
+        # Create separate optimizers for actor and critic
+        tx_actor = tx.actor if isinstance(tx, dict) else tx
+        tx_critic = tx.critic if isinstance(tx, dict) else tx
+        logging.info(f"Optimizer structure - Actor: {tx_actor}, Critic: {tx_critic}")
+
         state = ExtendedTrainState.create(
             apply_fn=apply_fn,
-            params={'actor': params['actor'], 'critic': params['critic']},
-            tx={'actor': policy_tx, 'critic': value_tx},
+            params=params,
+            tx={'actor': tx_actor, 'critic': tx_critic},
             batch_stats=variables.get('batch_stats', {})
         )
         logging.info("ExtendedTrainState created successfully")
+        logging.debug(f"ExtendedTrainState structure: {state}")
     except Exception as e:
         logging.error(f"Error creating ExtendedTrainState: {str(e)}")
         logging.error(f"Params structure: {jax.tree_map(lambda x: x.shape, params)}")
+        logging.error(f"Optimizer structure: {tx}")
         raise ValueError(f"Failed to create ExtendedTrainState: {str(e)}")
 
     logging.info(f"Created ExtendedTrainState with params structure: {jax.tree_map(lambda x: x.shape, state.params)}")
@@ -326,56 +307,55 @@ def create_train_state(rng, model, dummy_input, policy_tx, value_tx):
     logging.debug(f"Critic params in state: {jax.tree_map(lambda x: x.shape, state.params['critic'])}")
     logging.debug(f"Full state structure: {state}")
 
-    # Verify that 'actor' and 'critic' keys are present in the final state
-    if 'actor' not in state.params or 'critic' not in state.params:
-        logging.error(f"Missing 'actor' or 'critic' in final state params. Keys found: {state.params.keys()}")
-        raise ValueError("ExtendedTrainState creation did not preserve 'actor' and 'critic' submodules")
-
-    # Add more detailed logging for the 'actor' and 'critic' keys
-    logging.info("Detailed 'actor' key structure:")
-    logging.info(jax.tree_map(lambda x: x.shape, state.params['actor']))
-    logging.info("Detailed 'critic' key structure:")
-    logging.info(jax.tree_map(lambda x: x.shape, state.params['critic']))
-
-    # Verify the structure of 'actor' and 'critic' params in the final state
-    assert isinstance(state.params['actor'], dict), "'actor' params in state should be a dictionary"
-    assert isinstance(state.params['critic'], dict), "'critic' params in state should be a dictionary"
-    assert 'dense_0' in state.params['actor'], f"'actor' params in state should contain 'dense_0'. Keys: {state.params['actor'].keys()}"
-    assert 'dense_0' in state.params['critic'], f"'critic' params in state should contain 'dense_0'. Keys: {state.params['critic'].keys()}"
-
     logging.info("ExtendedTrainState creation successful with proper 'actor' and 'critic' submodules")
 
     return state
 
 def select_action(state: ExtendedTrainState, observation: jnp.ndarray, rng: jax.random.PRNGKey) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    logging.debug(f"select_action input - observation shape: {observation.shape}")
+    logging.info(f"Selecting action for observation shape: {observation.shape}")
     logging.debug(f"State params keys: {state.params.keys()}")
-    logging.debug(f"State params structure: {jax.tree_map(lambda x: x.shape, state.params)}")
 
-    assert 'actor' in state.params, "'actor' key not found in state.params"
-    assert 'critic' in state.params, "'critic' key not found in state.params"
+    if not isinstance(state.params, dict):
+        logging.error(f"Invalid state.params type: {type(state.params)}")
+        raise TypeError("state.params must be a dictionary")
 
-    logging.debug(f"Actor params structure: {jax.tree_map(lambda x: x.shape, state.params['actor'])}")
+    # Correctly access actor params
+    actor_params = state.params.get('actor', state.params)
+    if not isinstance(actor_params, dict):
+        logging.error(f"Invalid actor params type: {type(actor_params)}")
+        raise TypeError("Actor params must be a dictionary")
+
+    logging.debug(f"Actor params structure: {jax.tree_util.tree_map(lambda x: x.shape if hasattr(x, 'shape') else type(x), actor_params)}")
+    logging.debug(f"Actor params keys: {list(actor_params.keys())}")
+
+    # Check for expected actor layers
+    expected_layers = ['Dense_0', 'LayerNorm_0', 'Dense_1', 'LayerNorm_1', 'policy_logits']
+    missing_layers = [layer for layer in expected_layers if layer not in actor_params]
+    if missing_layers:
+        logging.error(f"Expected layers not found in actor params: {missing_layers}")
+        raise ValueError(f"Actor params missing expected layers: {missing_layers}")
 
     try:
+        logging.debug(f"Applying actor forward pass with observation shape: {observation[None, ...].shape}")
+
         logits = state.apply_fn(
-            {'params': state.params['actor']},
+            {'params': {'actor': actor_params}},
             observation[None, ...],
             method='actor_forward'
         )
-        logging.debug(f"Action logits shape: {logits.shape}")
-        logging.debug(f"Action logits content: {logits}")
+        logging.debug(f"Action logits shape: {logits.shape}, content: {logits}")
+
+        action = jax.random.categorical(rng, logits[0])
+        log_prob = jax.nn.log_softmax(logits)[0, action]
+        logging.debug(f"Selected action: {action}, Log probability: {log_prob}")
+
+        return action, log_prob
     except Exception as e:
-        logging.error(f"Error in actor forward pass: {str(e)}")
+        logging.error(f"Actor forward pass failed: {str(e)}")
         logging.error(f"State apply_fn: {state.apply_fn}")
-        logging.error(f"Actor params: {state.params['actor']}")
-        raise
-
-    action = jax.random.categorical(rng, logits[0])
-    log_prob = jax.nn.log_softmax(logits)[0, action]
-    logging.debug(f"Selected action: {action}, Log probability: {log_prob}")
-
-    return action, log_prob
+        logging.error(f"Actor params: {jax.tree_util.tree_map(lambda x: x.shape if hasattr(x, 'shape') else type(x), actor_params)}")
+        logging.error(f"Observation: {observation}")
+        raise RuntimeError(f"Actor forward pass failed: {str(e)}") from e
 
 from typing import Dict, Generator, Any
 
@@ -397,8 +377,7 @@ def train_rl_agent(
     max_steps: int = 1000,
     gamma: float = 0.99,
     clip_ratio: float = 0.2,
-    policy_learning_rate: float = 3e-4,
-    value_learning_rate: float = 1e-3,
+    learning_rate: float = 3e-4,
     n_epochs: int = 10,
     batch_size: int = 64,
     buffer_size: int = 2048,
@@ -414,12 +393,6 @@ def train_rl_agent(
     seed: int = 0,
     improvement_threshold: float = 1.005,
     max_training_time: int = 72000,
-    adaptive_lr_patience: int = 10,
-    adaptive_lr_factor: float = 0.5,
-    gradient_clip_value: float = 0.5,
-    use_self_curing: bool = True,
-    self_curing_threshold: float = 0.1,
-    weight_decay: float = 1e-4,
 ) -> Tuple[ExtendedTrainState, List[float], Dict[str, Any]]:
     rng = jax.random.PRNGKey(seed)
     logging.info(f"Initializing PPO agent training with seed {seed}")
@@ -428,46 +401,12 @@ def train_rl_agent(
     try:
         dummy_obs, _ = env.reset()
         dummy_obs = jnp.array(dummy_obs)
-
-        # Define learning rate schedule
-        lr_schedule = optax.exponential_decay(
-            init_value=policy_learning_rate,
-            transition_steps=1000,
-            decay_rate=0.9
-        )
-
-        # Define policy optimizer with gradient transformations
-        policy_tx = optax.chain(
-            optax.clip_by_global_norm(gradient_clip_value),
-            optax.scale_by_adam(),
-            optax.scale_by_schedule(lr_schedule),
-            optax.add_decayed_weights(weight_decay),
-        )
-
-        # Define value optimizer
-        value_tx = optax.chain(
-            optax.clip_by_global_norm(gradient_clip_value),
-            optax.adam(learning_rate=value_learning_rate)
-        )
-
-        # Create masked optimizer for actor and critic
-        tx = optax.masked(
-            policy_tx,
-            mask=optax.make_mask_by_prefix('actor')
-        )
-        tx = optax.chain(
-            tx,
-            optax.masked(
-                value_tx,
-                mask=optax.make_mask_by_prefix('critic')
-            )
-        )
-
+        tx = optax.adam(learning_rate=learning_rate)
         state = create_train_state(rng, agent, dummy_obs, tx)
         buffer = PPOBuffer(buffer_size, env.observation_space.shape, env.action_space.shape)
         logging.info(f"Initialized agent and PPO buffer with size {buffer_size}")
         logging.info(f"Agent architecture: {agent}")
-        logging.info(f"Training parameters: Policy LR={policy_learning_rate}, Value LR={value_learning_rate}, Gamma={gamma}, Clip ratio={clip_ratio}")
+        logging.info(f"Training parameters: LR={learning_rate}, Gamma={gamma}, Clip ratio={clip_ratio}")
         logging.info(f"Episodes={num_episodes}, Max steps={max_steps}, Batch size={batch_size}")
     except Exception as e:
         logging.error(f"Error initializing PPO agent: {str(e)}")
@@ -492,18 +431,10 @@ def train_rl_agent(
 
             total_loss = policy_loss + value_loss_coef * value_loss - entropy_coef * entropy
 
-            logging.debug(f"Policy loss: {policy_loss:.4f}, Value loss: {value_loss:.4f}, KL: {kl:.4f}, Entropy: {entropy:.4f}")
             return total_loss, (policy_loss, value_loss, kl, entropy)
 
         (total_loss, (policy_loss, value_loss, kl, entropy)), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
-
-        actor_grads = grads['actor']
-        critic_grads = grads['critic']
-
-        logging.debug(f"Actor grads norm: {optax.global_norm(actor_grads):.4f}, Critic grads norm: {optax.global_norm(critic_grads):.4f}")
-
-        new_state = state.apply_gradients(grads={'actor': actor_grads, 'critic': critic_grads})
-
+        new_state = state.apply_gradients(grads=grads)
         return new_state, policy_loss, value_loss, kl, entropy
 
     episode_rewards = []
@@ -512,63 +443,43 @@ def train_rl_agent(
     solved = False
     errors = []
     training_info = {'policy_loss_history': [], 'value_loss_history': [], 'kl_history': [],
-                     'episode_lengths': [], 'reward_history': [], 'lr_history': []}
+                     'episode_lengths': [], 'reward_history': []}
 
     logging.info(f"Starting training for {num_episodes} episodes, max {max_steps} steps per episode")
     try:
         for episode in range(num_episodes):
-            logging.info(f"Starting episode {episode + 1}/{num_episodes}")
             obs, _ = env.reset()
-            obs = jnp.array(obs)
             episode_reward = 0
             episode_length = 0
 
-            logging.debug(f"Episode {episode + 1} initial state structure: {jax.tree_map(lambda x: x.shape, state.params)}")
-            logging.debug(f"Episode {episode + 1} initial buffer size: {buffer.ptr}")
-
             for step in range(max_steps):
-                logging.debug(f"Episode {episode + 1}, Step {step + 1}")
-                logging.debug(f"Current state params keys: {state.params.keys()}")
-                logging.debug(f"Current observation shape: {obs.shape}")
-
                 rng, action_rng = jax.random.split(rng)
                 action, log_prob = select_action(state, obs, action_rng)
-                logging.debug(f"Selected action: {action}, Log probability: {log_prob}")
-
                 next_obs, reward, done, truncated, _ = env.step(int(action))
-                next_obs = jnp.array(next_obs)
 
                 episode_reward += reward
                 episode_length += 1
 
-                logging.debug(f"Reward: {reward}, Cumulative reward: {episode_reward}")
-
-                value = state.apply_fn({'params': state.params['critic']}, obs[None])[0]
+                value = state.apply_fn({'params': state.params['critic']}, obs[None], method='critic_forward')[0]
                 buffer.add(obs, action, reward, value, log_prob)
-                logging.debug(f"Updated buffer size: {buffer.ptr}")
 
                 if buffer.ptr == buffer.max_size:
-                    logging.info("Buffer full, starting PPO update")
-                    last_val = state.apply_fn({'params': state.params['critic']}, next_obs[None])[0]
+                    last_val = state.apply_fn({'params': state.params['critic']}, next_obs[None], method='critic_forward')[0]
                     buffer.finish_path(last_val)
                     data = buffer.get()
-                    logging.debug(f"PPO update data shapes: {jax.tree_map(lambda x: x.shape, data)}")
-                    for epoch in range(n_epochs):
+                    for _ in range(n_epochs):
                         for mini_batch in get_minibatches(data, batch_size):
                             state, policy_loss, value_loss, kl, entropy = update_ppo(state, mini_batch)
                             training_info['policy_loss_history'].append(float(policy_loss))
                             training_info['value_loss_history'].append(float(value_loss))
                             training_info['kl_history'].append(float(kl))
-                            logging.debug(f"Epoch {epoch + 1}, Policy loss: {policy_loss:.4f}, Value loss: {value_loss:.4f}, KL: {kl:.4f}")
                             if kl > 1.5 * target_kl:
-                                logging.info(f"Early stopping at step {step}, epoch {epoch + 1} due to reaching max KL.")
+                                logging.info(f"Early stopping at step {step}, epoch {_} due to reaching max KL.")
                                 break
                     buffer = PPOBuffer(buffer_size, env.observation_space.shape, env.action_space.shape)
-                    logging.info("PPO update completed, buffer reset")
 
                 obs = next_obs
                 if done or truncated:
-                    logging.debug(f"Episode {episode + 1} ended after {step + 1} steps")
                     break
 
             episode_rewards.append(episode_reward)
@@ -579,41 +490,15 @@ def train_rl_agent(
 
             training_info['reward_history'].append(episode_reward)
             training_info['episode_lengths'].append(episode_length)
-            training_info['lr_history'].append(state.tx['actor'].learning_rate)
 
             if avg_reward > best_average_reward * improvement_threshold:
                 best_average_reward = avg_reward
                 episodes_without_improvement = 0
-                logging.info(f"New best average reward: {best_average_reward:.2f}")
             else:
                 episodes_without_improvement += 1
-                logging.debug(f"Episodes without improvement: {episodes_without_improvement}")
 
-            # Adaptive learning rate
-            if episodes_without_improvement % adaptive_lr_patience == 0 and episodes_without_improvement > 0:
-                new_lr = state.tx['actor'].learning_rate * adaptive_lr_factor
-                state = state.replace(tx={
-                    'actor': optax.chain(
-                        optax.clip_by_global_norm(gradient_clip_value),
-                        optax.adam(learning_rate=new_lr)
-                    ),
-                    'critic': optax.chain(
-                        optax.clip_by_global_norm(gradient_clip_value),
-                        optax.adam(learning_rate=new_lr)
-                    )
-                })
-                logging.info(f"Reducing learning rate to {new_lr}")
-
-            # Self-curing mechanism
-            if use_self_curing and episode > 0 and episode % 10 == 0:
-                recent_rewards = episode_rewards[-10:]
-                if np.std(recent_rewards) < self_curing_threshold * np.mean(recent_rewards):
-                    logging.info("Applying self-curing mechanism")
-                    rng, reset_rng = jax.random.split(rng)
-                    state = create_train_state(reset_rng, agent, dummy_obs, state.tx['actor'], state.tx['critic'])
-
+            # Early stopping checks
             if avg_reward >= early_stop_threshold and episode >= min_episodes:
-                logging.info("Running validation...")
                 validation_rewards = run_validation(state, env, validation_episodes, max_steps)
                 val_avg_reward = sum(validation_rewards) / validation_episodes
                 val_std_reward = np.std(validation_rewards)
@@ -641,10 +526,9 @@ def train_rl_agent(
                 training_info['early_stop_reason'] = 'max_training_time_reached'
                 break
 
-            logging.info(f"Finished episode {episode + 1}/{num_episodes}")
-
     except Exception as e:
         logging.error(f"Unexpected error during training: {str(e)}")
+        logging.error(f"Current episode: {episode}")
         errors.append(f"Training error: {str(e)}")
         training_info['training_stopped_early'] = True
 
@@ -667,6 +551,20 @@ def train_rl_agent(
     logging.info("Training completed. Returning results.")
     return state, episode_rewards, training_info
 
+def run_validation(agent, env, num_episodes: int, max_steps: int) -> List[float]:
+    validation_rewards = []
+    for _ in range(num_episodes):
+        timestep = env.reset()
+        episode_reward = 0
+        for _ in range(max_steps):
+            action = agent.select_action(timestep.observation)
+            timestep = env.step(action)
+            episode_reward += timestep.reward
+            if timestep.last():
+                break
+        validation_rewards.append(episode_reward)
+    return validation_rewards
+
 def run_validation(state: ExtendedTrainState, env: RLEnvironment, num_episodes: int, max_steps: int) -> List[float]:
     validation_rewards = []
     for _ in range(num_episodes):
@@ -682,11 +580,3 @@ def run_validation(state: ExtendedTrainState, env: RLEnvironment, num_episodes: 
                 break
         validation_rewards.append(episode_reward)
     return validation_rewards
-
-# Example usage
-if __name__ == "__main__":
-    env = RLEnvironment("CartPole-v1")
-    agent = RLAgent(features=[64, 64], action_dim=env.action_space.n)
-    trained_state, rewards, info = train_rl_agent(agent, env, num_episodes=100, max_steps=500)
-    print(f"Average reward over last 10 episodes: {sum(rewards[-10:]) / 10:.2f}")
-    print(f"Training info: {info}")

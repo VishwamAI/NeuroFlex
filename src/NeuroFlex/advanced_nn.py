@@ -11,7 +11,7 @@ from functools import partial
 import optax
 import tensorflow as tf
 import numpy as np
-from .rl_module import PrioritizedReplayBuffer, create_train_state, select_action, RLAgent
+from .rl_module import create_train_state, select_action, RLAgent
 from .tensorflow_convolutions import TensorFlowConvolutions
 from .utils import create_backend, convert_array, get_activation_function
 from .cnn import create_cnn_block
