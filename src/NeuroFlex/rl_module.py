@@ -132,7 +132,18 @@ class RLAgent(nn.Module):
         logging.info(f"Setting up RLAgent with action_dim: {self.action_dim}, features: {self.features}")
         self.actor = Actor(self.action_dim, self.features)
         self.critic = Critic(self.features)
-        self.optimizer = optax.adam(self.learning_rate)
+
+        # Implement Optax-based optimization with learning rate scheduling
+        lr_schedule = optax.exponential_decay(
+            init_value=self.learning_rate,
+            transition_steps=1000,
+            decay_rate=0.9
+        )
+        self.optimizer = optax.chain(
+            optax.clip_by_global_norm(1.0),
+            optax.adam(learning_rate=lr_schedule)
+        )
+
         self.performance_history = []
         logging.info(f"RLAgent setup complete. Actor: {self.actor}, Critic: {self.critic}")
         logging.debug(f"Actor structure: {self.actor.tabulate(jax.random.PRNGKey(0), jnp.ones((1, self.features[0])))}")
@@ -155,11 +166,33 @@ class RLAgent(nn.Module):
         dummy_input = jnp.ones((1,) + input_shape)
         variables = self.init(rng, dummy_input)
         params = variables['params']
+        params = self._structure_params(params)
         self._check_params_structure(params)
         logging.info(f"RLAgent parameters initialized. Structure: {jax.tree_map(lambda x: x.shape, params)}")
         logging.debug(f"Actor params structure: {jax.tree_map(lambda x: x.shape, params['actor'])}")
         logging.debug(f"Critic params structure: {jax.tree_map(lambda x: x.shape, params['critic'])}")
         return params
+
+    def _structure_params(self, params):
+        structured_params = {'actor': {}, 'critic': {}}
+        for key, value in params.items():
+            if key.startswith('actor'):
+                structured_params['actor'][key.replace('actor_', '')] = value
+            elif key.startswith('critic'):
+                structured_params['critic'][key.replace('critic_', '')] = value
+            elif key in ['actor', 'critic']:
+                structured_params[key] = value
+            else:
+                logging.warning(f"Unexpected key in params: {key}")
+
+        # Ensure 'Dense_0' is present in both actor and critic
+        for module in ['actor', 'critic']:
+            if not structured_params[module]:
+                logging.error(f"{module} params are empty")
+            elif 'Dense_0' not in structured_params[module]:
+                logging.error(f"'Dense_0' not found in {module} params")
+
+        return structured_params
 
     def _check_params_structure(self, params):
         if 'actor' not in params or 'critic' not in params:
@@ -169,8 +202,11 @@ class RLAgent(nn.Module):
             if not isinstance(params[submodule], dict):
                 logging.error(f"{submodule} params is not a dictionary. Type: {type(params[submodule])}")
                 raise ValueError(f"{submodule} initialization did not return a dictionary for params")
-            if 'dense_0' not in params[submodule]:
-                logging.error(f"'dense_0' not found in {submodule} params. Keys: {params[submodule].keys()}")
+            if not params[submodule]:
+                logging.error(f"{submodule} params dictionary is empty")
+                raise ValueError(f"{submodule} initialization resulted in an empty dictionary")
+            if 'Dense_0' not in params[submodule]:
+                logging.error(f"'Dense_0' not found in {submodule} params. Keys: {params[submodule].keys()}")
                 raise ValueError(f"{submodule} initialization did not create expected layer structure")
 
     @property
@@ -206,7 +242,7 @@ class RLAgent(nn.Module):
     def reset_weights(self):
         logging.info("Resetting weights as part of self-curing mechanism")
         rng = jax.random.PRNGKey(int(time.time()))
-        self.params = self.initialize_params(rng, self.features[0])
+        self.params = self.initialize_params(rng, (self.features[0],))
         self.optimizer = optax.adam(self.learning_rate)
 
 class RLEnvironment:
@@ -341,7 +377,9 @@ def select_action(state: ExtendedTrainState, observation: jnp.ndarray, rng: jax.
 
     return action, log_prob
 
-def get_minibatches(data: Dict[str, jnp.ndarray], batch_size: int) -> List[Dict[str, jnp.ndarray]]:
+from typing import Dict, Generator, Any
+
+def get_minibatches(data: Dict[str, jnp.ndarray], batch_size: int) -> Generator[Dict[str, jnp.ndarray], None, None]:
     data_size = len(data['obs'])
     assert all(len(v) == data_size for v in data.values()), "All arrays must have the same length"
     indices = np.random.permutation(data_size)
@@ -381,6 +419,7 @@ def train_rl_agent(
     gradient_clip_value: float = 0.5,
     use_self_curing: bool = True,
     self_curing_threshold: float = 0.1,
+    weight_decay: float = 1e-4,
 ) -> Tuple[ExtendedTrainState, List[float], Dict[str, Any]]:
     rng = jax.random.PRNGKey(seed)
     logging.info(f"Initializing PPO agent training with seed {seed}")
@@ -389,15 +428,42 @@ def train_rl_agent(
     try:
         dummy_obs, _ = env.reset()
         dummy_obs = jnp.array(dummy_obs)
+
+        # Define learning rate schedule
+        lr_schedule = optax.exponential_decay(
+            init_value=policy_learning_rate,
+            transition_steps=1000,
+            decay_rate=0.9
+        )
+
+        # Define policy optimizer with gradient transformations
         policy_tx = optax.chain(
             optax.clip_by_global_norm(gradient_clip_value),
-            optax.adam(learning_rate=policy_learning_rate)
+            optax.scale_by_adam(),
+            optax.scale_by_schedule(lr_schedule),
+            optax.add_decayed_weights(weight_decay),
         )
+
+        # Define value optimizer
         value_tx = optax.chain(
             optax.clip_by_global_norm(gradient_clip_value),
             optax.adam(learning_rate=value_learning_rate)
         )
-        state = create_train_state(rng, agent, dummy_obs, policy_tx, value_tx)
+
+        # Create masked optimizer for actor and critic
+        tx = optax.masked(
+            policy_tx,
+            mask=optax.make_mask_by_prefix('actor')
+        )
+        tx = optax.chain(
+            tx,
+            optax.masked(
+                value_tx,
+                mask=optax.make_mask_by_prefix('critic')
+            )
+        )
+
+        state = create_train_state(rng, agent, dummy_obs, tx)
         buffer = PPOBuffer(buffer_size, env.observation_space.shape, env.action_space.shape)
         logging.info(f"Initialized agent and PPO buffer with size {buffer_size}")
         logging.info(f"Agent architecture: {agent}")
