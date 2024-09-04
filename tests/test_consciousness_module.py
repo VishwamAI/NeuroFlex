@@ -1,8 +1,11 @@
 import unittest
 import jax
 import jax.numpy as jnp
+import numpy as np
 import logging
 from NeuroFlex.consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
+import neurolib
+from neurolib.models.aln import ALNModel
 
 # Configure basic logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -12,10 +15,12 @@ class TestConsciousnessModule(unittest.TestCase):
         logging.info("Setting up TestConsciousnessModule")
         self.features = [64, 32]
         self.output_dim = 16
-        self.working_memory_size = 64
+        self.working_memory_size = 192  # Updated to match the default in create_consciousness_simulation
         self.attention_heads = 4
         self.qkv_features = 64
         self.dropout_rate = 0.1
+        self.num_brain_areas = 90
+        self.simulation_length = 1.0
         logging.debug(f"Creating ConsciousnessSimulation with features={self.features}, output_dim={self.output_dim}")
         self.consciousness_sim = create_consciousness_simulation(
             features=self.features,
@@ -23,7 +28,9 @@ class TestConsciousnessModule(unittest.TestCase):
             working_memory_size=self.working_memory_size,
             attention_heads=self.attention_heads,
             qkv_features=self.qkv_features,
-            dropout_rate=self.dropout_rate
+            dropout_rate=self.dropout_rate,
+            num_brain_areas=self.num_brain_areas,
+            simulation_length=self.simulation_length
         )
         self.rng = jax.random.PRNGKey(0)
         logging.info("TestConsciousnessModule setup complete")
@@ -51,28 +58,49 @@ class TestConsciousnessModule(unittest.TestCase):
                 'dropout': jax.random.fold_in(rng_key1, 0),
                 'perturbation': jax.random.fold_in(rng_key1, 1)
             }
-            consciousness1, new_working_memory1, working_memory1 = self.consciousness_sim.apply(
+            result1 = self.consciousness_sim.apply(
                 params, x, rngs=rng_keys1, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            logging.debug(f"Result1 type: {type(result1)}, length: {len(result1) if isinstance(result1, tuple) else 'N/A'}")
+            self.assertIsInstance(result1, tuple, "Result should be a tuple")
+            self.assertEqual(len(result1), 3, f"Expected 3 return values, got {len(result1)}")
+            consciousness1, new_working_memory1, working_memory_dict1 = result1
+            logging.debug(f"Unpacked values - consciousness1: {consciousness1.shape}, new_working_memory1: {new_working_memory1.shape}, working_memory_dict1 keys: {working_memory_dict1.keys()}")
 
             # Second forward pass with the same input but different RNG key
             rng_key2 = jax.random.PRNGKey(1)
             rng_keys2 = {'dropout': jax.random.fold_in(rng_key2, 0), 'perturbation': jax.random.fold_in(rng_key2, 1)}
-            consciousness2, new_working_memory2, working_memory2 = self.consciousness_sim.apply(
+            result2 = self.consciousness_sim.apply(
                 params, x, rngs=rng_keys2, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            logging.debug(f"Result2 type: {type(result2)}, length: {len(result2) if isinstance(result2, tuple) else 'N/A'}")
+            self.assertIsInstance(result2, tuple, "Result2 should be a tuple")
+            self.assertEqual(len(result2), 3, f"Expected 3 return values, got {len(result2)}")
+            consciousness2, new_working_memory2, working_memory_dict2 = result2
+            logging.debug(f"Unpacked Result2 - consciousness2 shape: {consciousness2.shape}, "
+                          f"new_working_memory2 shape: {new_working_memory2.shape}, "
+                          f"working_memory_dict2 type: {type(working_memory_dict2)}")
 
             logging.debug(f"Consciousness shape: {consciousness1.shape}")
-            logging.debug(f"Working memory shape: {new_working_memory1.shape}")
-            expected_consciousness_shape = (1, self.output_dim * 2 + self.working_memory_size + 2)
-            self.assertEqual(consciousness1.shape, expected_consciousness_shape)
-            self.assertEqual(new_working_memory1.shape, (1, self.working_memory_size))
-            self.assertIsInstance(working_memory1, dict)
-            self.assertIn('working_memory', working_memory1)
+            logging.debug(f"New working memory shape: {new_working_memory1.shape}")
+            logging.debug(f"Working memory dict keys: {working_memory_dict1.keys()}")
+            expected_consciousness_shape = (1, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
+            self.assertEqual(consciousness1.shape, expected_consciousness_shape,
+                             f"Expected consciousness shape {expected_consciousness_shape}, got {consciousness1.shape}")
+            self.assertEqual(new_working_memory1.shape, (1, self.working_memory_size),
+                             f"Expected new working memory shape (1, {self.working_memory_size}), got {new_working_memory1.shape}")
+            self.assertIsInstance(working_memory_dict1, dict, "working_memory_dict1 should be a dictionary")
+            self.assertIn('working_memory', working_memory_dict1, "working_memory_dict1 should contain 'working_memory' key")
+            self.assertIn('current_state', working_memory_dict1['working_memory'], "working_memory_dict1['working_memory'] should contain 'current_state' key")
+            self.assertEqual(working_memory_dict1['working_memory']['current_state'].shape, (1, self.working_memory_size),
+                             f"Expected working memory current state shape (1, {self.working_memory_size}), got {working_memory_dict1['working_memory']['current_state'].shape}")
 
             # Check that working memory is actually being perturbed
-            self.assertFalse(jnp.allclose(working_memory1, working_memory2),
+            self.assertFalse(jnp.allclose(working_memory_dict1['working_memory']['current_state'],
+                                          working_memory_dict2['working_memory']['current_state']),
                              "Working memory should be different due to perturbation")
+            self.assertFalse(jnp.allclose(new_working_memory1, new_working_memory2),
+                             "New working memory should be different due to perturbation")
 
             # Check that consciousness states are different due to different RNG keys
             self.assertFalse(jnp.allclose(consciousness1, consciousness2),
@@ -80,7 +108,10 @@ class TestConsciousnessModule(unittest.TestCase):
 
             # Check for NaN values
             self.assertFalse(jnp.any(jnp.isnan(consciousness1)), "Consciousness output contains NaN values")
-            self.assertFalse(jnp.any(jnp.isnan(working_memory1)), "Working memory output contains NaN values")
+            self.assertFalse(jnp.any(jnp.isnan(new_working_memory1)), "New working memory output contains NaN values")
+            self.assertFalse(jnp.any(jnp.isnan(working_memory_dict1['working_memory']['current_state'])), "Working memory output contains NaN values")
+
+            logging.debug("All shape and content checks passed successfully")
 
             logging.debug("Finished test_consciousness_simulation_forward_pass")
         except Exception as e:
@@ -106,33 +137,32 @@ class TestConsciousnessModule(unittest.TestCase):
                 params, x, rngs=rng_keys1,
                 method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
-            logging.debug(f"Result1 type: {type(result1)}, length: {len(result1) if isinstance(result1, tuple) else 'N/A'}")
+            self.assertEqual(len(result1), 3, "simulate_consciousness should return 3 values")
             consciousness_state1, new_working_memory1, working_memory1 = result1
+            logging.debug(f"Result1 unpacked: consciousness_state1 shape: {consciousness_state1.shape}, "
+                          f"new_working_memory1 shape: {new_working_memory1.shape}, "
+                          f"working_memory1 type: {type(working_memory1)}")
 
             logging.debug("Calling simulate_consciousness with rng_keys2")
             result2 = self.consciousness_sim.apply(
                 params, x, rngs=rng_keys2,
                 method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
-            logging.debug(f"Result2 type: {type(result2)}, length: {len(result2) if isinstance(result2, tuple) else 'N/A'}")
+            self.assertEqual(len(result2), 3, "simulate_consciousness should return 3 values")
             consciousness_state2, new_working_memory2, working_memory2 = result2
+            logging.debug(f"Result2 unpacked: consciousness_state2 shape: {consciousness_state2.shape}, "
+                          f"new_working_memory2 shape: {new_working_memory2.shape}, "
+                          f"working_memory2 type: {type(working_memory2)}")
+
         except Exception as e:
             logging.error(f"simulate_consciousness method failed: {str(e)}")
             self.fail(f"simulate_consciousness method failed: {str(e)}")
-
-        logging.debug(f"Consciousness state shape: {consciousness_state1.shape}")
-        logging.debug(f"New working memory shape: {new_working_memory1.shape}")
-        logging.debug(f"Working memory type: {type(working_memory1)}")
-        if isinstance(working_memory1, dict) and 'working_memory' in working_memory1:
-            logging.debug(f"Working memory shape: {working_memory1['working_memory']['current_state'].shape}")
-        else:
-            logging.warning(f"Unexpected working_memory1 structure: {working_memory1}")
 
         # Check types and shapes
         self.assertIsInstance(consciousness_state1, jnp.ndarray)
         self.assertIsInstance(new_working_memory1, jnp.ndarray)
         self.assertIsInstance(working_memory1, dict)
-        expected_consciousness_shape = (1, self.output_dim * 2 + self.working_memory_size + 2)
+        expected_consciousness_shape = (1, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
         self.assertEqual(consciousness_state1.shape, expected_consciousness_shape,
                          f"Expected shape {expected_consciousness_shape}, got {consciousness_state1.shape}")
         self.assertEqual(new_working_memory1.shape, (1, self.working_memory_size))
@@ -140,9 +170,9 @@ class TestConsciousnessModule(unittest.TestCase):
         self.assertIn('current_state', working_memory1['working_memory'], "working_memory1['working_memory'] should contain 'current_state' key")
         self.assertEqual(working_memory1['working_memory']['current_state'].shape, (1, self.working_memory_size))
 
-        # Check that new_working_memory is different from the initial working memory
+        # Check that new_working_memory is different from the current working memory state
         self.assertFalse(jnp.allclose(new_working_memory1, working_memory1['working_memory']['current_state']),
-                         "New working memory should be different due to perturbation")
+                         "New working memory should be different from current working memory state")
 
         # Check that the outputs are different due to different RNG keys
         self.assertFalse(jnp.allclose(consciousness_state1, consciousness_state2),
@@ -152,9 +182,38 @@ class TestConsciousnessModule(unittest.TestCase):
         self.assertFalse(jnp.allclose(working_memory1['working_memory']['current_state'], working_memory2['working_memory']['current_state']),
                          "Working memory states should be different due to different RNG keys")
 
-        # Check for NaN values
-        self.assertFalse(jnp.any(jnp.isnan(consciousness_state1)), "Consciousness state contains NaN values")
-        self.assertFalse(jnp.any(jnp.isnan(new_working_memory1)), "New working memory contains NaN values")
+        # Check for NaN and infinite values
+        for name, array in [("Consciousness state", consciousness_state1),
+                            ("New working memory", new_working_memory1),
+                            ("Working memory", working_memory1['working_memory']['current_state'])]:
+            self.assertFalse(jnp.any(jnp.isnan(array)), f"{name} contains NaN values")
+            self.assertFalse(jnp.any(jnp.isinf(array)), f"{name} contains infinite values")
+
+        # Check for error case with non-finite input
+        error_x = jnp.array([[float('nan')]])  # Input that should cause an error
+        error_result = self.consciousness_sim.apply(
+            params, error_x, rngs=rng_keys1,
+            method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
+        )
+        self.assertEqual(len(error_result), 3, "Error case should still return 3 values")
+        error_consciousness, error_working_memory, error_dict = error_result
+        self.assertIn('error', error_dict, "Error case should return an error message in the dictionary")
+        self.assertEqual(error_consciousness.shape, expected_consciousness_shape, "Error case consciousness shape mismatch")
+        self.assertEqual(error_working_memory.shape, (1, self.working_memory_size), "Error case working memory shape mismatch")
+        self.assertIn('working_memory', error_dict, "Error dictionary should contain 'working_memory' key")
+        self.assertIn('current_state', error_dict['working_memory'], "Error dictionary's working_memory should contain 'current_state' key")
+        self.assertIsInstance(error_dict['working_memory']['current_state'], jnp.ndarray, "Error case working memory should be a jax array")
+        self.assertEqual(error_dict['working_memory']['current_state'].shape, (1, self.working_memory_size), "Error case working memory shape mismatch")
+
+        # Check that error case returns zero arrays
+        self.assertTrue(jnp.all(error_consciousness == 0), "Error case consciousness should be all zeros")
+        self.assertTrue(jnp.all(error_working_memory == 0), "Error case working memory should be all zeros")
+        self.assertTrue(jnp.all(error_dict['working_memory']['current_state'] == 0), "Error case working memory state should be all zeros")
+
+        # Additional check for non-zero values in normal case
+        self.assertFalse(jnp.all(consciousness_state1 == 0), "Consciousness state should not be all zeros")
+        self.assertFalse(jnp.all(new_working_memory1 == 0), "New working memory should not be all zeros")
+        self.assertFalse(jnp.all(working_memory1['working_memory']['current_state'] == 0), "Working memory state should not be all zeros")
 
         logging.debug("Finished test_simulate_consciousness")
 
@@ -170,9 +229,11 @@ class TestConsciousnessModule(unittest.TestCase):
         rng_keys1 = {'dropout': jax.random.fold_in(rng_key1, 0), 'perturbation': jax.random.fold_in(rng_key1, 1)}
 
         try:
-            consciousness_state, new_working_memory, working_memory = self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=rng_keys1, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
+            consciousness_state, new_working_memory, working_memory = result
             logging.debug(f"Generated consciousness_state with shape: {consciousness_state.shape}")
 
             # Create PRNG keys for generate_thought
@@ -212,9 +273,11 @@ class TestConsciousnessModule(unittest.TestCase):
         rng_key = jax.random.PRNGKey(0)
         rng_keys = {'dropout': jax.random.fold_in(rng_key, 0), 'perturbation': jax.random.fold_in(rng_key, 1)}
         try:
-            consciousness, new_working_memory, working_memory = self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=rng_keys, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
+            consciousness, new_working_memory, working_memory = result
             logging.debug(f"Consciousness shape: {consciousness.shape}")
             logging.debug(f"New working memory shape: {new_working_memory.shape}")
             logging.debug(f"Working memory shape: {working_memory['working_memory']['current_state'].shape}")
@@ -223,11 +286,16 @@ class TestConsciousnessModule(unittest.TestCase):
             self.fail(f"Forward pass failed: {str(e)}")
 
         # Check the output shapes
-        expected_consciousness_shape = (1, self.output_dim * 2 + self.working_memory_size + 2)
+        expected_consciousness_shape = (1, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
         self.assertEqual(consciousness.shape, expected_consciousness_shape,
                          f"Expected consciousness shape {expected_consciousness_shape}, got {consciousness.shape}")
-        self.assertEqual(working_memory.shape, (1, self.working_memory_size),
-                         f"Expected working memory shape (1, {self.working_memory_size}), got {working_memory.shape}")
+        self.assertEqual(new_working_memory.shape, (1, self.working_memory_size),
+                         f"Expected working memory shape (1, {self.working_memory_size}), got {new_working_memory.shape}")
+        self.assertIsInstance(working_memory, dict, "Expected working_memory to be a dictionary")
+        self.assertIn('working_memory', working_memory, "Expected 'working_memory' key in working_memory dict")
+        self.assertIn('current_state', working_memory['working_memory'], "Expected 'current_state' key in working_memory['working_memory']")
+        self.assertEqual(working_memory['working_memory']['current_state'].shape, (1, self.working_memory_size),
+                         f"Expected working memory current state shape (1, {self.working_memory_size}), got {working_memory['working_memory']['current_state'].shape}")
         logging.info("Output shape checks passed")
 
         # Check if the output is different from the input (processing occurred)
@@ -238,14 +306,18 @@ class TestConsciousnessModule(unittest.TestCase):
         # Check if the output values are within a reasonable range
         self.assertTrue(jnp.all(jnp.isfinite(consciousness)),
                         "Consciousness output contains non-finite values")
-        self.assertTrue(jnp.all(jnp.isfinite(working_memory)),
+        self.assertTrue(jnp.all(jnp.isfinite(new_working_memory)),
+                        "New working memory output contains non-finite values")
+        self.assertTrue(jnp.all(jnp.isfinite(working_memory['working_memory']['current_state'])),
                         "Working memory output contains non-finite values")
         logging.info("Output range check passed")
 
         # Check for NaN values
         self.assertFalse(jnp.any(jnp.isnan(consciousness)),
                          "Consciousness output contains NaN values")
-        self.assertFalse(jnp.any(jnp.isnan(working_memory)),
+        self.assertFalse(jnp.any(jnp.isnan(new_working_memory)),
+                         "New working memory output contains NaN values")
+        self.assertFalse(jnp.any(jnp.isnan(working_memory['working_memory']['current_state'])),
                          "Working memory output contains NaN values")
         logging.info("NaN check passed")
 
@@ -260,10 +332,12 @@ class TestConsciousnessModule(unittest.TestCase):
         rng_key1 = jax.random.PRNGKey(0)
         rng_keys1 = {'dropout': jax.random.fold_in(rng_key1, 0), 'perturbation': jax.random.fold_in(rng_key1, 1)}
         try:
-            consciousness1, new_working_memory1, working_memory1 = self.consciousness_sim.apply(
+            result1 = self.consciousness_sim.apply(
                 params, x1, rngs=rng_keys1,
                 method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result1), 3, "simulate_consciousness should return 3 values")
+            consciousness1, new_working_memory1, working_memory1 = result1
         except Exception as e:
             self.fail(f"First forward pass failed: {str(e)}")
 
@@ -271,10 +345,12 @@ class TestConsciousnessModule(unittest.TestCase):
         rng_key2 = jax.random.PRNGKey(1)
         rng_keys2 = {'dropout': jax.random.fold_in(rng_key2, 0), 'perturbation': jax.random.fold_in(rng_key2, 1)}
         try:
-            consciousness2, new_working_memory2, working_memory2 = self.consciousness_sim.apply(
+            result2 = self.consciousness_sim.apply(
                 params, x2, rngs=rng_keys2,
                 method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result2), 3, "simulate_consciousness should return 3 values")
+            consciousness2, new_working_memory2, working_memory2 = result2
         except Exception as e:
             self.fail(f"Second forward pass failed: {str(e)}")
 
@@ -292,9 +368,10 @@ class TestConsciousnessModule(unittest.TestCase):
 
         # Test with None rngs
         try:
-            self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=None, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
             logging.info("Test with None rngs passed")
         except Exception as e:
             self.fail(f"Test with None rngs failed: {str(e)}")
@@ -302,9 +379,10 @@ class TestConsciousnessModule(unittest.TestCase):
         # Test with missing 'dropout' key
         invalid_rngs1 = {'perturbation': jax.random.PRNGKey(0)}
         try:
-            self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=invalid_rngs1, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
             logging.info("Test with missing 'dropout' key passed")
         except Exception as e:
             self.fail(f"Test with missing 'dropout' key failed: {str(e)}")
@@ -312,9 +390,10 @@ class TestConsciousnessModule(unittest.TestCase):
         # Test with missing 'perturbation' key
         invalid_rngs2 = {'dropout': jax.random.PRNGKey(0)}
         try:
-            self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=invalid_rngs2, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
             logging.info("Test with missing 'perturbation' key passed")
         except Exception as e:
             self.fail(f"Test with missing 'perturbation' key failed: {str(e)}")
@@ -322,14 +401,40 @@ class TestConsciousnessModule(unittest.TestCase):
         # Test with non-PRNGKey values
         invalid_rngs3 = {'dropout': 0, 'perturbation': 1}
         try:
-            self.consciousness_sim.apply(
+            result = self.consciousness_sim.apply(
                 params, x, rngs=invalid_rngs3, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
             )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
             logging.info("Test with non-PRNGKey values passed")
         except Exception as e:
             self.fail(f"Test with non-PRNGKey values failed: {str(e)}")
 
         logging.info("All invalid rngs tests passed successfully")
+
+    def test_neurolib_integration(self):
+        logging.info("Starting test_neurolib_integration")
+        x = jax.random.normal(self.rng, (1, self.output_dim))
+        params = self.consciousness_sim.init(self.rng, x)
+
+        rng_key = jax.random.PRNGKey(0)
+        rng_keys = {'dropout': jax.random.fold_in(rng_key, 0), 'perturbation': jax.random.fold_in(rng_key, 1)}
+
+        try:
+            result = self.consciousness_sim.apply(
+                params, x, rngs=rng_keys, method=self.consciousness_sim.simulate_consciousness, mutable=['working_memory', 'model_state']
+            )
+            self.assertEqual(len(result), 3, "simulate_consciousness should return 3 values")
+            consciousness, new_working_memory, working_memory = result
+
+            # Check if ALNModel simulation results are incorporated into the consciousness state
+            self.assertGreater(jnp.sum(jnp.abs(consciousness)), 0, "ALNModel simulation should affect consciousness state")
+
+            # Verify that the ALNModel parameters are updated
+            self.assertNotEqual(self.consciousness_sim.aln_model.params['duration'], 0, "ALNModel duration should be set")
+
+            logging.info("Neurolib integration test passed successfully")
+        except Exception as e:
+            self.fail(f"Neurolib integration test failed: {str(e)}")
 
     logging.info("All tests completed successfully")
 
