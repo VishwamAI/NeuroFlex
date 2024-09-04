@@ -24,7 +24,10 @@ from .tokenisation import tokenize_text
 from .tokenizer import Tokenizer
 from .destroy_button import DestroyButton
 from .cognitive_architecture import CognitiveArchitecture
-from .consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
+from .consciousness_simulation import (
+    ConsciousnessSimulation,
+    create_consciousness_simulation
+)
 
 # Ensure compatibility with latest JAX and Flax versions
 import jax
