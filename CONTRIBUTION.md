@@ -25,7 +25,7 @@ NeuroFlex is an advanced neural network framework that integrates various cuttin
 1. Fork the NeuroFlex repository on GitHub.
 2. Clone your fork locally:
    ```
-   git clone https://github.com/your-username/NeuroFlex.git
+   git clone https://github.com/VishwamAI/NeuroFlex.git
    ```
 3. Create a virtual environment:
    ```
@@ -78,7 +78,7 @@ NeuroFlex is an advanced neural network framework that integrates various cuttin
 If you need help or have questions about contributing to NeuroFlex, you can:
 
 - Open an issue on the GitHub repository
-- Join our community Discord server: [NeuroFlex Discord](https://discord.gg/neuroflexcommunity)
-- Email the core development team at: contribute@neuroflex.ai
+- Join our community Discord server: [NeuroFlex Discord](https://discord.gg/CUXW65Yz6d)
+- Email the core development team at: [REDACTED SECRET]
 
 We appreciate your contributions and look forward to your involvement in making NeuroFlex even better!

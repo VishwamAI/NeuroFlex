@@ -2,17 +2,13 @@ import unittest
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-import sys
-import os
+from jax import random
 
-# Add the src directory to the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-
-from NeuroFlex.gan import GAN
+from NeuroFlex.generative_models import GAN
 
 class TestGAN(unittest.TestCase):
     def setUp(self):
-        self.rng = jax.random.PRNGKey(0)
+        self.rng = random.PRNGKey(0)
         self.latent_dim = 100
         self.generator_features = (128, 256, 512)
         self.discriminator_features = (512, 256, 128)
@@ -39,11 +35,12 @@ class TestGAN(unittest.TestCase):
             discriminator_features=self.discriminator_features,
             output_shape=self.output_shape
         )
-        rng, init_rng = jax.random.split(self.rng)
-        x = jax.random.normal(rng, (self.batch_size,) + self.output_shape)
-        variables = gan.init(init_rng, x, init_rng)
-        rng, gen_rng = jax.random.split(rng)
-        generated_images, _, _ = gan.apply(variables, x, rng=gen_rng, train=True)
+        rng, init_rng = random.split(self.rng)
+        z = random.normal(rng, (self.batch_size, self.latent_dim))
+        x = random.normal(rng, (self.batch_size,) + self.output_shape)
+        variables = gan.init(init_rng, x, z)
+        rng, gen_rng = random.split(rng)
+        generated_images, _, _ = gan.apply(variables, x, z, rngs={'dropout': gen_rng})
 
         self.assertEqual(generated_images.shape, (self.batch_size,) + self.output_shape)
 
@@ -54,13 +51,13 @@ class TestGAN(unittest.TestCase):
             discriminator_features=self.discriminator_features,
             output_shape=self.output_shape
         )
-        # Create fake input data with the same shape as the output
-        x = jax.random.normal(self.rng, (self.batch_size,) + self.output_shape)
-        rng, init_rng = jax.random.split(self.rng)
+        x = random.normal(self.rng, (self.batch_size,) + self.output_shape)
+        z = random.normal(self.rng, (self.batch_size, self.latent_dim))
+        rng, init_rng = random.split(self.rng)
 
-        variables = gan.init(init_rng, x, init_rng)
-        rng, apply_rng = jax.random.split(rng)
-        generated, real_output, fake_output = gan.apply(variables, x, rng=apply_rng, train=True)
+        variables = gan.init(init_rng, x, z)
+        rng, apply_rng = random.split(rng)
+        generated, real_output, fake_output = gan.apply(variables, x, z, rngs={'dropout': apply_rng})
 
         self.assertEqual(generated.shape, (self.batch_size,) + self.output_shape)
         self.assertEqual(real_output.shape, (self.batch_size, 1))
@@ -73,7 +70,7 @@ class TestGAN(unittest.TestCase):
             discriminator_features=self.discriminator_features,
             output_shape=self.output_shape
         )
-        fake_logits = jax.random.normal(self.rng, (self.batch_size, 1))
+        fake_logits = random.normal(self.rng, (self.batch_size, 1))
         loss = gan.generator_loss(fake_logits)
 
         self.assertIsInstance(loss, jnp.ndarray)
@@ -87,13 +84,30 @@ class TestGAN(unittest.TestCase):
             discriminator_features=self.discriminator_features,
             output_shape=self.output_shape
         )
-        real_logits = jax.random.normal(self.rng, (self.batch_size, 1))
-        fake_logits = jax.random.normal(self.rng, (self.batch_size, 1))
+        real_logits = random.normal(self.rng, (self.batch_size, 1))
+        fake_logits = random.normal(self.rng, (self.batch_size, 1))
         loss = gan.discriminator_loss(real_logits, fake_logits)
 
         self.assertIsInstance(loss, jnp.ndarray)
         self.assertEqual(loss.shape, ())
         self.assertGreater(loss, 0)  # Loss should be positive
+
+    def test_sample(self):
+        gan = GAN(
+            latent_dim=self.latent_dim,
+            generator_features=self.generator_features,
+            discriminator_features=self.discriminator_features,
+            output_shape=self.output_shape
+        )
+        rng, init_rng = random.split(self.rng)
+        x = random.normal(rng, (self.batch_size,) + self.output_shape)
+        z = random.normal(rng, (self.batch_size, self.latent_dim))
+        variables = gan.init(init_rng, x, z)
+
+        rng, sample_rng = random.split(rng)
+        samples = gan.apply(variables, method=gan.sample, rngs={'dropout': sample_rng}, mutable=False)(sample_rng, self.batch_size)
+
+        self.assertEqual(samples.shape, (self.batch_size,) + self.output_shape)
 
 if __name__ == '__main__':
     unittest.main()

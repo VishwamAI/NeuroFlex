@@ -1,7 +1,7 @@
 import unittest
 import jax
 import jax.numpy as jnp
-from NeuroFlex.cognitive_architecture import (
+from src.NeuroFlex.cognitive_architecture import (
     CognitiveArchitecture, SensoryProcessing, Consciousness, FeedbackMechanism
 )
 

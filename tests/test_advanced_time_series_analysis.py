@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from NeuroFlex.advanced_time_series_analysis import AdvancedTimeSeriesAnalysis, create_advanced_time_series_analysis
+from NeuroFlex.scientific_domains import AdvancedTimeSeriesAnalysis
 
 @pytest.fixture
 def time_series_data():
@@ -11,10 +11,10 @@ def time_series_data():
 
 @pytest.fixture
 def atsa():
-    return create_advanced_time_series_analysis()
+    return AdvancedTimeSeriesAnalysis()
 
 def test_create_advanced_time_series_analysis():
-    atsa = create_advanced_time_series_analysis()
+    atsa = AdvancedTimeSeriesAnalysis()
     assert isinstance(atsa, AdvancedTimeSeriesAnalysis)
 
 def test_arima_forecast(atsa, time_series_data):

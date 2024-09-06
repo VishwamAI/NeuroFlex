@@ -2,15 +2,10 @@ import unittest
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-import sys
-import os
 
-# Add the src directory to the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from NeuroFlex.core_neural_networks import LRNN, create_rnn_block, LRNNCell
 
-from NeuroFlex.rnn import LRNN, create_rnn_block, LRNNCell
-
-class TestRNN(unittest.TestCase):
+class TestLRNN(unittest.TestCase):
     def setUp(self):
         self.rng = jax.random.PRNGKey(0)
         self.features = (32, 64)
@@ -24,10 +19,10 @@ class TestRNN(unittest.TestCase):
 
     def test_lrnn_forward_pass(self):
         lrnn = LRNN(features=self.features, activation=self.activation)
-        input_shape = (1, 10, 32)  # (batch_size, sequence_length, input_size)
+        input_shape = (1, 10, self.features[0])  # (batch_size, sequence_length, input_size)
         x = jnp.ones(input_shape)
-        params = lrnn.init(self.rng, x)['params']
-        output, state = lrnn.apply({'params': params}, x)
+        variables = lrnn.init(self.rng, x)
+        output, state = lrnn.apply(variables, x)
 
         self.assertEqual(output.shape, input_shape[:-1] + (self.features[-1],))
         self.assertEqual(state.shape, (input_shape[0], self.features[-1]))
@@ -44,10 +39,51 @@ class TestRNN(unittest.TestCase):
         state_shape = (1, 32)
         x = jnp.ones(input_shape)
         h = jnp.zeros(state_shape)
-        params = cell.init(self.rng, h, x)['params']
-        new_h, _ = cell.apply({'params': params}, h, x)
+        variables = cell.init(self.rng, h, x)
+        new_h, _ = cell.apply(variables, h, x)
 
         self.assertEqual(new_h.shape, state_shape)
+
+    def test_lrnn_multiple_layers(self):
+        multi_layer_features = (32, 64, 128)
+        lrnn = LRNN(features=multi_layer_features, activation=self.activation)
+        input_shape = (1, 10, multi_layer_features[0])
+        x = jnp.ones(input_shape)
+        variables = lrnn.init(self.rng, x)
+        output, state = lrnn.apply(variables, x)
+
+        self.assertEqual(output.shape, input_shape[:-1] + (multi_layer_features[-1],))
+        self.assertEqual(state.shape, (input_shape[0], multi_layer_features[-1]))
+
+    def test_lrnn_different_activations(self):
+        activations = [nn.relu, nn.sigmoid, nn.swish]
+        for activation in activations:
+            lrnn = LRNN(features=self.features, activation=activation)
+            input_shape = (1, 10, self.features[0])
+            x = jnp.ones(input_shape)
+            variables = lrnn.init(self.rng, x)
+            output, state = lrnn.apply(variables, x)
+            self.assertEqual(output.shape, input_shape[:-1] + (self.features[-1],))
+            self.assertEqual(state.shape, (input_shape[0], self.features[-1]))
+
+    def test_lrnn_single_layer(self):
+        single_layer_features = (64,)
+        lrnn = LRNN(features=single_layer_features, activation=self.activation)
+        input_shape = (1, 10, single_layer_features[0])
+        x = jnp.ones(input_shape)
+        variables = lrnn.init(self.rng, x)
+        output, state = lrnn.apply(variables, x)
+        self.assertEqual(output.shape, input_shape)
+        self.assertEqual(state.shape, (input_shape[0], single_layer_features[0]))
+
+    def test_lrnn_zero_length_input(self):
+        lrnn = LRNN(features=self.features, activation=self.activation)
+        input_shape = (1, 0, self.features[0])  # Zero-length sequence
+        x = jnp.ones(input_shape)
+        variables = lrnn.init(self.rng, x)
+        output, state = lrnn.apply(variables, x)
+        self.assertEqual(output.shape, (1, 0, self.features[-1]))
+        self.assertEqual(state.shape, (input_shape[0], self.features[-1]))
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import logging
-from NeuroFlex.consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
+from src.NeuroFlex.consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
 import neurolib
 from neurolib.models.aln import ALNModel
 

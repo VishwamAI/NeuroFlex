@@ -1,229 +1,210 @@
 import unittest
 from unittest.mock import Mock, patch
-import os
-from NeuroFlex.tokenizer import Tokenizer
+from NeuroFlex.utils.tokenizer import Tokenizer
 
 class TestTokenizer(unittest.TestCase):
     def setUp(self):
-        # Mock SentencePieceProcessor
-        self.mock_sp = Mock()
-        self.mock_sp.GetPieceSize.return_value = 1000
-        self.mock_sp.bos_id.return_value = 1
-        self.mock_sp.eos_id.return_value = 2
-        self.mock_sp.pad_id.return_value = 0
-        self.mock_sp.unk_id.return_value = 3
-        self.mock_sp.PieceToId.return_value = 4  # For <space> token
+        # Mock AutoTokenizer
+        self.mock_auto_tokenizer = Mock()
+        self.mock_auto_tokenizer.from_pretrained.return_value = Mock()
 
-        # Reset mock calls for each test
-        self.mock_sp.EncodeAsIds.reset_mock()
-        self.mock_sp.DecodeIds.reset_mock()
+        # Patch AutoTokenizer in Tokenizer
+        self.mock_auto_tokenizer_patcher = patch('NeuroFlex.utils.tokenizer.AutoTokenizer', self.mock_auto_tokenizer)
+        self.mock_auto_tokenizer_patcher.start()
 
-        # Mock os.path.isfile to return True for the dummy path
-        self.mock_isfile = patch('os.path.isfile', return_value=True)
-        self.mock_isfile.start()
+        # Initialize Tokenizer with default parameters
+        self.tokenizer = Tokenizer()
 
-        # Patch SentencePieceProcessor in Tokenizer
-        self.mock_sp_processor = patch('sentencepiece.SentencePieceProcessor', return_value=self.mock_sp)
-        self.mock_sp_processor.start()
-
-        self.tokenizer = Tokenizer("dummy_path")
+        # Set up special tokens
+        self.special_tokens = {'<unk>': 0, '<s>': 1, '</s>': 2, '<pad>': 3}
+        self.tokenizer.special_tokens = self.special_tokens
 
     def tearDown(self):
         # Stop all patches
-        self.mock_isfile.stop()
-        self.mock_sp_processor.stop()
+        self.mock_auto_tokenizer_patcher.stop()
 
     def test_encode_basic(self):
         text = "Hello, world!"
-        self.mock_sp.EncodeAsIds.return_value = [10, 20, 30]
+        mock_encoded = self.mock_auto_tokenizer.from_pretrained.return_value.encode
+        mock_encoded.return_value = [101, 7592, 1010, 2088, 999, 102]  # Example BERT encoding
         tokens = self.tokenizer.encode(text)
         self.assertIsInstance(tokens, list)
-        self.assertEqual(len(tokens), 5)  # BOS + 3 tokens + EOS
-        self.assertEqual(tokens[0], self.tokenizer.bos_id)
-        self.assertEqual(tokens[-1], self.tokenizer.eos_id)
-        self.assertEqual(tokens[1:-1], [10, 20, 30])
-        self.mock_sp.EncodeAsIds.assert_called_once_with(text)
-
-    def test_encode_no_bos(self):
-        text = "Hello, world!"
-        self.mock_sp.EncodeAsIds.return_value = [10, 20, 30]
-        tokens = self.tokenizer.encode(text, bos=False)
-        self.assertEqual(len(tokens), 4)  # 3 tokens + EOS
-        self.assertNotEqual(tokens[0], self.tokenizer.bos_id)
-        self.assertEqual(tokens[-1], self.tokenizer.eos_id)
-        self.assertEqual(tokens[:-1], [10, 20, 30])
-        self.mock_sp.EncodeAsIds.assert_called_once_with(text)
-
-    def test_encode_no_eos(self):
-        text = "Hello, world!"
-        self.mock_sp.EncodeAsIds.return_value = [10, 20, 30]
-        tokens = self.tokenizer.encode(text, eos=False)
-        self.assertEqual(len(tokens), 4)  # BOS + 3 tokens
-        self.assertEqual(tokens[0], self.tokenizer.bos_id)
-        self.assertNotEqual(tokens[-1], self.tokenizer.eos_id)
-        self.assertEqual(tokens[1:], [10, 20, 30])
-        self.mock_sp.EncodeAsIds.assert_called_once_with(text)
+        self.assertEqual(tokens, [101, 7592, 1010, 2088, 999, 102])
+        mock_encoded.assert_called_once_with(text, add_special_tokens=True)
 
     def test_decode_basic(self):
-        text = "Hello, world!"
-        encoded_tokens = [10, 20, 30]
-        tokens = [self.tokenizer.bos_id] + encoded_tokens + [self.tokenizer.eos_id]
-        self.mock_sp.DecodeIds.return_value = text
-        decoded_text = self.tokenizer.decode(tokens)
+        token_ids = [101, 7592, 1010, 2088, 999, 102]
+        expected_text = "Hello, world!"
+        mock_decoded = self.mock_auto_tokenizer.from_pretrained.return_value.decode
+        mock_decoded.return_value = expected_text
+        decoded_text = self.tokenizer.decode(token_ids)
         self.assertIsInstance(decoded_text, str)
-        self.assertEqual(decoded_text, text)
-        self.mock_sp.DecodeIds.assert_called_once_with(encoded_tokens)
+        self.assertEqual(decoded_text, expected_text)
+        mock_decoded.assert_called_once_with(token_ids, skip_special_tokens=True)
 
     def test_encode_decode_roundtrip(self):
         original_text = "This is a test sentence."
-        encoded_tokens = [10, 20, 30, 40, 50]
-        self.mock_sp.EncodeAsIds.return_value = encoded_tokens
+        mock_encoded = self.mock_auto_tokenizer.from_pretrained.return_value.encode
+        mock_decoded = self.mock_auto_tokenizer.from_pretrained.return_value.decode
+        encoded_tokens = [101, 2023, 2003, 1037, 3231, 6251, 1012, 102]
+        mock_encoded.return_value = encoded_tokens
+        mock_decoded.return_value = original_text
+
         tokens = self.tokenizer.encode(original_text)
-        self.mock_sp.DecodeIds.return_value = original_text
+        self.assertEqual(tokens, encoded_tokens)
+
         decoded_text = self.tokenizer.decode(tokens)
-        self.assertEqual(original_text, decoded_text)
-        self.mock_sp.EncodeAsIds.assert_called_once_with(original_text)
-        self.mock_sp.DecodeIds.assert_called_once_with(encoded_tokens)
-        self.assertEqual(tokens[0], self.tokenizer.bos_id)
-        self.assertEqual(tokens[-1], self.tokenizer.eos_id)
-        self.assertEqual(tokens[1:-1], encoded_tokens)
-        self.assertEqual(len(tokens), len(encoded_tokens) + 2)  # +2 for BOS and EOS tokens
+        self.assertEqual(decoded_text, original_text)
+
+        mock_encoded.assert_called_once_with(original_text, add_special_tokens=True)
+        mock_decoded.assert_called_once_with(encoded_tokens, skip_special_tokens=True)
 
     def test_empty_string(self):
         text = ""
-        self.mock_sp.EncodeAsIds.return_value = []
+        mock_encoded = self.mock_auto_tokenizer.from_pretrained.return_value.encode
+        mock_decoded = self.mock_auto_tokenizer.from_pretrained.return_value.decode
+        mock_encoded.return_value = [101, 102]  # CLS and SEP tokens
+        mock_decoded.return_value = ""
+
         tokens = self.tokenizer.encode(text)
-        self.assertEqual(len(tokens), 2)  # Should contain BOS and EOS tokens
-        self.assertEqual(tokens[0], self.tokenizer.bos_id)
-        self.assertEqual(tokens[-1], self.tokenizer.eos_id)
-        self.mock_sp.DecodeIds.return_value = ""
+        self.assertEqual(tokens, [101, 102])
+
         decoded_text = self.tokenizer.decode(tokens)
-        self.assertEqual(decoded_text, "[DECODING_FAILED]")
-        # DecodeIds should be called with an empty list
-        self.mock_sp.DecodeIds.assert_called_once_with([])
+        self.assertEqual(decoded_text, "")
 
-    def test_special_tokens_handling(self):
-        text = "Special tokens test"
-        self.mock_sp.EncodeAsIds.return_value = [10, 20, 30]
-        tokens = self.tokenizer.encode(text)
-        expected_tokens = [self.tokenizer.bos_id, 10, 20, 30, self.tokenizer.eos_id]
-        self.assertEqual(tokens, expected_tokens)
-        self.mock_sp.EncodeAsIds.assert_called_once_with(text)
-
-        self.mock_sp.DecodeIds.return_value = text
-        decoded_text = self.tokenizer.decode(tokens)
-        self.assertEqual(decoded_text, text)
-        self.mock_sp.DecodeIds.assert_called_once_with([10, 20, 30])
-
-        # Test handling of special tokens during decoding
-        special_tokens = [self.tokenizer.bos_id, 10, 20, 30, self.tokenizer.eos_id]
-        self.mock_sp.DecodeIds.return_value = text
-        decoded_special = self.tokenizer.decode(special_tokens)
-        self.assertEqual(decoded_special, text)
-        self.mock_sp.DecodeIds.assert_called_with([10, 20, 30])
+        mock_encoded.assert_called_once_with(text, add_special_tokens=True)
+        mock_decoded.assert_called_once_with([101, 102], skip_special_tokens=True)
 
     def test_special_tokens(self):
-        self.assertIsNotNone(self.tokenizer.bos_id)
-        self.assertIsNotNone(self.tokenizer.eos_id)
-        self.assertIsNotNone(self.tokenizer.pad_id)
-        self.assertIsNotNone(self.tokenizer.unk_id)
-        self.assertIsNotNone(self.tokenizer.space_id)
-        self.assertNotEqual(self.tokenizer.bos_id, self.tokenizer.eos_id)
-        self.assertNotEqual(self.tokenizer.bos_id, self.tokenizer.pad_id)
-        self.assertNotEqual(self.tokenizer.eos_id, self.tokenizer.pad_id)
+        self.assertEqual(self.tokenizer.special_tokens['<unk>'], 0)
+        self.assertEqual(self.tokenizer.special_tokens['<s>'], 1)
+        self.assertEqual(self.tokenizer.special_tokens['</s>'], 2)
+        self.assertEqual(self.tokenizer.special_tokens['<pad>'], 3)
 
     def test_encode_invalid_input(self):
         with self.assertRaises(ValueError):
             self.tokenizer.encode(123)  # Non-string input
 
     def test_decode_invalid_input(self):
+        mock_decoded = self.mock_auto_tokenizer.from_pretrained.return_value.decode
+
         # Test empty list
-        print("Testing empty list")
         result = self.tokenizer.decode([])
-        print(f"Result: {result}")
-        self.assertEqual(result, "[DECODING_FAILED]")
-        self.mock_sp.DecodeIds.assert_called_once_with([])
-        self.mock_sp.DecodeIds.reset_mock()
+        self.assertEqual(result, "")
+        mock_decoded.assert_not_called()
+
+        # Test None
+        with self.assertRaises(ValueError):
+            self.tokenizer.decode(None)
+        mock_decoded.assert_not_called()
 
         # Test list with non-integer values
-        print("Testing list with non-integer values")
-        result = self.tokenizer.decode(["a", "b", "c"])
-        print(f"Result: {result}")
-        self.assertEqual(result, "[DECODING_FAILED]")
-        self.mock_sp.DecodeIds.assert_not_called()
-        self.mock_sp.DecodeIds.reset_mock()
-
-        # Test with None
-        print("Testing None input")
-        result = self.tokenizer.decode(None)
-        print(f"Result: {result}")
-        self.assertEqual(result, "[DECODING_FAILED]")
-        self.mock_sp.DecodeIds.assert_not_called()
-        self.mock_sp.DecodeIds.reset_mock()
+        with self.assertRaises(ValueError):
+            self.tokenizer.decode(["a", "b", "c"])
+        mock_decoded.assert_not_called()
 
         # Test with invalid integer values
-        print("Testing invalid integer values")
-        self.mock_sp.DecodeIds.side_effect = Exception("Invalid token ID")
-        result = self.tokenizer.decode([-1, 1000000])
-        print(f"Result: {result}")
-        self.assertEqual(result, "[DECODING_FAILED]")
-        self.mock_sp.DecodeIds.assert_called_once_with([-1, 1000000])
-        self.mock_sp.DecodeIds.reset_mock()
+        mock_decoded.side_effect = Exception("Invalid input")
+        with self.assertRaises(Exception):
+            self.tokenizer.decode([-1, 1000000])
+        mock_decoded.assert_called_once_with([-1, 1000000], skip_special_tokens=True)
+        mock_decoded.reset_mock()
+
+        # Test with mixed valid and invalid integer values
+        mock_decoded.side_effect = None
+        mock_decoded.return_value = "Valid token"
+        result = self.tokenizer.decode([1, -1, 1000000, 2])
+        self.assertEqual(result, "Valid token")
+        mock_decoded.assert_called_once_with([1, -1, 1000000, 2], skip_special_tokens=True)
 
         # Reset side_effect for subsequent tests
-        self.mock_sp.DecodeIds.side_effect = None
+        mock_decoded.side_effect = None
 
-    def test_decode_error_handling(self):
-        self.mock_sp.DecodeIds.side_effect = Exception("Decoding error")
-        result = self.tokenizer.decode([10, 20, 30])
-        self.assertEqual(result, "[DECODING_FAILED]")
-
-    @patch('logging.error')
+    @patch('NeuroFlex.utils.tokenizer.logger.error')
     def test_logging_on_error(self, mock_log_error):
-        self.mock_sp.EncodeAsIds.side_effect = Exception("Encoding error")
-        with self.assertRaises(ValueError):
+        # Test encode error logging
+        mock_encoded = self.mock_auto_tokenizer.from_pretrained.return_value.encode
+        mock_encoded.side_effect = Exception("Encoding error")
+
+        with self.assertRaises(Exception) as context:
             self.tokenizer.encode("Test")
-        mock_log_error.assert_called()
 
-    def test_tokenize_detokenize(self):
+        self.assertEqual(str(context.exception), "Encoding error")
+        mock_log_error.assert_called_once_with("Error encoding text: Encoding error")
+
+        # Test decode error logging
+        mock_decoded = self.mock_auto_tokenizer.from_pretrained.return_value.decode
+        mock_decoded.side_effect = Exception("Decoding error")
+
+        with self.assertRaises(Exception) as context:
+            self.tokenizer.decode([1, 2, 3])
+
+        self.assertEqual(str(context.exception), "Decoding error")
+        mock_log_error.assert_called_with("Error decoding token ids: Decoding error")
+
+        # Verify that both encode and decode errors are logged
+        self.assertEqual(mock_log_error.call_count, 2)
+        mock_log_error.assert_any_call("Error encoding text: Encoding error")
+        mock_log_error.assert_any_call("Error decoding token ids: Decoding error")
+
+        # Reset mock and test both errors again to ensure consistent behavior
+        mock_log_error.reset_mock()
+        mock_encoded.side_effect = Exception("Another encoding error")
+        mock_decoded.side_effect = Exception("Another decoding error")
+
+        with self.assertRaises(Exception):
+            self.tokenizer.encode("Another test")
+
+        with self.assertRaises(Exception):
+            self.tokenizer.decode([4, 5, 6])
+
+        self.assertEqual(mock_log_error.call_count, 2)
+        mock_log_error.assert_any_call("Error encoding text: Another encoding error")
+        mock_log_error.assert_any_call("Error decoding token ids: Another decoding error")
+
+    def test_tokenize(self):
         text = "This is a test sentence."
-        self.mock_sp.EncodeAsPieces.return_value = ['▁This', '▁is', '▁a', '▁test', '▁sentence', '.']
+        mock_tokenize = self.mock_auto_tokenizer.from_pretrained.return_value.tokenize
+        expected_tokens = ['this', 'is', 'a', 'test', 'sentence', '.']
+        mock_tokenize.return_value = expected_tokens
+
         tokens = self.tokenizer.tokenize(text)
-        self.assertEqual(tokens, ['This', 'is', 'a', 'test', 'sentence', '.'])
-
-        # Mock the _post_process_decoded_text method
-        with patch.object(self.tokenizer, '_post_process_decoded_text', return_value=text):
-            detokenized = self.tokenizer.detokenize(tokens)
-            self.assertEqual(detokenized, text)
-
-        self.mock_sp.EncodeAsPieces.assert_called_once_with(text)
-        self.mock_sp.DecodePieces.assert_called_once_with(tokens)
-
-        # Test with tokens containing leading underscores
-        tokens_with_underscores = ['▁This', '▁is', '▁a', '▁test', '▁sentence', '.']
-        expected_tokens = ['This', 'is', 'a', 'test', 'sentence', '.']
-        self.assertEqual(self.tokenizer.tokenize(text), expected_tokens)
-
-    def test_tokenize_punctuation(self):
-        text = "Hello, world! How are you? I'm fine; thanks."
-        self.mock_sp.EncodeAsPieces.return_value = ['▁Hello', ',', '▁world', '!', '▁How', '▁are', '▁you', '?', '▁I', "'m", '▁fine', ';', '▁thanks', '.']
-        tokens = self.tokenizer.tokenize(text)
-        expected_tokens = ['Hello', ',', 'world', '!', 'How', 'are', 'you', '?', 'I', "'m", 'fine', ';', 'thanks', '.']
         self.assertEqual(tokens, expected_tokens)
+        mock_tokenize.assert_called_once_with(text)
 
-    def test_tokenize_capitalization(self):
-        text = "HELLO World. This IS a TEST."
-        self.mock_sp.EncodeAsPieces.return_value = ['▁HELLO', '▁World', '.', '▁This', '▁IS', '▁a', '▁TEST', '.']
-        tokens = self.tokenizer.tokenize(text)
-        expected_tokens = ['HELLO', 'World', '.', 'This', 'IS', 'a', 'TEST', '.']
-        self.assertEqual(tokens, expected_tokens)
+    def test_get_vocab(self):
+        mock_vocab = {'test': 0, 'vocab': 1}
+        mock_get_vocab = self.mock_auto_tokenizer.from_pretrained.return_value.get_vocab
+        mock_get_vocab.return_value = mock_vocab
 
-    def test_tokenize_special_characters(self):
-        text = "Email: user@example.com, Website: https://www.example.com"
-        self.mock_sp.EncodeAsPieces.return_value = ['▁Email', ':', '▁user', '@', 'example', '.', 'com', ',', '▁Website', ':', '▁https', '://', 'www', '.', 'example', '.', 'com']
-        tokens = self.tokenizer.tokenize(text)
-        expected_tokens = ['Email', ':', 'user', '@', 'example', '.', 'com', ',', 'Website', ':', 'https', '://', 'www', '.', 'example', '.', 'com']
-        self.assertEqual(tokens, expected_tokens)
+        vocab = self.tokenizer.get_vocab()
+        self.assertEqual(vocab, mock_vocab)
+        mock_get_vocab.assert_called_once()
+
+    def test_get_vocab_size(self):
+        mock_vocab = {'test': 0, 'vocab': 1}
+        mock_get_vocab = self.mock_auto_tokenizer.from_pretrained.return_value.get_vocab
+        mock_get_vocab.return_value = mock_vocab
+
+        vocab_size = self.tokenizer.get_vocab_size()
+        self.assertEqual(vocab_size, 2)
+        mock_get_vocab.assert_called_once()
+
+    def test_token_to_id(self):
+        mock_convert = self.mock_auto_tokenizer.from_pretrained.return_value.convert_tokens_to_ids
+        mock_convert.return_value = 42
+
+        token_id = self.tokenizer.token_to_id("test")
+        self.assertEqual(token_id, 42)
+        mock_convert.assert_called_once_with("test")
+
+    def test_id_to_token(self):
+        mock_convert = self.mock_auto_tokenizer.from_pretrained.return_value.convert_ids_to_tokens
+        mock_convert.return_value = "test"
+
+        token = self.tokenizer.id_to_token(42)
+        self.assertEqual(token, "test")
+        mock_convert.assert_called_once_with(42)
 
 if __name__ == '__main__':
     unittest.main()
