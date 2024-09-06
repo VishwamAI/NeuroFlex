@@ -36,6 +36,7 @@ fsspec
 gast
 google-pasta
 grpcio
+gym
 h5py
 huggingface-hub
 humanize
@@ -109,6 +110,7 @@ PyYAML
 qiskit
 qiskit-aer
 qiskit-algorithms
+qiskit-terra
 regex
 requests
 rich
