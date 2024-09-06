@@ -5,6 +5,7 @@ from .cnn import CNNBlock, create_cnn_block
 from .lstm import LSTMModule
 from .rnn import LRNN, LRNNCell, create_rnn_block
 from .machinelearning import MachineLearning
+from .data_loader import DataLoader
 
 __all__ = [
     'JaxModel',
@@ -21,5 +22,6 @@ __all__ = [
     'LRNN',
     'LRNNCell',
     'create_rnn_block',
-    'MachineLearning'
+    'MachineLearning',
+    'DataLoader'
 ]

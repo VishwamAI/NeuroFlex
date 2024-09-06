@@ -13,9 +13,9 @@ from .utils import (
 
 from .descriptive_statistics import (
     calculate_descriptive_statistics,
-    preprocess_data,
     analyze_bci_data
 )
+from .utils import preprocess_data
 
 __all__ = [
     'load_data',

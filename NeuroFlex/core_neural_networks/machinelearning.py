@@ -6,7 +6,7 @@ from art.estimators.classification import PyTorchClassifier
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from NeuroFlex.core_neural_networks.data_loader import DataLoader
+from .data_loader import DataLoader
 from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import create_tensorflow_model, train_tensorflow_model, tensorflow_predict
 from NeuroFlex.core_neural_networks.pytorch.pytorch_module import create_pytorch_model
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
@@ -30,17 +30,17 @@ class MachineLearning(torch.nn.Module):
                 self.layers.append(self.activation)
                 self.layers.append(torch.nn.Dropout(self.dropout_rate))
 
-    def forward(self, x, training: bool = False):
+    def forward(self, x):
         for layer in self.layers:
             if isinstance(layer, torch.nn.Dropout):
-                x = layer(x, training)
+                x = layer(x)
             else:
                 x = layer(x)
 
         if self.use_lale:
             x = self.lale_pipeline(x)
 
-        if self.use_art and training:
+        if self.use_art and self.training:
             x = self.generate_adversarial_examples(x)
 
         return x

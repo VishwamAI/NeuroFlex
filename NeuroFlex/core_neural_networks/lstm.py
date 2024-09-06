@@ -12,7 +12,7 @@ class LSTMModule(nn.Module):
     dtype: jnp.dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, inputs, initial_state=None, train: bool = True):
+    def __call__(self, inputs, initial_state=None, train: bool = True, rngs=None):
         batch_size, seq_len, input_size = inputs.shape
 
         # Create LSTM cells for each layer
@@ -50,7 +50,8 @@ class LSTMModule(nn.Module):
 
             # Apply dropout between layers if specified
             if self.dropout > 0.0 and train and layer < self.num_layers - 1:
-                current_input = nn.Dropout(rate=self.dropout)(current_input, deterministic=not train)
+                dropout_rng = None if rngs is None else rngs.get('dropout')
+                current_input = nn.Dropout(rate=self.dropout, deterministic=not train)(current_input, rng=dropout_rng)
 
         # Ensure outputs is an array and has the correct shape
         outputs = jnp.asarray(current_input)

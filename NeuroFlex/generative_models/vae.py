@@ -24,12 +24,15 @@ class VAE(nn.Module):
             nn.Dense(self.latent_dim * 2)  # Output layer for mean and log variance (2 * latent_dim)
         ])
 
+        # Convert input_shape to JAX ndarray
+        input_size = jnp.prod(jnp.array(self.input_shape))
+
         self.decoder = nn.Sequential([
             nn.Dense(self.hidden_dim),  # First hidden layer
             nn.relu,                    # ReLU activation
             nn.Dense(self.hidden_dim),  # Second hidden layer
             nn.relu,                    # ReLU activation
-            nn.Dense(jnp.prod(self.input_shape)),  # Output layer to match input size
+            nn.Dense(input_size),  # Output layer to match input size
             lambda x: x.reshape((-1,) + self.input_shape)  # Reshape to the original input shape
         ])
 
