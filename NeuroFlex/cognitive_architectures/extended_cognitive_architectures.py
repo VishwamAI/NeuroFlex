@@ -4,6 +4,7 @@ import flax.linen as nn
 from typing import List, Tuple, Dict, Any, Optional
 import logging
 import time
+from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, MAX_HEALING_ATTEMPTS
 
 class WorkingMemory(nn.Module):
     capacity: int

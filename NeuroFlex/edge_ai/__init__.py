@@ -14,7 +14,7 @@ Recent updates:
 
 from .edge_ai_optimization import EdgeAIOptimization
 from .neuromorphic_computing import NeuromorphicComputing
-from ..cognitive_architectures import (
+from ..constants import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,

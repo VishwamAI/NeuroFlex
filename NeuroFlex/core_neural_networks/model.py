@@ -4,7 +4,7 @@ from Bio.Seq import Seq
 from ..utils.utils import tokenize_text
 from ..utils.descriptive_statistics import preprocess_data
 from .jax.pytorch_module_converted import PyTorchModel
-from .tensorflow.tensorflow_module import PyTorchModel as TensorFlowPyTorchModel
+from .tensorflow.tensorflow_module import TensorFlowModel
 from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
 from ..quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
 from ..scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
@@ -250,7 +250,7 @@ model = NeuroFlex(
     use_quantum=True,
     use_alphafold=True,
     backend='pytorch',
-    tensorflow_model=TensorFlowPyTorchModel,
+    tensorflow_model=TensorFlowModel,
     pytorch_model=PyTorchModel,
     quantum_model=QuantumNeuralNetwork,
     bioinformatics_integration=BioinformaticsIntegration(),

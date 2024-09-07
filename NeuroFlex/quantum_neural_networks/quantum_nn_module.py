@@ -4,7 +4,7 @@ import pennylane as qml
 from typing import List, Tuple, Callable, Optional
 import time
 import logging
-from ..cognitive_architectures import (
+from ..constants import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
