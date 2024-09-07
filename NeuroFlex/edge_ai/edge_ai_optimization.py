@@ -13,6 +13,8 @@ from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_AD
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+from torch import optim
+
 class EdgeAIOptimization:
     def __init__(self):
         self.optimization_techniques = {
@@ -26,6 +28,23 @@ class EdgeAIOptimization:
         self.last_update = time.time()
         self.performance_history = []
         self.learning_rate = 0.001
+        self.performance_history_size = 100
+        self.gradient_norm_threshold = 10.0
+        self.healing_strategies = [
+            self._adjust_learning_rate,
+            self._reinitialize_layers,
+            self._increase_model_capacity,
+            self._apply_regularization
+        ]
+        self.optimizer = None
+
+    def initialize_optimizer(self, model: nn.Module):
+        if not hasattr(model, 'optimizer'):
+            model.optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        else:
+            for param_group in model.optimizer.param_groups:
+                param_group['lr'] = self.learning_rate
+        self.optimizer = model.optimizer
 
     def optimize(self, model: nn.Module, technique: str, **kwargs) -> nn.Module:
         """
@@ -195,26 +214,26 @@ class EdgeAIOptimization:
             latency = (end_time - start_time) / 10  # Average latency in seconds
 
             performance = {'accuracy': accuracy, 'latency': latency}
-            self._update_performance(performance['accuracy'])
+            self._update_performance(accuracy, model)
             return performance
         except Exception as e:
             logger.error(f"Error during model evaluation: {str(e)}")
             raise
 
-    def _update_performance(self, new_performance: float):
+    def _update_performance(self, new_performance: float, model: nn.Module):
         """Update the performance history and trigger self-healing if necessary."""
         self.performance = new_performance
-        self.performance_history.append(new_performance)
+        self.performance_history.append(self.performance)
         if len(self.performance_history) > 100:
             self.performance_history.pop(0)
         self.last_update = time.time()
 
         if self.performance < PERFORMANCE_THRESHOLD and not hasattr(self, '_healing_in_progress'):
             self._healing_in_progress = True
-            self._self_heal()
+            self._self_heal(model)
             delattr(self, '_healing_in_progress')
 
-    def _self_heal(self):
+    def _self_heal(self, model: nn.Module):
         """Implement self-healing mechanisms."""
         if hasattr(self, '_is_healing') and self._is_healing:
             logger.warning("Self-healing already in progress. Skipping.")
@@ -224,27 +243,40 @@ class EdgeAIOptimization:
         logger.info("Initiating self-healing process...")
         initial_performance = self.performance
         best_performance = initial_performance
-        best_learning_rate = self.learning_rate
+        best_config = {
+            'learning_rate': self.learning_rate,
+            'model_state': self._get_model_state(model)
+        }
 
         try:
             for attempt in range(MAX_HEALING_ATTEMPTS):
-                self._adjust_learning_rate()
-                self._apply_healing_strategies()
-                new_performance = self._simulate_performance()
+                logger.info(f"Healing attempt {attempt + 1}/{MAX_HEALING_ATTEMPTS}")
 
-                if new_performance > best_performance:
-                    best_performance = new_performance
-                    best_learning_rate = self.learning_rate
+                for strategy in self.healing_strategies:
+                    if strategy.__name__ in ['_reinitialize_layers', '_increase_model_capacity', '_apply_regularization']:
+                        strategy(model)
+                    else:
+                        strategy(model)
+                    new_performance = self._simulate_performance(model)
+                    logger.info(f"Strategy: {strategy.__name__}, New performance: {new_performance:.4f}")
 
-                if new_performance >= PERFORMANCE_THRESHOLD:
-                    logger.info(f"Self-healing successful after {attempt + 1} attempts.")
-                    self.performance = new_performance
-                    return
+                    if new_performance > best_performance:
+                        best_performance = new_performance
+                        best_config = {
+                            'learning_rate': self.learning_rate,
+                            'model_state': self._get_model_state(model)
+                        }
+
+                    if new_performance >= PERFORMANCE_THRESHOLD:
+                        logger.info(f"Self-healing successful. Performance threshold reached.")
+                        self._apply_best_config(best_config, model)
+                        return
+
+                self._adjust_learning_rate(model)
 
             if best_performance > initial_performance:
                 logger.info(f"Self-healing improved performance. Setting best found configuration.")
-                self.performance = best_performance
-                self.learning_rate = best_learning_rate
+                self._apply_best_config(best_config, model)
             else:
                 logger.warning("Self-healing not improving performance. Reverting changes.")
                 self._revert_changes()
@@ -253,7 +285,28 @@ class EdgeAIOptimization:
 
         logger.warning("Self-healing unsuccessful after maximum attempts.")
 
-    def _adjust_learning_rate(self):
+    def _get_model_state(self, model: nn.Module):
+        # Get model state
+        return model.state_dict()
+
+    def _apply_best_config(self, config, model: nn.Module):
+        self.learning_rate = config['learning_rate']
+        # Apply model state
+        model.load_state_dict(config['model_state'])
+        self.performance = self._simulate_performance(model)
+
+    def _revert_changes(self):
+        self.learning_rate = 0.001  # Reset to initial learning rate
+        # Revert model state to initial state (assuming it's stored)
+        if hasattr(self, 'initial_model_state') and hasattr(self, 'model'):
+            self.model.load_state_dict(self.initial_model_state)
+        if hasattr(self, 'initial_performance'):
+            self.performance = self.initial_performance  # Use the stored initial performance
+        else:
+            self.performance = 0.0  # Set a default performance if initial_performance is not available
+        logger.info("Reverted changes due to unsuccessful self-healing.")
+
+    def _adjust_learning_rate(self, model: nn.Module):
         """Adjust the learning rate based on recent performance."""
         if len(self.performance_history) >= 2:
             if self.performance_history[-1] > self.performance_history[-2]:
@@ -263,15 +316,80 @@ class EdgeAIOptimization:
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         logger.info(f"Adjusted learning rate to {self.learning_rate:.6f}")
 
-    def _apply_healing_strategies(self):
-        """Apply additional healing strategies."""
-        # Implement additional healing strategies here
-        pass
+        # Update the learning rate of the model's optimizer
+        for param_group in model.optimizer.param_groups:
+            param_group['lr'] = self.learning_rate
 
-    def _simulate_performance(self) -> float:
+    def _reinitialize_layers(self, model: nn.Module) -> bool:
+        """Reinitialize the layers of the model to potentially improve performance."""
+        try:
+            for module in model.modules():
+                if isinstance(module, (nn.Linear, nn.Conv2d)):
+                    nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        nn.init.zeros_(module.bias)
+            logger.info("Model layers reinitialized using Xavier initialization")
+            return True
+        except Exception as e:
+            logger.error(f"Error during layer reinitialization: {str(e)}")
+            return False
+
+    def _increase_model_capacity(self, model: nn.Module) -> bool:
+        """Increase the model's capacity by adding neurons or layers."""
+        try:
+            if isinstance(model, nn.Sequential):
+                # Add a new layer to the sequential model
+                last_layer = list(model.children())[-1]
+                if isinstance(last_layer, nn.Linear):
+                    new_layer = nn.Linear(last_layer.out_features, last_layer.out_features * 2)
+                    model.add_module(f"linear_{len(model)}", new_layer)
+                    model.add_module(f"relu_{len(model)}", nn.ReLU())
+            else:
+                # Increase the number of neurons in the last layer
+                for module in reversed(list(model.modules())):
+                    if isinstance(module, nn.Linear):
+                        in_features, out_features = module.in_features, module.out_features
+                        new_layer = nn.Linear(in_features, out_features * 2)
+                        new_layer.weight.data[:out_features, :] = module.weight.data
+                        new_layer.bias.data[:out_features] = module.bias.data
+                        module = new_layer
+                        break
+            logger.info("Model capacity increased")
+            return True
+        except Exception as e:
+            logger.error(f"Error during model capacity increase: {str(e)}")
+            return False
+
+    def _simulate_performance(self, model: nn.Module) -> float:
         """Simulate new performance after applying healing strategies."""
-        # This is a placeholder. In a real scenario, you would re-evaluate the model.
-        return self.performance * (1 + np.random.uniform(-0.1, 0.1))
+        # Use a fixed seed for reproducibility
+        np.random.seed(42)
+        torch.manual_seed(42)
+
+        # Generate consistent dummy input
+        dummy_input = torch.randn(1, model.input_size).to(next(model.parameters()).device)
+
+        with torch.no_grad():
+            output = model(dummy_input)
+
+        # Reduce variability in performance simulation
+        performance_change = np.random.uniform(-0.05, 0.05)
+        simulated_performance = self.performance + performance_change
+        simulated_performance += output.mean().item() * 0.005  # Reduced impact of model output
+
+        return max(0.0, min(1.0, simulated_performance))  # Ensure performance is between 0 and 1
+
+    def _apply_regularization(self, model: nn.Module, l2_lambda: float = 0.01) -> bool:
+        """Apply L2 regularization to the model parameters."""
+        try:
+            for param in model.parameters():
+                if param.requires_grad:
+                    param.data.add_(-l2_lambda * param.data)
+            logger.info(f"L2 regularization applied with lambda {l2_lambda}")
+            return True
+        except Exception as e:
+            logger.error(f"Error during regularization application: {str(e)}")
+            return False
 
     def _revert_changes(self):
         """Revert changes if self-healing is not improving performance."""
