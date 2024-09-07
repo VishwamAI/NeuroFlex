@@ -7,7 +7,7 @@ from .rnn import LRNN
 from .machinelearning import MachineLearning
 
 __all__ = [
-    'JAXModel',
+    'JaxModel',
     'CDSTDP',
     'create_cdstdp',
     'NeuroFlex',

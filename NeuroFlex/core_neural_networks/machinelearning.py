@@ -12,22 +12,24 @@ import torch.nn as nn
 import torch.optim as optim
 from NeuroFlex.core_neural_networks.data_loader import DataLoader
 from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import create_tensorflow_model, train_tensorflow_model, tensorflow_predict
-from NeuroFlex.core_neural_networks.pytorch.pytorch_module import pytorch_specific_function
+from NeuroFlex.core_neural_networks.pytorch.pytorch_module import create_pytorch_model, train_pytorch_model, pytorch_predict
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
 
 class MachineLearning(nn.Module):
     features: List[int]
-    activation: callable = nn.relu
+    activation: callable = nn.ReLU
     dropout_rate: float = 0.5
     use_lale: bool = False
     use_art: bool = False
     art_epsilon: float = 0.3
     use_tensorflow: bool = False
+    use_pytorch: bool = False
 
-    @nn.compact
     def __call__(self, x, training: bool = False):
         if self.use_tensorflow:
             return self.tensorflow_forward(x, training)
+        elif self.use_pytorch:
+            return self.pytorch_forward(x, training)
 
         for feat in self.features[:-1]:
             x = nn.Dense(feat)(x)
@@ -43,6 +45,14 @@ class MachineLearning(nn.Module):
             x = self.generate_adversarial_examples(x)
 
         return x
+
+    def pytorch_forward(self, x, training: bool = False):
+        pytorch_model = create_pytorch_model(input_shape=x.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
+        return pytorch_predict(pytorch_model, torch.from_numpy(x.numpy()))
+
+    def self_fix(self):
+        # Implement self-fixing logic here
+        pass
 
     def tensorflow_forward(self, x, training: bool = False):
         tf_model = create_tensorflow_model(input_shape=x.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
@@ -71,7 +81,7 @@ class MachineLearning(nn.Module):
         return x_adv
 
 class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, features, activation=nn.relu, dropout_rate=0.5, learning_rate=0.001, use_tensorflow=False):
+    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001, use_tensorflow=False, use_pytorch=False):
         self.features = features
         self.activation = activation
         self.dropout_rate = dropout_rate
@@ -79,18 +89,23 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         self.model = None
         self.params = None
         self.use_tensorflow = use_tensorflow
+        self.use_pytorch = use_pytorch
 
     def fit(self, X, y):
         self.model = MachineLearning(
             features=self.features,
             activation=self.activation,
             dropout_rate=self.dropout_rate,
-            use_tensorflow=self.use_tensorflow
+            use_tensorflow=self.use_tensorflow,
+            use_pytorch=self.use_pytorch
         )
 
         if self.use_tensorflow:
             tf_model = create_tensorflow_model(input_shape=X.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
             self.model = train_tensorflow_model(tf_model, X, y)
+        elif self.use_pytorch:
+            pt_model = create_pytorch_model(input_shape=X.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
+            self.model = train_pytorch_model(pt_model, torch.FloatTensor(X), torch.LongTensor(y))
         else:
             key = jax.random.PRNGKey(0)
             params = self.model.init(key, X)
@@ -119,6 +134,8 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
     def predict(self, X):
         if self.use_tensorflow:
             return tensorflow_predict(self.model, X)
+        elif self.use_pytorch:
+            return pytorch_predict(self.model, torch.FloatTensor(X)).numpy()
         else:
             logits = self.model.apply({'params': self.params}, X)
             return jnp.argmax(logits, axis=-1)
@@ -126,9 +143,21 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
     def predict_proba(self, X):
         if self.use_tensorflow:
             return tensorflow_predict(self.model, X)
+        elif self.use_pytorch:
+            return nn.functional.softmax(pytorch_predict(self.model, torch.FloatTensor(X)), dim=1).numpy()
         else:
             logits = self.model.apply({'params': self.params}, X)
             return nn.softmax(logits)
+
+    def self_fix(self, X, y):
+        # Implement self-fixing logic here
+        # For example, you could retrain the model on misclassified samples
+        predictions = self.predict(X)
+        misclassified = X[predictions != y]
+        misclassified_labels = y[predictions != y]
+        if len(misclassified) > 0:
+            self.fit(misclassified, misclassified_labels)
+        return self
 
 class PyTorchModel(torch.nn.Module):
     def __init__(self, features):
