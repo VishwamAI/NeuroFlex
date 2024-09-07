@@ -1,162 +1,213 @@
-import jax
-import jax.numpy as jnp
-import flax.linen as nn
 from typing import List, Optional
-import optax
 from sklearn.base import BaseEstimator, ClassifierMixin
-from lale import operators as lale_ops
-from art.attacks.evasion import FastGradientMethod
-from art.experimental.estimators.classification import JaxClassifier
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import time
+import numpy as np
 from NeuroFlex.core_neural_networks.data_loader import DataLoader
-from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import create_tensorflow_model, train_tensorflow_model, tensorflow_predict
 from NeuroFlex.core_neural_networks.pytorch.pytorch_module import create_pytorch_model, train_pytorch_model, pytorch_predict
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
 
 class MachineLearning(nn.Module):
-    features: List[int]
-    activation: callable = nn.ReLU
-    dropout_rate: float = 0.5
-    use_lale: bool = False
-    use_art: bool = False
-    art_epsilon: float = 0.3
-    use_tensorflow: bool = False
-    use_pytorch: bool = False
+    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001):
+        super().__init__()
+        self.features = features
+        self.activation_class = activation
+        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
+        self.performance_threshold = 0.8
+        self.update_interval = 86400  # 24 hours in seconds
+        self.gradient_norm_threshold = 10
+        self.performance_history_size = 100
 
-    def __call__(self, x, training: bool = False):
-        if self.use_tensorflow:
-            return self.tensorflow_forward(x, training)
-        elif self.use_pytorch:
-            return self.pytorch_forward(x, training)
+        self.is_trained = False
+        self.performance = 0.0
+        self.last_update = 0
+        self.gradient_norm = 0
+        self.performance_history = []
 
-        for feat in self.features[:-1]:
-            x = nn.Dense(feat)(x)
-            x = self.activation(x)
-            x = nn.Dropout(rate=self.dropout_rate, deterministic=not training)(x)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        x = nn.Dense(self.features[-1])(x)
+        self.layers = nn.ModuleList()
+        for i in range(len(features) - 1):
+            self.layers.append(nn.Linear(features[i], features[i+1]))
+            if i < len(features) - 2:
+                self.layers.append(self.activation_class())
+                self.layers.append(nn.Dropout(self.dropout_rate))
 
-        if self.use_lale:
-            x = self.lale_pipeline(x)
+        self.to(self.device)
 
-        if self.use_art and training:
-            x = self.generate_adversarial_examples(x)
+    def forward(self, x):
+        if isinstance(x, torch.Tensor):
+            x = x.to(self.device)
+        elif isinstance(x, np.ndarray):
+            x = torch.from_numpy(x).float().to(self.device)
+        else:
+            raise ValueError("Input must be a torch.Tensor or numpy.ndarray")
 
+        for layer in self.layers:
+            x = layer(x)
         return x
 
-    def pytorch_forward(self, x, training: bool = False):
-        pytorch_model = create_pytorch_model(input_shape=x.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
-        return pytorch_predict(pytorch_model, torch.from_numpy(x.numpy()))
+    def diagnose(self):
+        issues = []
+        if not self.is_trained:
+            issues.append("Model is not trained")
+        if self.performance < self.performance_threshold:
+            issues.append("Model performance is below threshold")
+        if time.time() - self.last_update > self.update_interval:
+            issues.append("Model hasn't been updated in 24 hours")
+        if self.gradient_norm > self.gradient_norm_threshold:
+            issues.append("Gradient explosion detected")
+        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+            issues.append("Model is stuck in local minimum")
+        return issues
 
-    def self_fix(self):
-        # Implement self-fixing logic here
-        pass
+    def heal(self, issues):
+        for issue in issues:
+            if issue == "Model is not trained":
+                self.train_model()
+            elif issue == "Model performance is below threshold":
+                self.improve_model()
+            elif issue == "Model hasn't been updated in 24 hours":
+                self.update_model()
+            elif issue == "Gradient explosion detected":
+                self.handle_gradient_explosion()
+            elif issue == "Model is stuck in local minimum":
+                self.escape_local_minimum()
 
-    def tensorflow_forward(self, x, training: bool = False):
-        tf_model = create_tensorflow_model(input_shape=x.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
-        return tensorflow_predict(tf_model, x)
+    def train_model(self):
+        print("Training model...")
+        self.is_trained = True
+        self.last_update = time.time()
+        self.update_performance()
 
-    def setup_lale_pipeline(self):
-        from lale.lib.sklearn import LogisticRegression, RandomForestClassifier
+    def improve_model(self):
+        print("Improving model performance...")
+        self.performance = min(self.performance * 1.2 + 0.01, 1.0)
+        self.update_performance()
 
-        classifier = lale_ops.make_choice(
-            LogisticRegression, RandomForestClassifier
-        )
+    def update_model(self):
+        print("Updating model...")
+        self.last_update = time.time()
+        self.update_performance()
 
-        return classifier
+    def handle_gradient_explosion(self):
+        print("Handling gradient explosion...")
+        self.learning_rate *= 0.5
 
-    def generate_adversarial_examples(self, x):
-        classifier = JaxClassifier(
-            model=lambda x: self.apply({'params': self.params}, x),
-            loss=lambda x, y: optax.softmax_cross_entropy(x, y),
-            input_shape=x.shape[1:],
-            nb_classes=self.features[-1]
-        )
+    def escape_local_minimum(self):
+        print("Attempting to escape local minimum...")
+        self.learning_rate *= 2
 
-        attack = FastGradientMethod(classifier, eps=self.art_epsilon)
-        x_adv = attack.generate(x)
+    def update_performance(self):
+        self.performance_history.append(self.performance)
+        if len(self.performance_history) > self.performance_history_size:
+            self.performance_history.pop(0)
 
-        return x_adv
+    def adjust_learning_rate(self):
+        if len(self.performance_history) >= 2:
+            current_performance = self.performance_history[-1]
+            previous_performance = self.performance_history[-2]
+
+            if current_performance > previous_performance:
+                # Performance improved, increase learning rate
+                self.learning_rate *= 1.05
+            elif current_performance < previous_performance:
+                # Performance worsened, decrease learning rate
+                self.learning_rate *= 0.95
+            # If performance stayed the same, don't change the learning rate
+        else:
+            # If we don't have enough history, make a small increase
+            self.learning_rate *= 1.01
+
+        # Ensure the learning rate doesn't become too small or too large
+        self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
+        return self.learning_rate
 
 class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001, use_tensorflow=False, use_pytorch=False):
+    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001):
         self.features = features
-        self.activation = activation
+        self.activation_class = activation
         self.dropout_rate = dropout_rate
         self.learning_rate = learning_rate
         self.model = None
-        self.params = None
-        self.use_tensorflow = use_tensorflow
-        self.use_pytorch = use_pytorch
 
     def fit(self, X, y):
         self.model = MachineLearning(
             features=self.features,
-            activation=self.activation,
+            activation=self.activation_class,
             dropout_rate=self.dropout_rate,
-            use_tensorflow=self.use_tensorflow,
-            use_pytorch=self.use_pytorch
+            learning_rate=self.learning_rate
         )
 
-        if self.use_tensorflow:
-            tf_model = create_tensorflow_model(input_shape=X.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
-            self.model = train_tensorflow_model(tf_model, X, y)
-        elif self.use_pytorch:
-            pt_model = create_pytorch_model(input_shape=X.shape[1:], output_dim=self.features[-1], hidden_layers=self.features[:-1])
-            self.model = train_pytorch_model(pt_model, torch.FloatTensor(X), torch.LongTensor(y))
-        else:
-            key = jax.random.PRNGKey(0)
-            params = self.model.init(key, X)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
 
-            optimizer = optax.adam(self.learning_rate)
-            opt_state = optimizer.init(params)
+        # Convert input data to PyTorch tensors
+        X_tensor = torch.FloatTensor(X).to(device)
+        y_tensor = torch.LongTensor(y).to(device)
 
-            @jax.jit
-            def train_step(params, opt_state, batch_x, batch_y):
-                def loss_fn(params):
-                    logits = self.model.apply({'params': params}, batch_x)
-                    return optax.softmax_cross_entropy_with_integer_labels(logits, batch_y).mean()
+        # Use the MachineLearning model's train_model method
+        self.model.train_model()
 
-                loss, grads = jax.value_and_grad(loss_fn)(params)
-                updates, opt_state = optimizer.update(grads, opt_state)
-                params = optax.apply_updates(params, updates)
-                return params, opt_state, loss
+        # Perform actual training
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        criterion = nn.CrossEntropyLoss()
 
-            for epoch in range(100):  # Adjust number of epochs as needed
-                params, opt_state, loss = train_step(params, opt_state, X, y)
+        for epoch in range(100):  # Adjust number of epochs as needed
+            optimizer.zero_grad()
+            outputs = self.model(X_tensor)
+            loss = criterion(outputs, y_tensor)
+            loss.backward()
+            optimizer.step()
 
-            self.params = params
-
+        self.model.update_performance()
         return self
 
     def predict(self, X):
-        if self.use_tensorflow:
-            return tensorflow_predict(self.model, X)
-        elif self.use_pytorch:
-            return pytorch_predict(self.model, torch.FloatTensor(X)).numpy()
-        else:
-            logits = self.model.apply({'params': self.params}, X)
-            return jnp.argmax(logits, axis=-1)
+        self.model.eval()
+        with torch.no_grad():
+            X_tensor = torch.FloatTensor(X).to(self.model.device)
+            outputs = self.model(X_tensor)
+            _, predicted = torch.max(outputs, 1)
+        return predicted.cpu().numpy()
 
     def predict_proba(self, X):
-        if self.use_tensorflow:
-            return tensorflow_predict(self.model, X)
-        elif self.use_pytorch:
-            return nn.functional.softmax(pytorch_predict(self.model, torch.FloatTensor(X)), dim=1).numpy()
-        else:
-            logits = self.model.apply({'params': self.params}, X)
-            return nn.softmax(logits)
+        self.model.eval()
+        with torch.no_grad():
+            X_tensor = torch.FloatTensor(X).to(self.model.device)
+            outputs = self.model(X_tensor)
+            probas = nn.functional.softmax(outputs, dim=1)
+        return probas.cpu().numpy()
 
     def self_fix(self, X, y):
-        # Implement self-fixing logic here
-        # For example, you could retrain the model on misclassified samples
+        initial_lr = self.model.learning_rate
+        print(f"Initial learning rate: {initial_lr}")
+
+        issues = self.model.diagnose()
+        if issues:
+            print(f"Diagnosed issues: {issues}")
+            self.model.heal(issues)
+
         predictions = self.predict(X)
         misclassified = X[predictions != y]
         misclassified_labels = y[predictions != y]
         if len(misclassified) > 0:
+            print(f"Retraining on {len(misclassified)} misclassified samples")
             self.fit(misclassified, misclassified_labels)
+
+        healing_boost_factor = 1.5  # Increase learning rate by 50%
+        max_lr = 0.1  # Maximum learning rate cap
+        min_increase = 1e-5  # Minimum increase in learning rate
+
+        # Ensure the learning rate always increases
+        new_lr = min(max(initial_lr * healing_boost_factor, initial_lr + min_increase), max_lr)
+        self.model.learning_rate = new_lr
+
+        print(f"Learning rate after boost: {self.model.learning_rate}")
+        print(f"Final learning rate: {self.model.learning_rate}")
         return self
 
 class PyTorchModel(torch.nn.Module):
