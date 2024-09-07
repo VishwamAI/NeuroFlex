@@ -133,5 +133,40 @@ def get_activation_function(activation_name: str):
     return activations.get(activation_name.lower(), jnn.relu)
 
 # TODO: Add more utility functions as needed for the NeuroFlex project
-# TODO: Consider adding functions for data preprocessing specific to neural network inputs
 # TODO: Implement error handling and logging in these utility functions
+
+def preprocess_data(data: np.ndarray, categorical_columns: List[int] = None,
+                    scale: bool = True, handle_missing: bool = True) -> np.ndarray:
+    """
+    Preprocess data for neural network inputs.
+
+    Args:
+    data (np.ndarray): Input data
+    categorical_columns (List[int]): Indices of categorical columns
+    scale (bool): Whether to scale numerical features
+    handle_missing (bool): Whether to handle missing values
+
+    Returns:
+    np.ndarray: Preprocessed data
+    """
+    try:
+        # Handle missing values
+        if handle_missing:
+            data = np.nan_to_num(data, nan=0)  # Replace NaN with 0
+
+        # Encode categorical variables
+        if categorical_columns:
+            for col in categorical_columns:
+                unique_values = np.unique(data[:, col])
+                encoding = {val: i for i, val in enumerate(unique_values)}
+                data[:, col] = np.array([encoding[val] for val in data[:, col]])
+
+        # Scale numerical features
+        if scale:
+            numerical_columns = [i for i in range(data.shape[1]) if i not in (categorical_columns or [])]
+            data[:, numerical_columns] = normalize_data(data[:, numerical_columns])
+
+        return data
+    except Exception as e:
+        print(f"Error in preprocess_data: {str(e)}")
+        raise
