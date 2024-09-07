@@ -14,13 +14,20 @@ from neurolib.models.aln import ALNModel
 from neurolib.optimize.exploration import BoxSearch
 from neurolib.utils.parameterSpace import ParameterSpace
 
+# Constants for self-healing and adaptive algorithms
+PERFORMANCE_THRESHOLD = 0.8
+UPDATE_INTERVAL = 86400  # 24 hours in seconds
+LEARNING_RATE_ADJUSTMENT = 0.1
+MAX_HEALING_ATTEMPTS = 5
+CONSCIOUSNESS_BROADCAST_INTERVAL = 100  # milliseconds
+
 class ConsciousnessSimulation(nn.Module):
     """
     An advanced module for simulating consciousness in the NeuroFlex framework.
     This class implements various cognitive processes and consciousness-related computations,
     including attention mechanisms, working memory, and decision-making processes.
-    It also includes self-curing capabilities for improved robustness and performance.
-    Integrates neurolib's ALNModel for whole-brain modeling.
+    It also includes self-healing capabilities for improved robustness and performance.
+    Integrates neurolib's ALNModel for whole-brain modeling and implements adaptive algorithms.
     """
 
     features: List[int]
@@ -29,10 +36,11 @@ class ConsciousnessSimulation(nn.Module):
     attention_heads: int = 4
     qkv_features: int = 64  # Dimension of query, key, and value for attention mechanism
     dropout_rate: float = 0.1  # Dropout rate for attention mechanism
-    performance_threshold: float = 0.8
-    update_interval: int = 86400  # 24 hours in seconds
+    performance_threshold: float = PERFORMANCE_THRESHOLD
+    update_interval: int = UPDATE_INTERVAL
     num_brain_areas: int = 90  # Number of brain areas to simulate
     simulation_length: float = 1.0  # Length of brain simulation in seconds
+    learning_rate: float = 0.001  # Initial learning rate
 
     def setup(self):
         self.is_trained = self.variable('model_state', 'is_trained', jnp.bool_, False)
@@ -43,6 +51,9 @@ class ConsciousnessSimulation(nn.Module):
         self.working_memory = self.variable('working_memory', 'current_state', jnp.float32, jnp.zeros((1, self.working_memory_size)))
         self.training_performance = self.variable('model_state', 'training_performance', jnp.float32, 0.0)
         self.validation_performance = self.variable('model_state', 'validation_performance', jnp.float32, 0.0)
+        self.learning_rate = self.variable('model_state', 'learning_rate', jnp.float32, self.learning_rate)
+        self.healing_attempts = self.variable('model_state', 'healing_attempts', jnp.int32, 0)
+        self.performance_history = self.variable('model_state', 'performance_history', jnp.float32, jnp.zeros(100))
 
         # Initialize neurolib's ALNModel
         Cmat = np.random.rand(self.num_brain_areas, self.num_brain_areas)
@@ -178,32 +189,32 @@ class ConsciousnessSimulation(nn.Module):
         # Adjust GRU cell input size to match working memory size
         gru_cell = EnhancedGRUCell(memory_size=self.working_memory_size)
 
-        # Initialize current_working_memory_var with the correct shape
-        current_working_memory_var = self.variable('working_memory', 'current', lambda: jnp.zeros((x.shape[0], self.working_memory_size)))
+        # Use Flax's variable method to store and update working memory
+        current_working_memory = self.variable('working_memory', 'current', lambda: jnp.zeros((x.shape[0], self.working_memory_size)))
 
         # Ensure attention_output has the correct shape
         attention_output = jnp.reshape(attention_output, (-1, self.working_memory_size))
 
         # Log shapes before GRU cell processing
         logging.debug(f"Attention output shape before GRU: {attention_output.shape}")
-        logging.debug(f"Current working memory shape before GRU: {current_working_memory_var.value.shape}")
+        logging.debug(f"Current working memory shape before GRU: {current_working_memory.value.shape}")
 
         # Process through GRU cell
-        new_working_memory, _ = gru_cell(attention_output, current_working_memory_var.value)
+        new_working_memory, _ = gru_cell(attention_output, current_working_memory.value)
 
         # Log shape after GRU cell processing
         logging.debug(f"New working memory shape after GRU: {new_working_memory.shape}")
 
-        logging.debug(f"GRU cell input shapes - attention_output: {attention_output.shape}, current_working_memory: {current_working_memory_var.value.shape}")
+        logging.debug(f"GRU cell input shapes - attention_output: {attention_output.shape}, current_working_memory: {current_working_memory.value.shape}")
         logging.debug(f"GRU cell output shape - new_working_memory: {new_working_memory.shape}")
 
         # Update working memory
-        current_working_memory_var.value = new_working_memory
+        current_working_memory.value = new_working_memory
 
         logging.debug(f"New working memory shape: {new_working_memory.shape}")
 
         # Update working memory with residual connection
-        current_working_memory_var.value = new_working_memory + current_working_memory_var.value
+        current_working_memory.value = new_working_memory + current_working_memory.value
 
         # Add a small perturbation to ensure working memory changes between forward passes
         perturbation_rng = rngs.get('perturbation')
@@ -306,12 +317,9 @@ class ConsciousnessSimulation(nn.Module):
         expected_shape = (x.shape[0], self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
         assert consciousness.shape == expected_shape, f"Expected shape {expected_shape}, got {consciousness.shape}"
 
-        working_memory_dict = {'working_memory': {'current_state': new_working_memory}}
+        return consciousness, new_working_memory
 
-        logging.debug(f"Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}, working_memory_dict keys: {working_memory_dict.keys()}")
-        return consciousness, new_working_memory, working_memory_dict
-
-    def simulate_consciousness(self, x, rngs: Dict[str, Any] = None, deterministic: bool = True) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
+    def simulate_consciousness(self, x, rngs: Dict[str, Any] = None, deterministic: bool = True) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate consciousness based on input x.
 
@@ -321,14 +329,11 @@ class ConsciousnessSimulation(nn.Module):
             deterministic (bool, optional): Whether to run in deterministic mode. Defaults to True.
 
         Returns:
-            Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
+            Tuple[jnp.ndarray, jnp.ndarray]:
                 - consciousness (jnp.ndarray): The simulated consciousness state
                   (shape: (batch_size, output_dim + 2*working_memory_size + 4 + working_memory_size))
                 - new_working_memory (jnp.ndarray): Updated working memory
                   (shape: (batch_size, working_memory_size))
-                - working_memory (Dict[str, Any]): Dictionary containing the current working memory state
-                  and additional information.
-                  Structure: {'working_memory': {'current_state': jnp.ndarray}, 'error': str (optional)}
         """
         logging.info(f"Starting simulate_consciousness with input shape: {x.shape}, deterministic: {deterministic}")
         try:
@@ -349,11 +354,11 @@ class ConsciousnessSimulation(nn.Module):
 
             result = self.__call__(x, deterministic=deterministic, rngs=rngs)
 
-            if not isinstance(result, tuple) or len(result) != 3:
-                raise ValueError(f"__call__ method returned {len(result)} values instead of 3")
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise ValueError(f"__call__ method returned {len(result)} values instead of 2")
 
-            consciousness, new_working_memory, working_memory_dict = result
-            self._validate_outputs(consciousness, new_working_memory, working_memory_dict)
+            consciousness, new_working_memory = result
+            self._validate_outputs(consciousness, new_working_memory)
 
             # Apply perturbation to working memory
             new_working_memory = self._apply_perturbation(new_working_memory, rngs['perturbation'])
@@ -361,13 +366,11 @@ class ConsciousnessSimulation(nn.Module):
             # Update model state
             self._update_model_state(consciousness)
 
-            working_memory = {'working_memory': {'current_state': new_working_memory}}
-
-            logging.info(f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}, working_memory keys: {working_memory.keys()}")
-            return consciousness, new_working_memory, working_memory
+            logging.info(f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}")
+            return consciousness, new_working_memory
         except Exception as e:
             logging.error(f"Error in simulate_consciousness: {str(e)}")
-            return self._handle_error(x, e)
+            return self._handle_error(x)
 
     def _handle_error(self, x: jnp.ndarray, error: Exception) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
         batch_size = x.shape[0] if len(x.shape) > 1 else 1
@@ -490,6 +493,16 @@ class ConsciousnessSimulation(nn.Module):
             if self.training_performance.value - self.validation_performance.value > 0.2:
                 issues.append("Potential overfitting detected")
 
+        # Check for consistent underperformance
+        if len(self.performance_history) > 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+            issues.append("Consistently low performance")
+
+        # Check for sudden performance drops
+        if len(self.performance_history) > 1:
+            performance_drop = self.performance_history[-2] - performance
+            if performance_drop > 0.1:
+                issues.append(f"Sudden performance drop of {performance_drop:.4f}")
+
         return issues
 
     def heal(self, x: jnp.ndarray):
@@ -500,15 +513,48 @@ class ConsciousnessSimulation(nn.Module):
                 self.update_model(x, full_update=True)
             elif issue == "Model hasn't been updated in 24 hours":
                 self.update_model(x, full_update=False)
+            elif issue == "Working memory contains NaN or Inf values":
+                self.reset_working_memory()
+            elif issue == "Model performance has stagnated":
+                self.adjust_learning_rate(increase=True)
+            elif issue == "Potential overfitting detected":
+                self.increase_regularization()
+            elif issue == "Consistently low performance":
+                self.reset_model_parameters()
+            elif "Sudden performance drop" in issue:
+                self.rollback_to_previous_state()
 
-        # Gradual performance improvement
+        # Gradual performance improvement with adaptive learning rate
         current_performance = self.performance.value
         target_performance = max(current_performance * 1.1, self.performance_threshold)
+        initial_learning_rate = self.learning_rate.value
 
-        while current_performance < target_performance:
+        for attempt in range(MAX_HEALING_ATTEMPTS):
             _, _, new_performance = self.update_model(x, full_update=False)
             current_performance = new_performance
-            logging.info(f"Gradual healing: Current performance: {current_performance:.4f}, Target: {target_performance:.4f}")
+
+            # Adaptive learning rate adjustment
+            if attempt > 0:
+                if new_performance > current_performance:
+                    self.learning_rate.value *= 1.05  # Increase learning rate
+                else:
+                    self.learning_rate.value *= 0.95  # Decrease learning rate
+                self.learning_rate.value = jnp.clip(self.learning_rate.value, 1e-5, 0.1)  # Clip learning rate
+
+            logging.info(f"Gradual healing: Attempt {attempt + 1}, Performance: {current_performance:.4f}, Target: {target_performance:.4f}, Learning rate: {self.learning_rate.value:.6f}")
+
+            if current_performance >= target_performance:
+                break
+
+        # Additional healing strategies
+        if current_performance < target_performance:
+            logging.info("Applying additional healing strategies")
+            self.apply_advanced_healing_techniques(x)
+
+        # Reset learning rate if healing was unsuccessful
+        if current_performance < self.performance_threshold:
+            self.learning_rate.value = initial_learning_rate
+            logging.info(f"Healing unsuccessful. Reset learning rate to {initial_learning_rate:.6f}")
 
         logging.info(f"Healing complete. Final performance: {current_performance:.4f}")
 

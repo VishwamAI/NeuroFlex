@@ -5,8 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import time
 import numpy as np
-from NeuroFlex.core_neural_networks.data_loader import DataLoader
-from NeuroFlex.core_neural_networks.pytorch.pytorch_module import create_pytorch_model, train_pytorch_model, pytorch_predict
+from tqdm import tqdm
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
 
 class MachineLearning(nn.Module):
@@ -135,7 +134,7 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         self.learning_rate = learning_rate
         self.model = None
 
-    def fit(self, X, y):
+    def fit(self, X, y, epochs=100, patience=10):
         self.model = MachineLearning(
             features=self.features,
             activation=self.activation_class,
@@ -157,12 +156,27 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
         criterion = nn.CrossEntropyLoss()
 
-        for epoch in range(100):  # Adjust number of epochs as needed
+        best_loss = float('inf')
+        no_improve = 0
+
+        for epoch in tqdm(range(epochs), desc="Training"):
+            self.model.train()
             optimizer.zero_grad()
             outputs = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
             loss.backward()
             optimizer.step()
+
+            # Early stopping
+            if loss < best_loss:
+                best_loss = loss
+                no_improve = 0
+            else:
+                no_improve += 1
+
+            if no_improve >= patience:
+                print(f"Early stopping at epoch {epoch}")
+                break
 
         self.model.update_performance()
         return self
@@ -229,35 +243,25 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         print(f"Learning rate after adjustment: {self.model.learning_rate}")
         return self
 
-class PyTorchModel(torch.nn.Module):
-    def __init__(self, features):
-        super(PyTorchModel, self).__init__()
-        self.layers = torch.nn.ModuleList()
-        for i in range(len(features) - 1):
-            self.layers.append(torch.nn.Linear(features[i], features[i+1]))
-            if i < len(features) - 2:
-                self.layers.append(torch.nn.ReLU())
-                self.layers.append(torch.nn.Dropout(0.5))
-
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return x
-
-def train_pytorch_model(model, X, y, learning_rate=0.001, epochs=100):
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-    X_tensor = torch.FloatTensor(X)
-    y_tensor = torch.LongTensor(y)
-
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        outputs = model(X_tensor)
-        loss = criterion(outputs, y_tensor)
-        loss.backward()
-        optimizer.step()
-
-    return model
+# This section has been removed as it contained redundant PyTorchModel class and train_pytorch_model function.
+# The functionality is now integrated into the MachineLearning and NeuroFlexClassifier classes.
 
 # Additional utility functions for machine learning can be added here
+def calculate_accuracy(model, X, y):
+    model.eval()
+    with torch.no_grad():
+        X_tensor = torch.FloatTensor(X).to(model.device)
+        y_tensor = torch.LongTensor(y).to(model.device)
+        outputs = model(X_tensor)
+        _, predicted = torch.max(outputs, 1)
+        correct = (predicted == y_tensor).sum().item()
+        total = y_tensor.size(0)
+        accuracy = correct / total
+    return accuracy
+
+def save_model(model, path):
+    torch.save(model.state_dict(), path)
+
+def load_model(model, path):
+    model.load_state_dict(torch.load(path))
+    return model

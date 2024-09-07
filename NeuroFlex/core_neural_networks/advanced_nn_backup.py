@@ -1,69 +1,82 @@
-from typing import Sequence, Optional, Tuple, Any, Union, List, Callable, Dict
-import jax
-import jax.numpy as jnp
-import flax
-import flax.linen as nn
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from typing import Tuple, List, Optional, Callable
 import logging
-from jax import Array
-from dataclasses import field
-from functools import partial
-import optax
-import tensorflow as tf
+import time
 import numpy as np
-from src.reinforcement_learning.rl_module import PrioritizedReplayBuffer, create_train_state, select_action, RLAgent
-from src.core_neural_networks.tensorflow.tensorflow_convolutions import TensorFlowConvolutions
-from src.utils.utils import create_backend, convert_array, get_activation_function
-from src.utils.descriptive_statistics import preprocess_data
 
+logging.basicConfig(level=logging.INFO)
 
-class NeuroFlexNN(nn.Module):
+class AdvancedNN(nn.Module):
     """
-    A flexible neural network module that can be configured for various tasks, including reinforcement learning.
+    An advanced neural network module with self-healing mechanisms and adaptive learning rate adjustments.
 
     Args:
-        features (Tuple[int, ...]): The number of units in each layer.
+        features (List[int]): The number of units in each layer.
         input_shape (Tuple[int, ...]): The shape of the input tensor.
         output_shape (Tuple[int, ...]): The shape of the output tensor.
         conv_dim (int, optional): The dimension of convolution (2 or 3). Defaults to 2.
         action_dim (Optional[int], optional): The dimension of the action space for RL. Defaults to None.
         use_cnn (bool, optional): Whether to use convolutional layers. Defaults to False.
         use_rl (bool, optional): Whether to use reinforcement learning components. Defaults to False.
-        use_residual (bool, optional): Whether to use residual connections. Defaults to False.
-        use_dueling (bool, optional): Whether to use dueling DQN architecture. Defaults to False.
-        use_double (bool, optional): Whether to use double Q-learning. Defaults to False.
-        dtype (Union[jnp.dtype, str], optional): The data type to use for computations. Defaults to jnp.float32.
-        activation (Callable, optional): The activation function to use in the network. Defaults to nn.relu.
-        max_retries (int, optional): Maximum number of retries for self-curing. Defaults to 3.
-        rl_learning_rate (float, optional): Learning rate for RL components. Defaults to 1e-4.
-        rl_gamma (float, optional): Discount factor for RL. Defaults to 0.99.
-        rl_epsilon_start (float, optional): Starting epsilon for ε-greedy policy. Defaults to 1.0.
-        rl_epsilon_end (float, optional): Ending epsilon for ε-greedy policy. Defaults to 0.01.
-        rl_epsilon_decay (float, optional): Decay rate for epsilon. Defaults to 0.995.
-        backend (str, optional): The backend to use ('jax' or 'tensorflow'). Defaults to 'jax'.
+        dropout_rate (float, optional): Dropout rate for regularization. Defaults to 0.5.
+        learning_rate (float, optional): Initial learning rate for optimization. Defaults to 0.001.
     """
-    features: Tuple[int, ...]
-    input_shape: Tuple[int, ...]
-    output_shape: Tuple[int, ...]
-    conv_dim: int = 2
-    action_dim: Optional[int] = None
-    use_cnn: bool = False
-    use_rl: bool = False
-    use_residual: bool = False
-    use_dueling: bool = False
-    use_double: bool = False
-    dtype: jnp.dtype = jnp.float32
-    activation: Callable = nn.relu
-    max_retries: int = 3
-    rl_learning_rate: float = 1e-4
-    rl_gamma: float = 0.99
-    rl_epsilon_start: float = 1.0
-    rl_epsilon_end: float = 0.01
-    rl_epsilon_decay: float = 0.995
-    backend: str = 'jax'
+    def __init__(self, features: List[int], input_shape: Tuple[int, ...], output_shape: Tuple[int, ...],
+                 conv_dim: int = 2, action_dim: Optional[int] = None, use_cnn: bool = False,
+                 use_rl: bool = False, dropout_rate: float = 0.5, learning_rate: float = 0.001):
+        super(AdvancedNN, self).__init__()
+        self.features = features
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+        self.conv_dim = conv_dim
+        self.action_dim = action_dim
+        self.use_cnn = use_cnn
+        self.use_rl = use_rl
+        self.dropout_rate = dropout_rate
+        self.learning_rate = learning_rate
+        self.performance_threshold = 0.8
+        self.update_interval = 86400  # 24 hours in seconds
+        self.gradient_norm_threshold = 10
+        self.performance_history_size = 100
 
-    def setup(self):
-        """Initialize the layers of the neural network."""
-        logging.info("Starting NeuroFlexNN setup")
+        self.is_trained = False
+        self.performance = 0.0
+        self.last_update = 0
+        self.gradient_norm = 0
+        self.performance_history = []
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self._build_network()
+        self.to(self.device)
+
+    def _build_network(self):
+        layers = []
+        in_features = np.prod(self.input_shape[1:])  # Flatten input
+
+        if self.use_cnn:
+            # Add CNN layers
+            pass  # TODO: Implement CNN layers
+
+        # Add dense layers
+        for out_features in self.features:
+            layers.append(nn.Linear(in_features, out_features))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(self.dropout_rate))
+            in_features = out_features
+
+        if self.use_rl:
+            # Add RL-specific layers
+            pass  # TODO: Implement RL layers
+        else:
+            layers.append(nn.Linear(in_features, self.output_shape[-1]))
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.network(x.view(x.size(0), -1))  # Flatten input
 
         try:
             self._validate_shapes()

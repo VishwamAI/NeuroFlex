@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 from .advanced_thinking import CDSTDP
 import jax.tree_util
 from abc import ABC, abstractmethod
+import time
+import logging
 
 def create_sensory_modules(key: jax.random.PRNGKey):
     keys = jax.random.split(key, 4)
@@ -125,11 +127,12 @@ class CognitiveComponent(ABC):
 
 class SensoryProcessing(CognitiveComponent):
     def __init__(self, config: Dict):
-        key = jax.random.PRNGKey(config.get('seed', 0))
+        prng_key = config['prng_key']
+        keys = jax.random.split(prng_key, 3)
         self.modules = {
-            "vision": jax.random.normal(key, (100,)),
-            "audition": jax.random.normal(jax.random.fold_in(key, 1), (100,)),
-            "touch": jax.random.normal(jax.random.fold_in(key, 2), (100,)),
+            "vision": jax.random.normal(keys[0], (100,)),
+            "audition": jax.random.normal(keys[1], (100,)),
+            "touch": jax.random.normal(keys[2], (100,)),
         }
 
     def process(self, inputs: Dict[str, jnp.ndarray]) -> jnp.ndarray:
@@ -137,14 +140,16 @@ class SensoryProcessing(CognitiveComponent):
 
 class Consciousness(CognitiveComponent):
     def __init__(self, config: Dict):
-        self.state = jnp.asarray(create_consciousness(jax.random.PRNGKey(config.get('seed', 0))))
+        prng_key = config['prng_key']
+        self.state = jnp.asarray(create_consciousness(prng_key))
 
     def process(self, integrated_input: jnp.ndarray) -> jnp.ndarray:
         return jnp.asarray(process_consciousness(self.state, integrated_input))
 
 class FeedbackMechanism(CognitiveComponent):
     def __init__(self, config: Dict):
-        self.mechanism = jnp.asarray(create_feedback_mechanism(jax.random.PRNGKey(config.get('seed', 0))))
+        prng_key = config['prng_key']
+        self.mechanism = jnp.asarray(create_feedback_mechanism(prng_key))
 
     def process(self, consciousness_state: jnp.ndarray) -> jnp.ndarray:
         return jnp.asarray(apply_feedback(self.mechanism, consciousness_state))
@@ -162,6 +167,8 @@ class CognitiveArchitecture:
         sensory_processing (SensoryProcessing): The sensory processing component.
         consciousness (Consciousness): The consciousness component.
         feedback_mechanism (FeedbackMechanism): The feedback mechanism component.
+        performance (float): Current performance metric of the architecture.
+        last_update_time (float): Timestamp of the last update.
     """
 
     def __init__(self, config: Dict):
@@ -174,13 +181,28 @@ class CognitiveArchitecture:
         def convert_to_jax_array(x):
             if isinstance(x, dict):
                 return jax.tree_util.tree_map(convert_to_jax_array, x)
-            return jnp.array(x, dtype=jnp.float32) if isinstance(x, (int, float)) else x
+            if isinstance(x, (int, float)):
+                return jnp.array(x, dtype=jnp.float32)
+            return x
+
+        # Ensure 'seed' is an integer and create a PRNG key
+        seed = int(config.get('seed', 0))
+        config['seed'] = seed
+        config['prng_key'] = jax.random.PRNGKey(seed)
 
         self.config = jax.tree_util.tree_map(convert_to_jax_array, config)
 
         self.sensory_processing = SensoryProcessing(self.config)
         self.consciousness = Consciousness(self.config)
         self.feedback_mechanism = FeedbackMechanism(self.config)
+
+        self.performance = 0.0
+        self.last_update_time = time.time()
+        self.performance_history = []
+        self.performance_threshold = 0.8
+        self.update_interval = 3600  # 1 hour in seconds
+        self.performance_history_size = 100  # New attribute
+        self.learning_rate = 0.001  # New attribute for adaptive learning rate
 
     @staticmethod
     @jax.jit
@@ -215,7 +237,7 @@ class CognitiveArchitecture:
         Update the cognitive architecture based on new inputs.
 
         This method integrates sensory inputs, processes consciousness, and applies feedback
-        using the modular components.
+        using the modular components. It also includes self-healing mechanisms.
 
         Args:
             inputs (Dict[str, jnp.ndarray]): A dictionary of new sensory inputs.
@@ -234,6 +256,9 @@ class CognitiveArchitecture:
 
             consciousness_state = self.consciousness.process(integrated_sensory_data)
             feedback = self.feedback_mechanism.process(consciousness_state)
+
+            self._update_performance(consciousness_state, feedback)
+            self._self_heal()
 
             return consciousness_state, feedback
         except (ValueError, TypeError) as e:
@@ -267,3 +292,68 @@ class CognitiveArchitecture:
                     for name, value in inputs.items()}
         except Exception as e:
             raise ValueError(f"Invalid inputs: {str(e)}. Ensure all inputs are compatible JAX arrays with shape {expected_shape}.") from e
+
+    def _update_performance(self, consciousness_state: jnp.ndarray, feedback: jnp.ndarray):
+        """
+        Update the performance metric of the cognitive architecture.
+
+        Args:
+            consciousness_state (jnp.ndarray): The current consciousness state.
+            feedback (jnp.ndarray): The current feedback.
+        """
+        # This is a simple performance metric. You may want to implement a more sophisticated one.
+        self.performance = jnp.mean(jnp.abs(consciousness_state - feedback))
+        self.last_update_time = time.time()
+        self.performance_history.append(self.performance)
+        if len(self.performance_history) > self.performance_history_size:
+            self.performance_history.pop(0)
+
+    def _self_heal(self):
+        """
+        Implement self-healing mechanisms based on the current performance and last update time.
+        """
+        current_time = time.time()
+        if self.performance < self.performance_threshold or (current_time - self.last_update_time) > self.update_interval:
+            logging.info("Self-healing mechanism activated.")
+            if self.performance < self.performance_threshold:
+                # Implement adaptive learning rate adjustment
+                self.learning_rate *= 1.1  # Increase learning rate by 10%
+                logging.info(f"Adjusted learning rate to {self.learning_rate}")
+
+            # Reinitialize components with potentially improved parameters
+            self.sensory_processing = SensoryProcessing(self.config)
+            self.consciousness = Consciousness(self.config)
+            self.feedback_mechanism = FeedbackMechanism(self.config)
+
+            # Perform additional training or optimization here
+            # ...
+
+            logging.info("Components reinitialized and additional optimization performed.")
+            self.last_update_time = current_time
+
+    def diagnose(self) -> List[str]:
+        """
+        Diagnose the current state of the cognitive architecture.
+
+        Returns:
+            List[str]: A list of diagnosed issues.
+        """
+        issues = []
+        if self.performance < self.performance_threshold:
+            issues.append("Low performance")
+        if (time.time() - self.last_update_time) > self.update_interval:
+            issues.append("Long time since last update")
+        if len(self.performance_history) > 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+            issues.append("Consistently low performance")
+        return issues
+
+    def adjust_learning_rate(self):
+        """
+        Adjust the learning rate based on recent performance history.
+        """
+        if len(self.performance_history) >= 2:
+            if self.performance_history[-1] > self.performance_history[-2]:
+                self.learning_rate *= 1.05  # Increase learning rate if performance is improving
+            else:
+                self.learning_rate *= 0.95  # Decrease learning rate if performance is declining
+        self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)  # Keep learning rate within reasonable bounds

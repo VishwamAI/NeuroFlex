@@ -1,14 +1,11 @@
 import time
-import jax
-import jax.numpy as jnp
-from jax import errors as jax_errors
 import numpy as np
 from Bio.Seq import Seq
 from ..utils.utils import tokenize_text
 from ..utils.descriptive_statistics import preprocess_data
-from .jax.jax_module import JaxModel
-from .tensorflow.tensorflow_module import TensorFlowModel
-from .pytorch.pytorch_module import PyTorchModel
+from .jax.pytorch_module_converted import PyTorchModel
+from .tensorflow.tensorflow_module import PyTorchModel as TensorFlowPyTorchModel
+from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
 from ..quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
 from ..scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
 from ..scientific_domains.bioinformatics.scikit_bio_integration import ScikitBioIntegration
@@ -193,7 +190,7 @@ class SelfCuringAlgorithm:
 
 class NeuroFlex:
     def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
-                 use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
+                 use_quantum=False, use_alphafold=False, backend='pytorch', tensorflow_model=None,
                  pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
                  ete_integration=None, alphafold_integration=None, alphafold_params=None):
         self.features = features
@@ -204,7 +201,6 @@ class NeuroFlex:
         self.use_quantum = use_quantum
         self.use_alphafold = use_alphafold
         self.backend = backend
-        self.jax_model = jax_model
         self.tensorflow_model = tensorflow_model
         self.pytorch_model = pytorch_model
         self.quantum_model = quantum_model
@@ -239,20 +235,11 @@ class NeuroFlex:
 
     def dnn_block(self, x, deterministic):
         """Apply DNN layers to the input."""
-        def apply_layer(x, layer):
+        for layer in self.dense_layers:
             x = layer(x)
-            return jax.lax.cond(
-                deterministic,
-                lambda x: x,
-                lambda x: self.dropout(x, deterministic=False),
-                x
-            )
-
-        return jax.lax.fori_loop(
-            0, len(self.dense_layers),
-            lambda i, x: apply_layer(x, self.dense_layers[i]),
-            x
-        )
+            if not deterministic:
+                x = self.dropout(x)
+        return x
 
 model = NeuroFlex(
     features=[64, 32, 10],
@@ -262,9 +249,8 @@ model = NeuroFlex(
     fairness_constraint=0.1,
     use_quantum=True,
     use_alphafold=True,
-    backend='jax',
-    jax_model=JaxModel,
-    tensorflow_model=TensorFlowModel,
+    backend='pytorch',
+    tensorflow_model=TensorFlowPyTorchModel,
     pytorch_model=PyTorchModel,
     quantum_model=QuantumNeuralNetwork,
     bioinformatics_integration=BioinformaticsIntegration(),
