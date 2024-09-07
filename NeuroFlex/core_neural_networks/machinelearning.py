@@ -99,7 +99,8 @@ class MachineLearning(nn.Module):
 
     def escape_local_minimum(self):
         print("Attempting to escape local minimum...")
-        self.learning_rate *= 2
+        self.learning_rate = min(self.learning_rate * 2.5, 0.1)  # Increase more aggressively, but cap at 0.1
+        print(f"New learning rate: {self.learning_rate}")
 
     def update_performance(self):
         self.performance_history.append(self.performance)
@@ -202,12 +203,30 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         max_lr = 0.1  # Maximum learning rate cap
         min_increase = 1e-5  # Minimum increase in learning rate
 
-        # Ensure the learning rate always increases
-        new_lr = min(max(initial_lr * healing_boost_factor, initial_lr + min_increase), max_lr)
+        # Calculate the new learning rate
+        if initial_lr >= max_lr:
+            new_lr = max_lr
+        else:
+            # Ensure the new learning rate doesn't exceed max_lr
+            new_lr = min(initial_lr * healing_boost_factor, max_lr)
+
+            # Apply additional boost if the model was stuck in a local minimum
+            if "Model is stuck in local minimum" in issues:
+                new_lr = min(new_lr * 1.2, max_lr)
+
+            # Ensure the learning rate always increases by at least min_increase
+            new_lr = max(new_lr, initial_lr + min_increase)
+
+            # Apply the maximum cap
+            new_lr = min(new_lr, max_lr)
+
+        # Ensure the final learning rate is different from the initial one
+        if abs(new_lr - initial_lr) < min_increase and new_lr < max_lr:
+            new_lr = min(initial_lr + min_increase, max_lr)
+
         self.model.learning_rate = new_lr
 
-        print(f"Learning rate after boost: {self.model.learning_rate}")
-        print(f"Final learning rate: {self.model.learning_rate}")
+        print(f"Learning rate after adjustment: {self.model.learning_rate}")
         return self
 
 class PyTorchModel(torch.nn.Module):
