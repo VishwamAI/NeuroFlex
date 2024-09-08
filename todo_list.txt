@@ -1,0 +1,18 @@
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/edge_ai/edge_ai_optimization.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/edge_ai/neuromorphic_computing.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/__init__.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/config.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/logging_config.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/__init__.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/advanced_models/__init__.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/advanced_models/advanced_time_series_analysis.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/google_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/art_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/math_solvers.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/alphafold_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/biology/synthetic_biology_insights.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/xarray_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/__init__.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/bioinformatics/ete_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/bioinformatics/scikit_bio_integration.py
+- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/bioinformatics/bioinformatics_integration.py

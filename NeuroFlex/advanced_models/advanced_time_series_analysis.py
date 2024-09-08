@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Any, Union, Optional
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from prophet import Prophet
 import time
 import logging
+from typing import List, Dict, Any, Union, Optional
+import statsmodels.api as sm
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tools.sm_exceptions import ValueWarning, EstimationWarning, MissingDataError, InfeasibleTestError
+from prophet import Prophet
 from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,14 +40,9 @@ class AdvancedTimeSeriesAnalysis:
         if method not in self.available_methods:
             raise ValueError(f"Unsupported method: {method}")
 
-        try:
-            result = self.available_methods[method](data, **kwargs)
-            self._update_performance(result)
-            return result
-        except Exception as e:
-            logger.error(f"Error in {method} analysis: {str(e)}")
-            self._update_performance(None)
-            raise
+        result = self.available_methods[method](data, **kwargs)
+        self._update_performance(result)
+        return result
 
     def _update_performance(self, result: Optional[Dict[str, Any]]):
         """Update the performance history and trigger self-healing if necessary."""
@@ -65,9 +62,21 @@ class AdvancedTimeSeriesAnalysis:
             self._self_heal()
 
     def _calculate_performance(self, result: Dict[str, Any]) -> float:
-        """Calculate performance metric based on analysis results."""
-        # This is a placeholder. Implement a proper performance metric.
-        return 0.8  # Example static return
+        """Calculate performance metric based on analysis results using MAPE."""
+        if 'forecast' not in result or 'actual' not in result:
+            logger.warning("Missing forecast or actual values for performance calculation")
+            return 0.0
+
+        forecast = result['forecast']
+        actual = result['actual']
+
+        if len(forecast) != len(actual):
+            logger.warning("Forecast and actual data have different lengths")
+            return 0.0
+
+        mape = np.mean(np.abs((actual - forecast) / actual)) * 100
+        performance = max(0, 1 - (mape / 100))  # Convert MAPE to a 0-1 scale
+        return performance
 
     def _self_heal(self):
         """Implement self-healing mechanisms."""
@@ -108,27 +117,59 @@ class AdvancedTimeSeriesAnalysis:
         # This is a placeholder. In a real scenario, you would re-evaluate the model's performance.
         return self.performance * (1 + np.random.uniform(-0.1, 0.1))
 
-    def arima_forecast(self, data: pd.DataFrame, order: tuple = (1, 1, 1), forecast_steps: int = 10) -> Dict[str, Any]:
+    def arima_forecast(self, data: Union[pd.DataFrame, pd.Series], order: tuple = (1, 1, 1), forecast_steps: int = 10) -> Dict[str, Any]:
         """Perform ARIMA forecast."""
-        model = ARIMA(data, order=order)
-        results = model.fit()
-        forecast = results.forecast(steps=forecast_steps)
-        return {'forecast': forecast, 'model_summary': results.summary()}
+        # Ensure data is a numeric Series
+        if isinstance(data, pd.DataFrame):
+            if 'y' in data.columns:
+                data = data['y']
+            else:
+                raise ValueError("DataFrame must contain a 'y' column for ARIMA forecast")
 
-    def sarima_forecast(self, data: pd.DataFrame, order: tuple = (1, 1, 1), seasonal_order: tuple = (1, 1, 1, 12), forecast_steps: int = 10) -> Dict[str, Any]:
+        if not pd.api.types.is_numeric_dtype(data):
+            raise ValueError("Input data must be numeric for ARIMA forecast")
+
+        if len(data) < sum(order):
+            warnings.warn("The number of observations is less than the number of parameters. This may result in poor estimates.", ValueWarning)
+
+        model = ARIMA(data, order=order)
+        try:
+            results = model.fit()
+        except np.linalg.LinAlgError:
+            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", EstimationWarning)
+            return {'forecast': None, 'actual': None, 'model_summary': None}
+
+        forecast = results.forecast(steps=forecast_steps)
+        actual = data.iloc[-forecast_steps:]
+        return {'forecast': forecast, 'actual': actual, 'model_summary': results.summary()}
+
+    def sarima_forecast(self, data: Union[pd.DataFrame, pd.Series], order: tuple = (1, 1, 1), seasonal_order: tuple = (1, 1, 1, 12), forecast_steps: int = 10) -> Dict[str, Any]:
         """Perform SARIMA forecast."""
+        if isinstance(data, pd.DataFrame):
+            if 'y' in data.columns:
+                data = data['y']
+            else:
+                raise ValueError("DataFrame must contain a 'y' column for SARIMA forecast")
+
+        if not pd.api.types.is_numeric_dtype(data):
+            raise ValueError("Input data must be numeric for SARIMA forecast")
+
         model = SARIMAX(data, order=order, seasonal_order=seasonal_order)
         results = model.fit()
         forecast = results.forecast(steps=forecast_steps)
-        return {'forecast': forecast, 'model_summary': results.summary()}
+        actual = data.iloc[-forecast_steps:]
+        return {'forecast': forecast, 'actual': actual, 'model_summary': results.summary()}
 
     def prophet_forecast(self, data: pd.DataFrame, forecast_steps: int = 10) -> Dict[str, Any]:
         """Perform Prophet forecast."""
+        if not all(col in data.columns for col in ['ds', 'y']):
+            raise ValueError("Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively.")
         model = Prophet()
         model.fit(data)
         future = model.make_future_dataframe(periods=forecast_steps)
         forecast = model.predict(future)
-        return {'forecast': forecast, 'model': model}
+        actual = data.iloc[-forecast_steps:]
+        return {'forecast': forecast['yhat'].iloc[-forecast_steps:], 'actual': actual['y'], 'model': model}
 
 # Example usage
 if __name__ == "__main__":

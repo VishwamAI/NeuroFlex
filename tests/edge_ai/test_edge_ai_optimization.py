@@ -1,9 +1,9 @@
 import unittest
+import pytest
 import torch
 import torch.nn as nn
 import numpy as np
 import time
-import pytest
 from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
 from NeuroFlex.constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
@@ -20,6 +20,14 @@ class DummyModel(nn.Module):
         x = self.relu(x)
         x = self.fc2(x)
         return x
+
+@pytest.fixture
+def sample_model():
+    return DummyModel()
+
+@pytest.fixture
+def edge_ai_optimizer():
+    return EdgeAIOptimization()
 
 class TestEdgeAIOptimization(unittest.TestCase):
     def setUp(self):
@@ -140,6 +148,26 @@ class TestEdgeAIOptimization(unittest.TestCase):
 
         issues = self.edge_ai_optimizer.diagnose()
         self.assertEqual(len(issues), 0)  # Expect no issues
+
+def test_knowledge_distillation(edge_ai_optimizer, sample_model):
+    teacher_model = sample_model
+    student_model = DummyModel(input_size=10, hidden_size=10, output_size=5)
+    # Create a dummy DataLoader
+    dummy_data = torch.randn(100, 10)
+    dummy_labels = torch.randint(0, 5, (100,))
+    dummy_dataset = torch.utils.data.TensorDataset(dummy_data, dummy_labels)
+    dummy_loader = torch.utils.data.DataLoader(dummy_dataset, batch_size=10)
+
+    distilled_model = edge_ai_optimizer.knowledge_distillation(teacher_model, student_model, dummy_loader, epochs=1)
+    assert isinstance(distilled_model, nn.Module)
+
+def test_optimize(edge_ai_optimizer, sample_model):
+    optimized_model = edge_ai_optimizer.optimize(sample_model, 'quantization')
+    assert isinstance(optimized_model, nn.Module)
+    assert hasattr(optimized_model, 'qconfig')
+
+    with pytest.raises(ValueError):
+        edge_ai_optimizer.optimize(sample_model, 'invalid_technique')
 
 if __name__ == '__main__':
     unittest.main()
