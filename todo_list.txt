@@ -1,10 +1,10 @@
 - [x] /home/ubuntu/NeuroFlex/NeuroFlex/edge_ai/edge_ai_optimization.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/edge_ai/neuromorphic_computing.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/__init__.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/config/config.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/config/logging_config.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/config/__init__.py
-- [ ] /home/ubuntu/NeuroFlex/NeuroFlex/advanced_models/__init__.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/edge_ai/neuromorphic_computing.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/__init__.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/config.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/logging_config.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/config/__init__.py
+- [x] /home/ubuntu/NeuroFlex/NeuroFlex/advanced_models/__init__.py
 - [ ] /home/ubuntu/NeuroFlex/NeuroFlex/advanced_models/advanced_time_series_analysis.py
 - [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/google_integration.py
 - [ ] /home/ubuntu/NeuroFlex/NeuroFlex/scientific_domains/art_integration.py
