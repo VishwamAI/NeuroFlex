@@ -1,0 +1,4 @@
+sphinx==7.4.7
+sphinx_rtd_theme==2.0.0
+myst-parser==2.0.0
+linkify-it-py==2.0.2
