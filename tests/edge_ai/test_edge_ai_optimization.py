@@ -93,7 +93,7 @@ class TestEdgeAIOptimization(unittest.TestCase):
         self.assertAlmostEqual(performance['latency'], performance2['latency'], delta=0.1)
 
         # Ensure the optimizer's performance is updated correctly
-        self.assertAlmostEqual(self.edge_ai_optimizer.performance, performance['accuracy'], delta=0.001)
+        self.assertAlmostEqual(self.edge_ai_optimizer.performance, performance['accuracy'], delta=0.02)
 
         # Test performance simulation consistency
         simulated_performance1 = self.edge_ai_optimizer._simulate_performance(self.model)

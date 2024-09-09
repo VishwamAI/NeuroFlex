@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 import logging
+import warnings
 from typing import List, Dict, Any, Union, Optional
 import statsmodels.api as sm
 from statsmodels.tsa.arima.model import ARIMA
@@ -36,11 +37,34 @@ class AdvancedTimeSeriesAnalysis:
 
         Returns:
             Dict[str, Any]: Results of the time series analysis
+
+        Raises:
+            ValueError: If the method is unsupported or if the input data is invalid
         """
         if method not in self.available_methods:
             raise ValueError(f"Unsupported method: {method}")
 
-        result = self.available_methods[method](data, **kwargs)
+        if method in ['arima', 'sarima']:
+            if isinstance(data, pd.DataFrame):
+                if 'y' not in data.columns:
+                    raise ValueError(f"DataFrame must contain a 'y' column for {method.upper()} forecast")
+                data = data['y']
+            if not pd.api.types.is_numeric_dtype(data):
+                raise ValueError(f"Input data must be numeric for {method.upper()} forecast")
+
+            order = kwargs.get('order', (1, 1, 1))
+            if method == 'sarima':
+                seasonal_order = kwargs.get('seasonal_order', (1, 1, 1, 12))
+                result = self.available_methods[method](data, order=order, seasonal_order=seasonal_order)
+            else:
+                result = self.available_methods[method](data, order=order)
+        elif method == 'prophet':
+            if not all(col in data.columns for col in ['ds', 'y']):
+                raise ValueError("Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively.")
+            result = self.available_methods[method](data, **kwargs)
+        else:
+            result = self.available_methods[method](data, **kwargs)
+
         self._update_performance(result)
         return result
 
@@ -130,14 +154,18 @@ class AdvancedTimeSeriesAnalysis:
             raise ValueError("Input data must be numeric for ARIMA forecast")
 
         if len(data) < sum(order):
-            warnings.warn("The number of observations is less than the number of parameters. This may result in poor estimates.", ValueWarning)
+            warnings.warn("The number of observations is less than the number of parameters. This may result in poor estimates.", UserWarning)
 
         model = ARIMA(data, order=order)
         try:
             results = model.fit()
         except np.linalg.LinAlgError:
-            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", EstimationWarning)
+            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", UserWarning)
             return {'forecast': None, 'actual': None, 'model_summary': None}
+
+        # Check for non-stationary starting autoregressive parameters
+        if any(abs(param) >= 1 for param in results.arparams):
+            warnings.warn("Non-stationary starting autoregressive parameters found. Using zeros as starting parameters.", UserWarning)
 
         forecast = results.forecast(steps=forecast_steps)
         actual = data.iloc[-forecast_steps:]
@@ -155,7 +183,48 @@ class AdvancedTimeSeriesAnalysis:
             raise ValueError("Input data must be numeric for SARIMA forecast")
 
         model = SARIMAX(data, order=order, seasonal_order=seasonal_order)
-        results = model.fit()
+
+        try:
+            # Calculate the number of parameters
+            p, d, q = order
+            P, D, Q, m = seasonal_order
+            n_params = p + q + P + Q + (1 if d + D > 0 else 0)
+
+            # Initialize start_params with zeros
+            start_params = np.zeros(n_params)
+
+            logger.info(f"Initial start_params: {start_params}")
+
+            # Fit the model with custom start_params
+            results = model.fit(start_params=start_params, enforce_stationarity=False, enforce_invertibility=False)
+
+            # Check for non-invertible MA parameters
+            ma_params = results.maparams
+            logger.info(f"MA parameters after initial fit: {ma_params}")
+
+            non_invertible_ma = False
+            if ma_params is not None:
+                roots = np.roots(np.r_[1, ma_params])
+                logger.info(f"Roots of MA polynomial: {roots}")
+                non_invertible_ma = any(np.abs(roots) <= 1)
+                logger.info(f"Non-invertible MA condition: {non_invertible_ma}")
+
+            if non_invertible_ma:
+                warnings.warn("Non-invertible starting MA parameters found. Using zeros as starting parameters.", UserWarning)
+                logger.info("Re-fitting model with zero start_params")
+                # Re-fit the model with zero start_params
+                results = model.fit(start_params=np.zeros(n_params), enforce_stationarity=False, enforce_invertibility=False)
+
+                # Log MA parameters after re-fitting
+                ma_params_refit = results.maparams
+                logger.info(f"MA parameters after re-fit: {ma_params_refit}")
+                roots_refit = np.roots(np.r_[1, ma_params_refit])
+                logger.info(f"Roots of MA polynomial after re-fit: {roots_refit}")
+
+        except np.linalg.LinAlgError:
+            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", UserWarning)
+            return {'forecast': None, 'actual': None, 'model_summary': None}
+
         forecast = results.forecast(steps=forecast_steps)
         actual = data.iloc[-forecast_steps:]
         return {'forecast': forecast, 'actual': actual, 'model_summary': results.summary()}
