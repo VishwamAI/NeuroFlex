@@ -35,6 +35,7 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 - Improved Brain-Computer Interface (BCI) functionality
 - Support for Python 3.9, 3.10, 3.11, 3.12
 - Resolved dependency issues and improved stability
+- Implemented CI/CD pipeline using GitHub Actions for automated testing and deployment
 
 ## Installation
 
