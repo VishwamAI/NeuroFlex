@@ -1,6 +1,6 @@
 # ethical_framework.py
 
-from ...utils import utils
+from NeuroFlex.utils import utils
 
 class EthicalFramework:
     def __init__(self):

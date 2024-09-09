@@ -1,6 +1,6 @@
 # explainable_ai.py
 
-from ...utils import utils
+from NeuroFlex.utils import utils
 
 class ExplainableAI:
     def __init__(self):
