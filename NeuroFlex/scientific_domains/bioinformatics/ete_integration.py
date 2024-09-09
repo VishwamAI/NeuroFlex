@@ -1,5 +1,6 @@
 # ete_integration.py
-from ete3 import Tree, TreeStyle
+from ete3 import Tree
+from ete3.treeview import TreeStyle
 
 class ETEIntegration:
     def __init__(self):

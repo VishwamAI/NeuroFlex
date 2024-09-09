@@ -1,18 +1,18 @@
 import time
 import numpy as np
 from Bio.Seq import Seq
-from ..utils.utils import tokenize_text
-from ..utils.descriptive_statistics import preprocess_data
+from NeuroFlex.utils.utils import tokenize_text
+from NeuroFlex.utils.descriptive_statistics import preprocess_data
 from .jax.pytorch_module_converted import PyTorchModel
 from .tensorflow.tensorflow_module import TensorFlowModel
 from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
-from ..quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
-from ..scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
-from ..scientific_domains.bioinformatics.scikit_bio_integration import ScikitBioIntegration
-from ..scientific_domains.bioinformatics.ete_integration import ETEIntegration
-from ..scientific_domains.bioinformatics.alphafold_integration import AlphaFoldIntegration
-from ..scientific_domains.xarray_integration import XarrayIntegration
-from ..generative_models.ddpm import DDPM
+from NeuroFlex.quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
+from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
+from NeuroFlex.scientific_domains.bioinformatics.scikit_bio_integration import ScikitBioIntegration
+from NeuroFlex.scientific_domains.bioinformatics.ete_integration import ETEIntegration
+from NeuroFlex.scientific_domains.bioinformatics.alphafold_integration import AlphaFoldIntegration
+from NeuroFlex.scientific_domains.xarray_integration import XarrayIntegration
+from NeuroFlex.generative_models.ddpm import DDPM
 
 def load_bioinformatics_data(file_path):
     """

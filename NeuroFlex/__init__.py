@@ -1,4 +1,4 @@
-__version__ = "0.2.0"  # Incremented version
+__version__ = "0.1.2"  # Incremented version
 
 # Importing core components
 from .core_neural_networks import *
