@@ -2,8 +2,7 @@ trigger:
 - main
 
 variables:
-  - name: 'pythonVersions'
-    value: ['3.9', '3.10', '3.11', '3.12']
+  pythonVersions: ['3.9', '3.10', '3.11', '3.12']
 
 stages:
 - stage: Test
@@ -11,9 +10,14 @@ stages:
   - job: RunTests
     strategy:
       matrix:
-        ${{ each version in variables.pythonVersions }}:
-          Python${{ replace(version, '.', '') }}:
-            pythonVersion: ${{ version }}
+        Python39:
+          pythonVersion: '3.9'
+        Python310:
+          pythonVersion: '3.10'
+        Python311:
+          pythonVersion: '3.11'
+        Python312:
+          pythonVersion: '3.12'
     pool:
       vmImage: ubuntu-latest
     steps:
@@ -29,7 +33,7 @@ stages:
       displayName: 'Install dependencies'
 
     - script: |
-        pytest tests/ --durations=0 --cov=NeuroFlex --cov-report=xml --html=test_report.html --self-contained-html
+        pytest tests/ --durations=0 --cov=NeuroFlex --cov-report=xml --junitxml=pytest_junit.xml --html=test_report.html --self-contained-html
       displayName: 'Run pytest with coverage'
       continueOnError: true
 
@@ -52,13 +56,13 @@ stages:
 
     - task: PublishCodeCoverageResults@1
       inputs:
-        codeCoverageTool: cobertura
+        codeCoverageTool: 'cobertura'
         summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
 
     - task: PublishTestResults@2
       inputs:
         testResultsFormat: 'JUnit'
-        testResultsFiles: '**/TEST-*.xml'
+        testResultsFiles: '**/pytest_junit.xml'
         testRunTitle: 'Publish test results'
 
     - task: PublishBuildArtifacts@1
@@ -86,6 +90,11 @@ stages:
         pip install sphinx
         sphinx-build -b html docs/source docs/build
       displayName: 'Build documentation'
+      
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: 'docs/build'
+        artifactName: 'Documentation'
 
 - stage: Publish
   dependsOn: Documentation
