@@ -2,8 +2,9 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 from typing import List, Dict, Any, Tuple
-from alphafold.model import modules_multimer, config
-from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
+# from alphafold.model import modules_multimer, config
+from alphafold.model import config
+from alphafold.model.config import CONFIG, CONFIG_DIFFS  # CONFIG_MULTIMER removed
 from alphafold.common import protein
 from alphafold.data import pipeline, templates
 from alphafold.data.tools import hhblits, jackhmmer
@@ -14,6 +15,13 @@ import logging
 import copy
 import ml_collections
 from unittest.mock import MagicMock
+
+# Try to import alphafold.model.tf, but handle the case where it's not available
+try:
+    from alphafold.model import tf as alphafold_tf
+except ImportError:
+    logging.warning("Failed to import alphafold.model.tf. Some functionality may be limited.")
+    alphafold_tf = None
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
