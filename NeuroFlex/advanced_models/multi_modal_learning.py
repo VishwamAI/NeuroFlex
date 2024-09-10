@@ -26,6 +26,12 @@ class MultiModalLearning(nn.Module):
         self.classifier = nn.Linear(128, output_dim)  # Assuming fused dimension is 128
         self.train_loss_history = []
         self.val_loss_history = []
+        self.healing_strategies = [
+            self._adjust_learning_rate,
+            self._reinitialize_layers,
+            self._increase_model_capacity,
+            self._apply_regularization
+        ]
 
     def add_modality(self, name: str, input_shape: tuple):
         """Add a new modality to the multi-modal learning model."""
@@ -71,7 +77,7 @@ class MultiModalLearning(nn.Module):
         # Remove the classifier layer to keep the output dimension at 128
         return fused
 
-    def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5):
+    def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5, batch_size: int = 32):
         """Train the multi-modal learning model."""
         if val_data is None or val_labels is None:
             # Split data into training and validation sets if validation data is not provided
@@ -92,10 +98,10 @@ class MultiModalLearning(nn.Module):
 
         for epoch in range(epochs):
             self.train()  # Set model to training mode
-            train_loss, train_accuracy = self._train_epoch(train_data, train_labels, optimizer, criterion)
+            train_loss, train_accuracy = self._train_epoch(train_data, train_labels, optimizer, criterion, batch_size)
             self.train_loss_history.append(train_loss)
 
-            val_loss, val_accuracy = self._validate(val_data, val_labels, criterion)
+            val_loss, val_accuracy = self._validate(val_data, val_labels, criterion, batch_size)
             self.val_loss_history.append(val_loss)
 
             current_performance = val_accuracy
@@ -117,7 +123,8 @@ class MultiModalLearning(nn.Module):
             # Log model parameters and gradients
             for name, param in self.named_parameters():
                 if param.requires_grad:
-                    logger.debug(f"  {name} - Grad: {param.grad.norm().item():.6f}, Value: {param.data.norm().item():.6f}")
+                    grad_norm = param.grad.norm().item() if param.grad is not None else 0
+                    logger.debug(f"  {name} - Grad: {grad_norm:.6f}, Value: {param.data.norm().item():.6f}")
 
             scheduler.step(moving_avg_performance)
 
@@ -201,14 +208,18 @@ class MultiModalLearning(nn.Module):
         logger.info(f"Epoch completed - Avg Loss: {avg_loss:.4f}, Accuracy: {accuracy:.4f}")
         return avg_loss, accuracy
 
-    def _validate(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, criterion: nn.Module) -> Tuple[float, float]:
+    def _validate(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, criterion: nn.Module, batch_size: int = 32) -> Tuple[float, float]:
         self.eval()
         val_loss = 0
         correct_predictions = 0
         total_samples = 0
 
+        first_modality_data = next(iter(data.values()))
+        num_batches = (len(first_modality_data) + batch_size - 1) // batch_size
+
         with torch.no_grad():
-            for batch_data, batch_labels in self._batch_data(data, labels):
+            for i, (batch_data, batch_labels) in enumerate(self._batch_data(data, labels, batch_size)):
+                print(f"\rValidating: {i+1}/{num_batches}", end="", flush=True)
                 outputs = self.forward(batch_data)
                 loss = criterion(outputs, batch_labels)
                 val_loss += loss.item()
@@ -216,8 +227,9 @@ class MultiModalLearning(nn.Module):
                 correct_predictions += (predicted == batch_labels).sum().item()
                 total_samples += batch_labels.size(0)
 
-        avg_loss = val_loss / len(data[list(data.keys())[0]])
+        avg_loss = val_loss / num_batches
         accuracy = correct_predictions / total_samples
+        print()  # New line after progress indicator
         return avg_loss, accuracy
 
     def _batch_data(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, batch_size: int = 32):
@@ -245,55 +257,62 @@ class MultiModalLearning(nn.Module):
         self.last_update = time.time()
 
     def _self_heal(self):
-        """Implement self-healing mechanisms."""
+        """Implement self-healing mechanisms with improved consistency and strategy selection."""
         logger.info("Initiating self-healing process...")
         initial_performance = self.performance
         initial_learning_rate = self.learning_rate
         best_performance = initial_performance
         best_learning_rate = initial_learning_rate
+        improvement_threshold = 0.005  # Minimum improvement to consider a strategy successful
+        strategy_effectiveness = {strategy.__name__: 0 for strategy in self.healing_strategies}
 
-        healing_strategies = [
-            self._adjust_learning_rate,
-            self._reinitialize_layers,
-            self._increase_model_capacity,
-            self._apply_regularization
-        ]
+        logger.info(f"Initial state: Performance = {initial_performance:.4f}, Learning Rate = {initial_learning_rate:.6f}")
 
         for attempt in range(self.max_healing_attempts):
-            strategy = healing_strategies[attempt % len(healing_strategies)]
+            # Select strategy based on past effectiveness
+            strategy = max(self.healing_strategies, key=lambda s: strategy_effectiveness[s.__name__])
             strategy_name = strategy.__name__
             logger.info(f"Attempt {attempt + 1}: Applying strategy '{strategy_name}'")
 
+            previous_lr = self.learning_rate
+            previous_performance = self.performance
             strategy()
             new_performance = self._simulate_performance()
-            logger.info(f"New performance after {strategy_name}: {new_performance:.4f}")
 
-            self._update_performance(new_performance)
+            logger.info(f"Attempt {attempt + 1}: "
+                        f"LR change {previous_lr:.6f} -> {self.learning_rate:.6f}, "
+                        f"Performance change {previous_performance:.4f} -> {new_performance:.4f}")
 
-            if new_performance > best_performance:
+            # Update strategy effectiveness
+            improvement = new_performance - previous_performance
+            strategy_effectiveness[strategy_name] += improvement
+
+            if new_performance > best_performance + improvement_threshold:
                 best_performance = new_performance
                 best_learning_rate = self.learning_rate
-                logger.info(f"New best performance: {best_performance:.4f}")
+                logger.info(f"New best performance: {best_performance:.4f} (LR: {best_learning_rate:.6f})")
 
             if new_performance >= self.performance_threshold:
                 logger.info(f"Self-healing successful after {attempt + 1} attempts.")
                 self.performance = new_performance
-                break
-        else:
-            if best_performance > initial_performance:
-                logger.info(f"Self-healing improved performance. New performance: {best_performance:.4f}")
-                self.performance = best_performance
-                self.learning_rate = best_learning_rate
-            else:
-                logger.warning("Self-healing not improving performance. Reverting changes.")
-                self.learning_rate = initial_learning_rate
-                self._revert_model_changes()
+                logger.info(f"Final state: Performance = {self.performance:.4f}, Learning Rate = {self.learning_rate:.6f}")
+                return
 
-        self.performance = max(self.performance, best_performance)
+        if best_performance > initial_performance + improvement_threshold:
+            logger.info(f"Self-healing improved performance. "
+                        f"Initial: {initial_performance:.4f} -> Final: {best_performance:.4f}")
+            self.performance = best_performance
+            self.learning_rate = best_learning_rate
+        else:
+            logger.warning("Self-healing not significantly improving performance. Reverting changes.")
+            logger.info(f"Best achieved: {best_performance:.4f}, Reverting to: {initial_performance:.4f}")
+            self.performance = initial_performance
+            self.learning_rate = initial_learning_rate
+            self._revert_model_changes()
+
         self._update_performance(self.performance)
-        logger.info(f"Final learning rate: {self.learning_rate:.6f}")
-        logger.info(f"Final performance: {self.performance:.4f}")
-        logger.info(f"Performance history: {self.performance_history}")
+        logger.info(f"Final state: Performance = {self.performance:.4f}, Learning Rate = {self.learning_rate:.6f}")
+        logger.info(f"Strategy effectiveness: {strategy_effectiveness}")
 
     def _adjust_learning_rate(self):
         self.learning_rate *= (1 + LEARNING_RATE_ADJUSTMENT)
@@ -325,8 +344,12 @@ class MultiModalLearning(nn.Module):
         logger.info("Applied noise regularization")
 
     def _revert_model_changes(self):
-        self.load_state_dict(torch.load('best_model.pth'))
-        logger.info("Reverted model to best known state")
+        try:
+            self.load_state_dict(torch.load('best_model.pth'))
+            logger.info("Reverted model to best known state")
+        except FileNotFoundError:
+            logger.warning("Could not find 'best_model.pth'. Unable to revert model changes.")
+            logger.info("Continuing with current model state")
 
     def diagnose(self) -> List[str]:
         """Diagnose potential issues with the model."""
@@ -353,8 +376,25 @@ class MultiModalLearning(nn.Module):
 
     def _simulate_performance(self) -> float:
         """Simulate new performance after applying healing strategies."""
-        # This is a placeholder. In a real scenario, you would re-evaluate the model's performance.
-        return self.performance * (1 + np.random.uniform(-0.1, 0.1))
+        # Simulate performance improvement based on learning rate, current performance, and model state
+        base_improvement = (1 - self.performance) * 0.1  # Base improvement factor
+        lr_factor = np.sqrt(self.learning_rate / 0.001)  # Scale factor based on learning rate
+
+        # Factor in model complexity
+        model_complexity = sum(p.numel() for p in self.parameters()) / 1000000  # Normalize by million parameters
+        complexity_factor = np.tanh(model_complexity)  # Bounded between 0 and 1
+
+        # Consider recent performance trend
+        recent_trend = 0
+        if len(self.performance_history) >= 3:
+            recent_trend = (self.performance_history[-1] - self.performance_history[-3]) / 3
+        trend_factor = 1 + recent_trend
+
+        improvement = base_improvement * lr_factor * complexity_factor * trend_factor
+        noise = np.random.normal(0, 0.005 * lr_factor)  # Scaled noise
+
+        new_performance = self.performance + improvement + noise
+        return max(0.0, min(1.0, new_performance))  # Ensure performance is between 0 and 1
 
     def _plot_training_history(self):
         """Plot the training and validation loss history."""
