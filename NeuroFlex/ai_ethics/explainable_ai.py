@@ -16,7 +16,7 @@ class ExplainableAI:
 
         prediction = self.model.predict(input_data)
         explanation = self._generate_explanation(input_data, prediction)
-        self.explanations[input_data] = explanation
+        self.explanations[str(input_data)] = explanation  # Use str(input_data) as key
         return explanation
 
     def _generate_explanation(self, input_data, prediction):
