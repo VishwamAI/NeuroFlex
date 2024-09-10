@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 from typing import List, Dict, Any, Tuple
-from alphafold.model import modules_multimer, config
+from alphafold.model import config
 from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
 from alphafold.common import protein
 from alphafold.data import pipeline, templates
@@ -14,6 +14,13 @@ import logging
 import copy
 import ml_collections
 from unittest.mock import MagicMock
+from alphafold.model.tf import shape_placeholders
+
+try:
+    from alphafold.model import modules_multimer
+except ImportError:
+    logging.warning("Failed to import alphafold.model.modules_multimer. Some functionality may be limited.")
+    modules_multimer = MagicMock()
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

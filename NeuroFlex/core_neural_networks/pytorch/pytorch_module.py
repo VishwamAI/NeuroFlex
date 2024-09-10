@@ -4,18 +4,22 @@ import torch.optim as optim
 from typing import List, Tuple, Optional, Callable
 import logging
 import time
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
 class PyTorchModel(nn.Module):
-    def __init__(self, input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int],
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(self, input_dim: int, output_dim: int, hidden_layers: List[int],
+                 dropout_rate: float = 0.5, learning_rate: float = 0.001,
+                 use_cnn: bool = True, use_rnn: bool = True):
         super(PyTorchModel, self).__init__()
-        self.input_shape = input_shape
+        self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_layers = hidden_layers
         self.dropout_rate = dropout_rate
         self.learning_rate = learning_rate
+        self.use_cnn = use_cnn
+        self.use_rnn = use_rnn
         self.performance_threshold = 0.8
         self.update_interval = 86400  # 24 hours in seconds
         self.gradient_norm_threshold = 10
@@ -29,14 +33,49 @@ class PyTorchModel(nn.Module):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.input_layer = nn.Flatten()
+        current_dim = input_dim
+
+        # CNN layers
+        if self.use_cnn:
+            self.cnn_layers = nn.Sequential(
+                nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Flatten()
+            )
+            current_dim = self._get_cnn_output_dim()
+        else:
+            self.cnn_layers = nn.Identity()
+
+        # RNN layer
+        if self.use_rnn:
+            self.rnn_layer = nn.LSTM(input_size=current_dim, hidden_size=hidden_layers[0], batch_first=True)
+            current_dim = hidden_layers[0]
+        else:
+            self.rnn_layer = nn.Identity()
+
+        # Hidden layers
         self.hidden_layers = nn.ModuleList([
-            nn.Linear(input_shape[0] if i == 0 else hidden_layers[i-1], units)
+            nn.Linear(current_dim if i == 0 else hidden_layers[i-1], units)
             for i, units in enumerate(hidden_layers)
         ])
+
+        self.input_layer = nn.Sequential(
+            self.cnn_layers,
+            nn.Unflatten(1, (-1, 1)) if self.use_cnn and self.use_rnn else nn.Identity()
+        )
+
         self.dropout = nn.Dropout(self.dropout_rate)
         self.output_layer = nn.Linear(hidden_layers[-1], output_dim)
         self.to(self.device)
+
+    def _get_cnn_output_dim(self):
+        # Helper method to calculate the output dimension of the CNN layers
+        x = torch.randn(1, 1, int(np.sqrt(self.input_dim)), int(np.sqrt(self.input_dim)))
+        return self.cnn_layers(x).numel()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.input_layer(x)

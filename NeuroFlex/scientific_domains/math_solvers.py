@@ -49,4 +49,39 @@ class MathSolver:
         """
         return sp.diff(expr, variable)
 
+    def solve(self, problem):
+        """
+        Solve a mathematical problem given as a string.
+
+        Args:
+            problem (str): A string representing the mathematical problem.
+
+        Returns:
+            str: The solution to the problem.
+        """
+        try:
+            # Extract the equation from the problem string
+            equation_str = problem.split(":")[1].strip()
+
+            # Parse the equation
+            left, right = equation_str.split("=")
+            equation = sp.Eq(sp.sympify(left), sp.sympify(right))
+
+            # Identify the variable to solve for
+            variables = list(equation.free_symbols)
+            if len(variables) != 1:
+                raise ValueError("The equation should contain exactly one variable")
+            variable = variables[0]
+
+            # Solve the equation
+            solution = sp.solve(equation, variable)
+
+            # Format the solution
+            if len(solution) == 1:
+                return f"The solution is: {variable} = {solution[0]}"
+            else:
+                return f"The solutions are: {', '.join([f'{variable} = {sol}' for sol in solution])}"
+        except Exception as e:
+            return f"Error solving the problem: {str(e)}"
+
 # Additional methods can be added here as needed

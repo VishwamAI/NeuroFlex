@@ -3,6 +3,7 @@ import numpy as np
 from Bio.Seq import Seq
 from NeuroFlex.utils.utils import tokenize_text
 from NeuroFlex.utils.descriptive_statistics import preprocess_data
+from NeuroFlex.utils.logging_config import setup_logging
 from .jax.pytorch_module_converted import PyTorchModel
 from .tensorflow.tensorflow_module import TensorFlowModel
 from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
@@ -189,27 +190,102 @@ class SelfCuringAlgorithm:
         return self.learning_rate
 
 class NeuroFlex:
-    def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
-                 use_quantum=False, use_alphafold=False, backend='pytorch', tensorflow_model=None,
-                 pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
-                 ete_integration=None, alphafold_integration=None, alphafold_params=None):
-        self.features = features
-        self.use_cnn = use_cnn
-        self.use_rnn = use_rnn
-        self.use_gan = use_gan
-        self.fairness_constraint = fairness_constraint
-        self.use_quantum = use_quantum
-        self.use_alphafold = use_alphafold
-        self.backend = backend
-        self.tensorflow_model = tensorflow_model
-        self.pytorch_model = pytorch_model
-        self.quantum_model = quantum_model
-        self.bioinformatics_integration = bioinformatics_integration
-        self.scikit_bio_integration = scikit_bio_integration
-        self.ete_integration = ete_integration
-        self.alphafold_integration = alphafold_integration
-        self.alphafold_params = alphafold_params or {}
+    def __init__(self, config):
+        self.config = config
+        self.logger = setup_logging()
+        self.features = config.get('CORE_MODEL_FEATURES', [])
+        self.use_cnn = config.get('USE_CNN', False)
+        self.use_rnn = config.get('USE_RNN', False)
+        self.use_gan = config.get('USE_GAN', False)
+        self.fairness_constraint = config.get('FAIRNESS_CONSTRAINT', None)
+        self.use_quantum = config.get('USE_QUANTUM', False)
+        self.use_alphafold = config.get('USE_ALPHAFOLD', False)
+        self.backend = config.get('BACKEND', 'pytorch')
         self.bioinformatics_data = None
+        self.core_model = None
+        self.quantum_model = None
+        self.ethical_framework = None
+        self.explainable_ai = None
+        self.bci_processor = None
+        self.consciousness_sim = None
+        self.alphafold = None
+        self.math_solver = None
+        self.edge_optimizer = None
+
+    def _setup_core_model(self):
+        input_shape = self.config.get('INPUT_SHAPE', (28, 28, 1))
+        input_dim = int(np.prod(input_shape))
+        if self.backend == 'pytorch':
+            self.core_model = PyTorchModel(
+                input_dim=input_dim,
+                output_dim=self.config.get('OUTPUT_DIM', 10),
+                hidden_layers=self.config.get('HIDDEN_LAYERS', [64, 32])
+            )
+        elif self.backend == 'tensorflow':
+            self.core_model = TensorFlowModel(
+                input_shape=input_shape,
+                output_dim=self.config.get('OUTPUT_DIM', 10),
+                hidden_layers=self.config.get('HIDDEN_LAYERS', [64, 32]),
+                use_cnn=self.use_cnn,
+                use_rnn=self.use_rnn
+            )
+        else:
+            raise ValueError(f"Unsupported backend: {self.backend}")
+
+        self.logger.info(f"Core model set up with backend: {self.backend}")
+
+    def _setup_quantum_model(self):
+        if self.use_quantum:
+            self.quantum_model = QuantumNeuralNetwork(
+                n_qubits=self.config.get('QUANTUM_N_QUBITS', 4),
+                n_layers=self.config.get('QUANTUM_N_LAYERS', 2)
+            )
+            self.logger.info("Quantum model set up")
+
+    def _setup_ethical_framework(self):
+        from NeuroFlex.ai_ethics.ethical_framework import EthicalFramework
+        self.ethical_framework = EthicalFramework()
+        self.logger.info("Ethical framework set up")
+
+    def _setup_explainable_ai(self):
+        from NeuroFlex.ai_ethics.explainable_ai import ExplainableAI
+        self.explainable_ai = ExplainableAI()
+        self.explainable_ai.set_model(self.core_model)
+        self.logger.info("Explainable AI set up")
+
+    def _setup_bci_processor(self):
+        if self.config.get('USE_BCI', False):
+            from NeuroFlex.bci_integration.bci_processing import BCIProcessor
+            self.bci_processor = BCIProcessor(
+                sampling_rate=self.config.get('BCI_SAMPLING_RATE', 250),
+                num_channels=self.config.get('BCI_NUM_CHANNELS', 32)
+            )
+            self.logger.info("BCI processor set up")
+
+    def _setup_consciousness_sim(self):
+        if self.config.get('USE_CONSCIOUSNESS_SIM', False):
+            from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
+            self.consciousness_sim = ConsciousnessSimulation(
+                features=self.config.get('CONSCIOUSNESS_SIM_FEATURES', [64, 32])
+            )
+            self.logger.info("Consciousness simulation set up")
+
+    def _setup_alphafold(self):
+        if self.use_alphafold:
+            from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
+            self.alphafold = AlphaFoldIntegration()
+            self.logger.info("AlphaFold integration set up")
+
+    def _setup_math_solver(self):
+        from NeuroFlex.scientific_domains.math_solvers import MathSolver
+        self.math_solver = MathSolver()
+        self.logger.info("Math solver set up")
+
+    def _setup_edge_optimizer(self):
+        if self.config.get('USE_EDGE_OPTIMIZATION', False):
+            from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
+            self.edge_optimizer = EdgeAIOptimization()
+            self.logger.info("Edge AI optimizer set up")
 
     def load_bioinformatics_data(self, file_path):
         """
@@ -241,24 +317,124 @@ class NeuroFlex:
                 x = self.dropout(x)
         return x
 
-model = NeuroFlex(
-    features=[64, 32, 10],
-    use_cnn=True,
-    use_rnn=True,
-    use_gan=True,
-    fairness_constraint=0.1,
-    use_quantum=True,
-    use_alphafold=True,
-    backend='pytorch',
-    tensorflow_model=TensorFlowModel,
-    pytorch_model=PyTorchModel,
-    quantum_model=QuantumNeuralNetwork,
-    bioinformatics_integration=BioinformaticsIntegration(),
-    scikit_bio_integration=ScikitBioIntegration(),
-    ete_integration=ETEIntegration(),
-    alphafold_integration=AlphaFoldIntegration(),
-    alphafold_params={'max_recycling': 3}
-)
+    def evaluate_ethics(self, action):
+        """
+        Evaluate the ethical implications of an action.
+
+        Args:
+            action (dict): A dictionary representing the action to be evaluated.
+
+        Returns:
+            bool: True if the action is ethical, False otherwise.
+        """
+        if self.ethical_framework is None:
+            self._setup_ethical_framework()
+        return self.ethical_framework.evaluate_action(action)
+
+    def explain_prediction(self, data):
+        """
+        Generate an explanation for a model prediction.
+
+        Args:
+            data: The input data for which the prediction is to be made and explained.
+
+        Returns:
+            dict: An explanation of the prediction.
+        """
+        if self.explainable_ai is None:
+            self._setup_explainable_ai()
+        return self.explainable_ai.explain_prediction(data)
+
+    def solve_math_problem(self, problem):
+        """
+        Solve a mathematical problem.
+
+        Args:
+            problem (str): A string representing the mathematical problem.
+
+        Returns:
+            str: The solution to the problem.
+        """
+        if self.math_solver is None:
+            self._setup_math_solver()
+        return self.math_solver.solve(problem)
+
+    def process_bci_data(self, raw_data):
+        """
+        Process raw BCI data.
+
+        Args:
+            raw_data (numpy.ndarray): Raw BCI data.
+
+        Returns:
+            numpy.ndarray: Processed BCI data.
+        """
+        if self.bci_processor is None:
+            self._setup_bci_processor()
+        return self.bci_processor.process(raw_data) if self.bci_processor else raw_data
+
+    def simulate_consciousness(self, input_data):
+        """
+        Simulate consciousness based on input data.
+
+        Args:
+            input_data (numpy.ndarray): Input data for consciousness simulation.
+
+        Returns:
+            dict: Result of consciousness simulation.
+        """
+        if self.consciousness_sim is None:
+            self._setup_consciousness_sim()
+        return self.consciousness_sim.simulate_consciousness(input_data) if self.consciousness_sim else None
+
+    def predict_protein_structure(self, sequence):
+        """
+        Predict protein structure from a given sequence.
+
+        Args:
+            sequence (str): Protein sequence.
+
+        Returns:
+            dict: Predicted protein structure.
+        """
+        if self.alphafold is None:
+            self._setup_alphafold()
+        return self.alphafold.predict_structure(sequence) if self.alphafold else None
+
+    def optimize_for_edge(self, model):
+        """
+        Optimize the given model for edge deployment.
+
+        Args:
+            model: The model to be optimized.
+
+        Returns:
+            The optimized model.
+        """
+        if self.edge_optimizer is None:
+            self._setup_edge_optimizer()
+        return self.edge_optimizer.optimize(model) if self.edge_optimizer else model
+
+config = {
+    'CORE_MODEL_FEATURES': [64, 32, 10],
+    'USE_CNN': True,
+    'USE_RNN': True,
+    'USE_GAN': True,
+    'FAIRNESS_CONSTRAINT': 0.1,
+    'USE_QUANTUM': True,
+    'USE_ALPHAFOLD': True,
+    'BACKEND': 'pytorch',
+    'TENSORFLOW_MODEL': TensorFlowModel,
+    'PYTORCH_MODEL': PyTorchModel,
+    'QUANTUM_MODEL': QuantumNeuralNetwork,
+    'BIOINFORMATICS_INTEGRATION': BioinformaticsIntegration(),
+    'SCIKIT_BIO_INTEGRATION': ScikitBioIntegration(),
+    'ETE_INTEGRATION': ETEIntegration(),
+    'ALPHAFOLD_INTEGRATION': AlphaFoldIntegration(),
+    'ALPHAFOLD_PARAMS': {'max_recycling': 3}
+}
+
+model = NeuroFlex(config)
 
 # Initialize self-curing algorithm
 self_curing_algorithm = SelfCuringAlgorithm(model)
