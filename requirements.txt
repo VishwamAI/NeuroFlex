@@ -3,7 +3,7 @@ adversarial-robustness-toolbox
 aiohappyeyeballs
 aiohttp
 aiosignal
-pip install git+https://github.com/google-deepmind/alphafold.git
+git+https://github.com/google-deepmind/alphafold.git
 appdirs
 astunparse
 attrs
