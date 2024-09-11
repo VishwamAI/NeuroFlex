@@ -54,6 +54,7 @@ setup(
         "torch",
         "shap",
         "whisper",
+        "openmm==7.7.0",
     ],
     extras_require={
         'dev': [

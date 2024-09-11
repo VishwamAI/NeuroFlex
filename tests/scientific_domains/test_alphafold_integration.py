@@ -2,15 +2,31 @@ import unittest
 import jax
 import jax.numpy as jnp
 import pytest
+import sys
 from unittest.mock import patch, MagicMock
-from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
+import openmm
+import openmm.app as app
+import openmm.unit as unit
+sys.path.append('/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages')
+from NeuroFlex.scientific_domains.alphafold_integration import (
+    AlphaFoldIntegration, protein, check_version,
+    ALPHAFOLD_COMPATIBLE, JAX_COMPATIBLE, HAIKU_COMPATIBLE, OPENMM_COMPATIBLE
+)
 
 class TestAlphaFoldIntegration(unittest.TestCase):
     def setUp(self):
         self.alphafold_integration = AlphaFoldIntegration()
 
+    def test_version_compatibility(self):
+        with patch('NeuroFlex.scientific_domains.alphafold_integration.importlib.metadata.version') as mock_version:
+            mock_version.side_effect = ['2.0.0', '0.3.25', '0.0.9', '7.7.0']
+            self.assertTrue(check_version("alphafold", "2.0.0"))
+            self.assertTrue(check_version("jax", "0.3.25"))
+            self.assertTrue(check_version("haiku", "0.0.9"))
+            self.assertTrue(check_version("openmm", "7.7.0"))
+
     @pytest.mark.skip(reason="Mocking issues with AlphaFold dependencies")
-    @patch('NeuroFlex.scientific_domains.alphafold_integration.modules_multimer.AlphaFold')
+    @patch('NeuroFlex.scientific_domains.alphafold_integration.modules.AlphaFold')
     @patch('NeuroFlex.scientific_domains.alphafold_integration.hk.transform')
     @patch('NeuroFlex.scientific_domains.alphafold_integration.jax.random.PRNGKey')
     def test_setup_model(self, mock_prng_key, mock_transform, mock_alphafold):
@@ -52,24 +68,58 @@ class TestAlphaFoldIntegration(unittest.TestCase):
 
     @pytest.mark.skip(reason="Mocking issues with AlphaFold dependencies")
     @patch('NeuroFlex.scientific_domains.alphafold_integration.protein')
-    def test_predict_structure(self, mock_protein):
+    @patch('NeuroFlex.scientific_domains.alphafold_integration.openmm')
+    def test_predict_structure(self, mock_openmm, mock_protein):
         self.alphafold_integration.model = MagicMock()
         self.alphafold_integration.model_params = MagicMock()
         self.alphafold_integration.feature_dict = MagicMock()
         self.alphafold_integration.config = MagicMock()
         mock_prediction = MagicMock()
         self.alphafold_integration.model.return_value = mock_prediction
-        mock_protein.from_prediction.return_value = 'predicted_structure'
+        mock_protein.from_prediction.return_value = MagicMock()
+
+        mock_simulation = MagicMock()
+        mock_openmm.LangevinMiddleIntegrator.return_value = MagicMock()
+        mock_openmm.app.Simulation.return_value = mock_simulation
 
         result = self.alphafold_integration.predict_structure()
-        self.assertEqual(result, 'predicted_structure')
+        self.assertIsNotNone(result)
         self.alphafold_integration.model.assert_called_once()
         mock_protein.from_prediction.assert_called_once_with(mock_prediction)
+        mock_simulation.minimizeEnergy.assert_called_once()
+        mock_simulation.step.assert_called_once_with(1000)
 
     def test_predict_structure_not_ready(self):
         with self.assertRaises(ValueError) as context:
             self.alphafold_integration.predict_structure()
         self.assertIn("Model or features not set up", str(context.exception))
+
+    @pytest.mark.skip(reason="Mocking issues with AlphaFold dependencies")
+    @patch('NeuroFlex.scientific_domains.alphafold_integration.openmm')
+    @patch('NeuroFlex.scientific_domains.alphafold_integration.app')
+    def test_setup_openmm_simulation(self, mock_app, mock_openmm):
+        mock_protein = MagicMock()
+        mock_protein.residue_index = range(10)
+        mock_protein.sequence = "ABCDEFGHIJ"
+        mock_protein.atom_mask = [[True] * 5 for _ in range(10)]
+        mock_protein.atom_positions = [[[1.0, 1.0, 1.0]] * 5 for _ in range(10)]
+
+        mock_topology = MagicMock()
+        mock_app.Topology.return_value = mock_topology
+        mock_forcefield = MagicMock()
+        mock_app.ForceField.return_value = mock_forcefield
+        mock_system = MagicMock()
+        mock_forcefield.createSystem.return_value = mock_system
+
+        self.alphafold_integration.setup_openmm_simulation(mock_protein)
+
+        mock_app.Topology.assert_called_once()
+        mock_app.ForceField.assert_called_once_with('amber14-all.xml', 'amber14/tip3pfb.xml')
+        mock_forcefield.createSystem.assert_called_once()
+        mock_openmm.LangevinMiddleIntegrator.assert_called_once_with(300*mock_openmm.unit.kelvin, 1/mock_openmm.unit.picosecond, 0.002*mock_openmm.unit.picoseconds)
+        mock_app.Simulation.assert_called_once()
+
+        self.assertIsNotNone(self.alphafold_integration.openmm_simulation)
 
     @pytest.mark.skip(reason="Mocking issues with AlphaFold dependencies")
     def test_get_plddt_scores(self):
@@ -106,6 +156,28 @@ class TestAlphaFoldIntegration(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             self.alphafold_integration.get_predicted_aligned_error()
         self.assertIn("Model or features not set up", str(context.exception))
+
+    @pytest.mark.skip(reason="AlphaProteo integration not yet implemented")
+    def test_alphaproteo_integration(self):
+        # TODO: Implement this test when AlphaProteo is integrated
+        pass
+
+    @pytest.mark.skip(reason="AlphaMissense integration not yet implemented")
+    def test_alphamissense_integration(self):
+        # TODO: Implement this test when AlphaMissense is integrated
+        pass
+
+    def test_input_validation(self):
+        with self.assertRaises(ValueError):
+            self.alphafold_integration.prepare_features("")
+        with self.assertRaises(ValueError):
+            self.alphafold_integration.prepare_features("INVALID_SEQUENCE")
+
+    def test_model_compatibility(self):
+        self.assertTrue(ALPHAFOLD_COMPATIBLE)
+        self.assertTrue(JAX_COMPATIBLE)
+        self.assertTrue(HAIKU_COMPATIBLE)
+        self.assertTrue(OPENMM_COMPATIBLE)
 
 if __name__ == '__main__':
     unittest.main()
