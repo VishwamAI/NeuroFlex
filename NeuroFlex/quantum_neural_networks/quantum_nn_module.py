@@ -4,12 +4,22 @@ import pennylane as qml
 from typing import List, Tuple, Callable, Optional
 import time
 import logging
+import importlib.metadata
+
 from ..constants import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
     MAX_HEALING_ATTEMPTS
 )
+
+# Check PennyLane version
+try:
+    pennylane_version = importlib.metadata.version("pennylane")
+    if pennylane_version != "0.37.0":
+        logging.warning(f"This module was tested with PennyLane 0.37.0. You are using version {pennylane_version}. Some features may not work as expected.")
+except importlib.metadata.PackageNotFoundError:
+    logging.warning("Unable to determine PennyLane version. Make sure it's installed correctly.")
 
 class QuantumNeuralNetwork:
     """
@@ -50,7 +60,7 @@ class QuantumNeuralNetwork:
         self.update_interval = UPDATE_INTERVAL
         self.max_healing_attempts = MAX_HEALING_ATTEMPTS
 
-    def circuit(self, inputs: jnp.ndarray, weights: jnp.ndarray) -> List[qml.measurements.ExpectationMP]:
+    def circuit(self, inputs: jnp.ndarray, weights: jnp.ndarray) -> List[float]:
         """
         Define the enhanced quantum circuit structure.
 
@@ -62,7 +72,7 @@ class QuantumNeuralNetwork:
             weights (jnp.ndarray): Weights for the variational layers.
 
         Returns:
-            List[qml.measurements.ExpectationMP]: Expectation values of observables.
+            List[float]: Expectation values of observables.
         """
         # Encode input data using the specified method
         self.encoding_method(inputs)

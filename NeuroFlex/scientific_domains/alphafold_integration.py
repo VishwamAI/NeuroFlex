@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 from typing import List, Dict, Any, Tuple
-from alphafold.model import config
+from alphafold.model import config, modules
 from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
 from alphafold.common import protein
 from alphafold.data import pipeline, templates
@@ -14,7 +14,52 @@ import logging
 import copy
 import ml_collections
 from unittest.mock import MagicMock
-from alphafold.model.tf import shape_placeholders
+import importlib
+import importlib.metadata
+import openmm
+import openmm.app as app
+import openmm.unit as unit
+
+# Configure logging only if it hasn't been configured yet
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
+
+def check_version(package_name: str, expected_version: str) -> bool:
+    try:
+        version = importlib.metadata.version(package_name)
+        logger.info(f"{package_name} version: {version}")
+        if version != expected_version:
+            logger.warning(f"This integration was tested with {package_name} {expected_version}. You are using version {version}. Some features may not work as expected.")
+            return False
+        return True
+    except importlib.metadata.PackageNotFoundError:
+        logger.error(f"Unable to determine {package_name} version. Make sure it's installed correctly.")
+        return False
+
+# Check versions and set flags for fallback strategies
+ALPHAFOLD_COMPATIBLE = check_version("alphafold", "2.0.0")
+JAX_COMPATIBLE = check_version("jax", "0.3.25")
+HAIKU_COMPATIBLE = check_version("haiku", "0.0.9")
+OPENMM_COMPATIBLE = check_version("openmm", "7.7.0")  # Add OpenMM version check
+
+if not all([ALPHAFOLD_COMPATIBLE, JAX_COMPATIBLE, HAIKU_COMPATIBLE, OPENMM_COMPATIBLE]):
+    logger.warning("This integration may have compatibility issues. Some features might be missing or work differently.")
+    logger.info("Fallback strategies will be used where possible.")
+
+# Set up OpenMM simulation environment
+if OPENMM_COMPATIBLE:
+    logger.info("Setting up OpenMM simulation environment")
+    try:
+        platform = openmm.Platform.getPlatformByName('CUDA')
+        properties = {'CudaPrecision': 'mixed'}
+    except Exception:
+        logger.warning("CUDA platform not available for OpenMM. Falling back to CPU.")
+        platform = openmm.Platform.getPlatformByName('CPU')
+        properties = {}
+else:
+    logger.warning("OpenMM not compatible. Some molecular simulation features may be limited.")
 
 try:
     from alphafold.model import modules_multimer
@@ -56,7 +101,10 @@ class AlphaFoldIntegration:
         self.msa_runner = None
         self.template_searcher = None
         self.config = None  # Will be initialized in setup_model
-        logging.info("AlphaFoldIntegration initialized")
+        self.openmm_system = None
+        self.openmm_simulation = None
+        self.openmm_integrator = None
+        logging.info("AlphaFoldIntegration initialized with OpenMM support")
 
     def setup_model(self, model_params: Dict[str, Any] = None):
         """
@@ -100,51 +148,48 @@ class AlphaFoldIntegration:
             logging.debug(f"Config initialized: {self.config}")
 
             def create_model(config):
-                logging.debug("Creating AlphaFold model")
+                logging.debug(f"Creating AlphaFold model with config: {config}")
                 try:
-                    model = modules_multimer.AlphaFold(config)
+                    model = modules.AlphaFold(config)
                     def apply(params, rng, config, **inputs):
                         logging.debug(f"Applying model with inputs: {inputs.keys()}")
                         try:
                             # Process inputs
                             processed_inputs = {}
-                            for key, value in inputs.items():
-                                if key in ['msa_mask', 'seq_mask', 'aatype', 'residue_index', 'template_aatype', 'template_all_atom_masks', 'template_all_atom_positions']:
-                                    processed_inputs[key] = value
-
-                            # Ensure all required inputs are present with correct shapes
                             required_inputs = {
-                                'msa': (None, None, None),
-                                'msa_mask': (None, None, None),
-                                'seq_mask': (None, None),
                                 'aatype': (None, None),
                                 'residue_index': (None, None),
+                                'seq_mask': (None, None),
+                                'msa': (None, None, None),
+                                'msa_mask': (None, None, None),
+                                'num_alignments': (None,),
                                 'template_aatype': (None, None, None),
                                 'template_all_atom_masks': (None, None, None, None),
                                 'template_all_atom_positions': (None, None, None, None, 3)
                             }
+
                             for input_name, expected_shape in required_inputs.items():
-                                if input_name not in processed_inputs:
-                                    if input_name == 'msa':
-                                        # Handle 'msa' input separately
-                                        if 'msa' in inputs:
-                                            msa = inputs['msa']
-                                            if isinstance(msa, str):
-                                                # Convert string MSA to numerical representation
-                                                msa = jnp.array([[ord(c) for c in msa]])
-                                            elif isinstance(msa, jnp.ndarray):
-                                                if msa.ndim != 3:
-                                                    raise ValueError(f"MSA input should be 3-dimensional, got {msa.ndim} dimensions")
-                                            else:
-                                                raise ValueError(f"Unsupported MSA input type: {type(msa)}")
-                                            processed_inputs['msa'] = msa
-                                        else:
-                                            # If 'msa' is not provided, create a dummy input
-                                            processed_inputs['msa'] = jnp.zeros((1, 1, 1), dtype=jnp.int32)
-                                    else:
-                                        processed_inputs[input_name] = jnp.zeros(expected_shape)
-                                elif processed_inputs[input_name].ndim != len(expected_shape):
-                                    raise ValueError(f"Input '{input_name}' has incorrect number of dimensions. Expected {len(expected_shape)}, got {processed_inputs[input_name].ndim}")
+                                if input_name in inputs:
+                                    processed_inputs[input_name] = inputs[input_name]
+                                    logging.debug(f"Input '{input_name}' provided with shape: {inputs[input_name].shape}")
+                                else:
+                                    # Create dummy input if not provided
+                                    processed_inputs[input_name] = jnp.zeros(expected_shape, dtype=jnp.float32)
+                                    logging.warning(f"Input '{input_name}' not provided. Using dummy input with shape: {expected_shape}")
+
+                                if processed_inputs[input_name].ndim != len(expected_shape):
+                                    error_msg = f"Input '{input_name}' has incorrect number of dimensions. Expected {len(expected_shape)}, got {processed_inputs[input_name].ndim}"
+                                    logging.error(error_msg)
+                                    raise ValueError(error_msg)
+
+                            # Special handling for 'msa' input
+                            if isinstance(processed_inputs['msa'], str):
+                                processed_inputs['msa'] = jnp.array([[ord(c) for c in processed_inputs['msa']]])
+                                logging.debug("Converted string 'msa' input to numerical representation")
+
+                            # Ensure 'num_alignments' is set correctly
+                            processed_inputs['num_alignments'] = jnp.array([processed_inputs['msa'].shape[0]], dtype=jnp.int32)
+                            logging.debug(f"Set 'num_alignments' to {processed_inputs['num_alignments']}")
 
                             logging.debug(f"Processed inputs: {processed_inputs.keys()}")
                             return model.apply({'params': params}, **processed_inputs, rngs={'dropout': rng})
@@ -156,27 +201,33 @@ class AlphaFoldIntegration:
                     logging.error(f"Error creating AlphaFold model: {str(e)}", exc_info=True)
                     raise
 
+            # Transform the model creation function
             model_creator = hk.transform(create_model)
 
+            # Initialize random number generator
             rng = jax.random.PRNGKey(0)
+
+            # Create dummy input for model initialization
             dummy_seq_length = 256
             dummy_input = {
                 'msa': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
                 'msa_mask': jnp.ones((1, 1, dummy_seq_length), dtype=jnp.float32),
                 'seq_mask': jnp.ones((1, dummy_seq_length), dtype=jnp.float32),
+                'aatype': jnp.zeros((1, dummy_seq_length), dtype=jnp.int32),
                 'residue_index': jnp.arange(dummy_seq_length)[None],
                 'template_aatype': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
                 'template_all_atom_masks': jnp.zeros((1, 1, dummy_seq_length, 37), dtype=jnp.float32),
                 'template_all_atom_positions': jnp.zeros((1, 1, dummy_seq_length, 37, 3), dtype=jnp.float32),
-                'template_sum_probs': jnp.zeros((1, 1), dtype=jnp.float32),
-                'is_distillation': jnp.array(0, dtype=jnp.int32),
             }
+
             logging.debug("Initializing model parameters")
             try:
+                # Initialize model parameters
                 self.model_params = model_creator.init(rng, self.config)
                 self.model = model_creator.apply
+                logging.info("AlphaFold model parameters initialized successfully")
             except Exception as e:
-                logging.error(f"Error initializing model parameters: {str(e)}")
+                logging.error(f"Error initializing model parameters: {str(e)}", exc_info=True)
                 raise ValueError(f"Failed to initialize AlphaFold model parameters: {str(e)}")
 
             # Test the model with dummy input
@@ -187,6 +238,8 @@ class AlphaFoldIntegration:
             except Exception as e:
                 logging.error(f"Error during model test: {str(e)}")
                 logging.debug(f"Dummy input keys: {dummy_input.keys()}")
+                for key, value in dummy_input.items():
+                    logging.debug(f"Dummy input '{key}' shape: {value.shape}")
                 raise ValueError(f"Failed to test AlphaFold model: {str(e)}")
 
             self.msa_runner = jackhmmer.Jackhmmer(binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'))
@@ -238,18 +291,67 @@ class AlphaFoldIntegration:
         ).get_templates(query_sequence=sequence, hits=hits)
         return templates_result.features
 
+    def setup_openmm_simulation(self, protein: protein.Protein):
+        """Set up OpenMM simulation for the predicted protein structure."""
+        if not OPENMM_COMPATIBLE:
+            logging.warning("OpenMM is not compatible. Skipping molecular dynamics simulation.")
+            return
+
+        try:
+            # Convert AlphaFold protein to OpenMM topology and positions
+            topology = app.Topology()
+            chain = topology.addChain()
+            positions = []
+
+            for residue in protein.residue_index:
+                omm_residue = topology.addResidue(protein.sequence[residue], chain)
+                for atom_name, atom_position in zip(protein.atom_mask[residue], protein.atom_positions[residue]):
+                    if atom_name:
+                        topology.addAtom(atom_name, app.Element.getBySymbol(atom_name[0]), omm_residue)
+                        positions.append(atom_position * unit.angstrom)
+
+            # Create OpenMM system
+            forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+            system = forcefield.createSystem(topology, nonbondedMethod=app.PME, nonbondedCutoff=1*unit.nanometer, constraints=app.HBonds)
+
+            # Set up integrator and simulation
+            integrator = openmm.LangevinMiddleIntegrator(300*unit.kelvin, 1/unit.picosecond, 0.002*unit.picoseconds)
+            self.openmm_simulation = app.Simulation(topology, system, integrator, platform)
+            self.openmm_simulation.context.setPositions(positions)
+
+            logging.info("OpenMM simulation set up successfully.")
+        except Exception as e:
+            logging.error(f"Error setting up OpenMM simulation: {str(e)}")
+            self.openmm_simulation = None
+
     def predict_structure(self) -> protein.Protein:
         """
-        Predict protein structure using AlphaFold.
+        Predict protein structure using AlphaFold and refine with OpenMM.
 
         Returns:
-            protein.Protein: Predicted protein structure.
+            protein.Protein: Predicted and refined protein structure.
         """
         if self.model is None or self.feature_dict is None:
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
         prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
-        return protein.from_prediction(prediction_result)
+        predicted_protein = protein.from_prediction(prediction_result)
+
+        # Set up and run OpenMM simulation for refinement
+        self.setup_openmm_simulation(predicted_protein)
+        if self.openmm_simulation:
+            # Run a short simulation to refine the structure
+            self.openmm_simulation.minimizeEnergy()
+            self.openmm_simulation.step(1000)  # Run for 1000 steps
+
+            # Get refined positions
+            refined_positions = self.openmm_simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+
+            # Update the predicted protein with refined positions
+            for i, residue in enumerate(predicted_protein.residue_index):
+                predicted_protein.atom_positions[residue] = refined_positions[i].value_in_unit(unit.angstrom)
+
+        return predicted_protein
 
     def get_plddt_scores(self) -> jnp.ndarray:
         """
