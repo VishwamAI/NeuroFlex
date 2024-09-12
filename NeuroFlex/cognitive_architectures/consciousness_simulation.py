@@ -444,7 +444,6 @@ class ConsciousnessSimulation(nn.Module):
         logging.error(f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}")
         return empty_consciousness, empty_working_memory, error_working_memory
 
-    @nn.compact
     def generate_thought(self, consciousness_state):
         # Simulate thought generation based on current consciousness state
         logging.debug(f"Generate thought input shape: {consciousness_state.shape}")
@@ -558,7 +557,6 @@ class ConsciousnessSimulation(nn.Module):
 
         logging.info(f"Healing complete. Final performance: {current_performance:.4f}")
 
-    @nn.compact
     def update_model(self, x: jnp.ndarray, full_update: bool = False):
         # Simulate a training step
         consciousness_state, new_working_memory = self.__call__(x)
