@@ -3,6 +3,9 @@ from scipy import optimize, integrate
 from typing import List, Dict, Any, Union
 import time
 import logging
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,6 +26,7 @@ class AdvancedMathSolver:
         self.performance_threshold = PERFORMANCE_THRESHOLD
         self.update_interval = UPDATE_INTERVAL
         self.max_healing_attempts = MAX_HEALING_ATTEMPTS
+        self.rl_agent = RLAgent(state_dim=3, action_dim=1)  # Initialize RL agent
 
     def solve(self, problem_type: str, problem_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -113,54 +117,106 @@ class AdvancedMathSolver:
         self.last_update = time.time()
 
     def _self_heal(self):
-        """Implement self-healing mechanisms."""
+        """Implement self-healing mechanisms using RL agent."""
         logger.info("Initiating self-healing process...")
         initial_performance = self.performance
         best_performance = initial_performance
+        select_action_calls = 0
+        update_calls = 0
 
         for attempt in range(self.max_healing_attempts):
-            self.adjust_learning_rate()
+            state = self._get_state()
+            action = self.rl_agent.select_action(state)
+            select_action_calls += 1
+            self._apply_action(action)
             new_performance = self._simulate_performance()
 
             if new_performance > best_performance:
                 best_performance = new_performance
+                self.performance = best_performance
+                logger.info(f"Performance improved: {self.performance:.4f}")
+
+            reward = new_performance - initial_performance
+            next_state = self._get_state()
+            self.rl_agent.update(state, action, reward, next_state, new_performance >= self.performance_threshold)
+            update_calls += 1
 
             if new_performance >= self.performance_threshold:
-                logger.info(f"Self-healing successful after {attempt + 1} attempts.")
                 self.performance = new_performance
+                logger.info(f"Self-healing successful after {attempt + 1} attempts.")
+                logger.info(f"RL agent method calls - select_action: {select_action_calls}, update: {update_calls}")
                 return
 
         if best_performance > initial_performance:
-            logger.info(f"Self-healing improved performance. New performance: {best_performance:.4f}")
             self.performance = best_performance
+            logger.info(f"Self-healing improved performance. New performance: {self.performance:.4f}")
         else:
-            logger.warning("Self-healing not improving performance. Reverting changes.")
+            logger.warning("Self-healing not improving performance. Performance unchanged.")
+            self.performance = initial_performance
+
+        logger.info(f"Self-healing completed. Final performance: {self.performance:.4f}")
+        logger.info(f"RL agent method calls - select_action: {select_action_calls}, update: {update_calls}")
+
+    def _get_state(self) -> np.ndarray:
+        """Get the current state for the RL agent."""
+        return np.array([self.performance, self.learning_rate, len(self.performance_history)])
+
+    def _apply_action(self, action: float):
+        """Apply the action suggested by the RL agent."""
+        self.learning_rate = max(min(self.learning_rate * (1 + action), 0.1), 1e-5)
+        logger.info(f"Adjusted learning rate to {self.learning_rate:.6f}")
 
     def diagnose(self) -> List[str]:
         """Diagnose potential issues with the solver."""
         issues = []
         if self.performance < self.performance_threshold:
             issues.append(f"Low performance: {self.performance:.4f}")
-        if (time.time() - self.last_update) > self.update_interval:
-            issues.append(f"Long time since last update: {(time.time() - self.last_update) / 3600:.2f} hours")
-        if len(self.performance_history) > 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+        time_since_update = time.time() - self.last_update
+        if time_since_update > self.update_interval:
+            issues.append(f"Long time since last update: {time_since_update / 3600:.2f} hours")
+        if len(self.performance_history) >= 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
             issues.append("Consistently low performance")
         return issues
-
-    def adjust_learning_rate(self):
-        """Adjust the learning rate based on recent performance."""
-        if len(self.performance_history) >= 2:
-            if self.performance_history[-1] > self.performance_history[-2]:
-                self.learning_rate *= (1 + LEARNING_RATE_ADJUSTMENT)
-            else:
-                self.learning_rate *= (1 - LEARNING_RATE_ADJUSTMENT)
-        self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
-        logger.info(f"Adjusted learning rate to {self.learning_rate:.6f}")
 
     def _simulate_performance(self) -> float:
         """Simulate new performance after applying healing strategies."""
         # This is a placeholder. In a real scenario, you would re-evaluate the solver's performance.
         return self.performance * (1 + np.random.uniform(-0.1, 0.1))
+
+class RLAgent:
+    def __init__(self, state_dim: int, action_dim: int):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.policy_net = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_dim),
+            nn.Tanh()
+        )
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=0.001)
+
+    def select_action(self, state: np.ndarray) -> float:
+        state_tensor = torch.FloatTensor(state)
+        with torch.no_grad():
+            action = self.policy_net(state_tensor).item()
+        return action
+
+    def update(self, state: np.ndarray, action: float, reward: float, next_state: np.ndarray, done: bool):
+        state_tensor = torch.FloatTensor(state)
+        action_tensor = torch.FloatTensor([action])
+        reward_tensor = torch.FloatTensor([reward])
+        next_state_tensor = torch.FloatTensor(next_state)
+
+        # Compute the loss
+        predicted_action = self.policy_net(state_tensor)
+        loss = nn.MSELoss()(predicted_action, action_tensor)
+
+        # Backpropagate and update the policy
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
 # Example usage
 if __name__ == "__main__":
