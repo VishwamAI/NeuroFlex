@@ -202,7 +202,6 @@ class GAN(nn.Module):
         fake_output = self.discriminator(generated_images)
         return generated_images, real_output, fake_output
 
-    @nn.compact
     class Generator(nn.Module):
         features: Tuple[int, ...]
         output_shape: Tuple[int, ...]
