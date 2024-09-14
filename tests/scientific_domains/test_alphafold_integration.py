@@ -174,6 +174,7 @@ class TestAlphaFoldIntegration(unittest.TestCase):
             self.alphafold_integration.prepare_features("INVALID_SEQUENCE")
 
     def test_model_compatibility(self):
+        print(f"DEBUG: HAIKU_COMPATIBLE value: {HAIKU_COMPATIBLE}")  # Debug print
         self.assertTrue(ALPHAFOLD_COMPATIBLE)
         self.assertTrue(JAX_COMPATIBLE)
         self.assertTrue(HAIKU_COMPATIBLE)

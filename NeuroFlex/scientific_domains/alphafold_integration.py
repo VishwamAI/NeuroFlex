@@ -26,23 +26,32 @@ if not logging.getLogger().hasHandlers():
 
 logger = logging.getLogger(__name__)
 
+from packaging import version
+
 def check_version(package_name: str, expected_version: str) -> bool:
     try:
-        version = importlib.metadata.version(package_name)
-        logger.info(f"{package_name} version: {version}")
-        if version != expected_version:
-            logger.warning(f"This integration was tested with {package_name} {expected_version}. You are using version {version}. Some features may not work as expected.")
+        installed_version = importlib.metadata.version(package_name)
+        logger.info(f"{package_name} version: {installed_version}")
+        print(f"DEBUG: {package_name} version string: '{installed_version}'")
+        parsed_installed = version.parse(installed_version)
+        parsed_expected = version.parse(expected_version)
+        print(f"DEBUG: Parsed versions - Installed: {parsed_installed}, Expected: {parsed_expected}")
+        if parsed_installed != parsed_expected:
+            logger.warning(f"This integration was tested with {package_name} {expected_version}. You are using version {installed_version}. Some features may not work as expected.")
             return False
+        logger.info(f"{package_name} version check passed.")
         return True
     except importlib.metadata.PackageNotFoundError:
         logger.error(f"Unable to determine {package_name} version. Make sure it's installed correctly.")
         return False
 
 # Check versions and set flags for fallback strategies
-ALPHAFOLD_COMPATIBLE = check_version("alphafold", "2.0.0")
-JAX_COMPATIBLE = check_version("jax", "0.3.25")
-HAIKU_COMPATIBLE = check_version("haiku", "0.0.9")
-OPENMM_COMPATIBLE = check_version("openmm", "7.7.0")  # Add OpenMM version check
+ALPHAFOLD_COMPATIBLE = check_version("alphafold", "2.3.2")
+JAX_COMPATIBLE = check_version("jax", "0.4.13")
+print("DEBUG: Checking Haiku version")
+HAIKU_COMPATIBLE = check_version("dm-haiku", "0.0.9")
+print(f"DEBUG: HAIKU_COMPATIBLE = {HAIKU_COMPATIBLE}")
+OPENMM_COMPATIBLE = check_version("openmm", "8.1.1")  # Add OpenMM version check
 
 if not all([ALPHAFOLD_COMPATIBLE, JAX_COMPATIBLE, HAIKU_COMPATIBLE, OPENMM_COMPATIBLE]):
     logger.warning("This integration may have compatibility issues. Some features might be missing or work differently.")
@@ -70,28 +79,28 @@ except ImportError:
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Global variable to track which version of SCOPData is being used
-USING_BIO_SCOP_DATA = False
+# Global variable to track which version of PDBData is being used
+USING_BIO_PDB_DATA = False
 
-# Conditionally import SCOPData
+# Conditionally import PDBData
 try:
-    from Bio.Data import SCOPData
-    USING_BIO_SCOP_DATA = True
-    logging.info("Using SCOPData from Bio.Data")
+    from Bio.Data import PDBData
+    USING_BIO_PDB_DATA = True
+    logging.info("Using PDBData from Bio.Data")
 except ImportError:
-    # Fallback SCOPData
-    class SCOPData:
+    # Fallback PDBData
+    class PDBData:
         protein_letters_3to1 = {
             'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
             'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
             'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
             'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
         }
-    USING_BIO_SCOP_DATA = False
-    logging.warning("Failed to import SCOPData from Bio.Data. Using fallback SCOPData in alphafold_integration.py")
+    USING_BIO_PDB_DATA = False
+    logging.warning("Failed to import PDBData from Bio.Data. Using fallback PDBData in alphafold_integration.py")
 
-# Export AlphaFoldIntegration, SCOPData, and USING_BIO_SCOP_DATA for use in other modules
-__all__ = ['AlphaFoldIntegration', 'SCOPData', 'USING_BIO_SCOP_DATA']
+# Export AlphaFoldIntegration, PDBData, and USING_BIO_PDB_DATA for use in other modules
+__all__ = ['AlphaFoldIntegration', 'PDBData', 'USING_BIO_PDB_DATA']
 
 class AlphaFoldIntegration:
     def __init__(self):
@@ -263,8 +272,18 @@ class AlphaFoldIntegration:
 
         Returns:
             Dict: Feature dictionary for AlphaFold.
+
+        Raises:
+            ValueError: If the sequence is invalid.
         """
-        sequence_features = pipeline.make_sequence_features(sequence)
+        if not sequence or not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid sequence provided.")
+
+        sequence_features = pipeline.make_sequence_features(
+            sequence=sequence,
+            description="query",
+            num_res=len(sequence)
+        )
         msa = self._run_msa(sequence)
         msa_features = pipeline.make_msa_features(msas=[msa])
         template_features = self._search_templates(sequence)
