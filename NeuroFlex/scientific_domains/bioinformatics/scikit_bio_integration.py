@@ -15,7 +15,7 @@ class ScikitBioIntegration:
                 'gc_content': dna.gc_content(),
                 'length': len(dna)
             }
-        except skbio.exception.BiologicalSequenceError:
+        except ValueError:
             raise ValueError("Invalid DNA sequence")
 
     def calculate_diversity(self, data):
