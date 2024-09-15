@@ -1,2 +1,9 @@
 *.pyc
 .coverage
+best_model.pth
+check_backend.py
+logs/
+loss_history.png
+neuroflex-env/
+performance_history.png
+results.xml
