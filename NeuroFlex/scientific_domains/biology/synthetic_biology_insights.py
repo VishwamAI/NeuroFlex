@@ -84,17 +84,22 @@ class SyntheticBiologyInsights:
         graph = self._create_pathway_graph(reactions)
         flux_analysis = self._perform_flux_balance_analysis(graph)
 
+        num_reactions = graph.number_of_edges()
+        num_metabolites = graph.number_of_nodes()
+
         self.metabolic_pathways[pathway_name] = {
             "reactions": reactions,
             "graph": graph,
-            "flux_analysis": flux_analysis
+            "flux_analysis": flux_analysis,
+            "num_reactions": num_reactions,
+            "num_metabolites": num_metabolites
         }
 
         return {
             "pathway_name": pathway_name,
             "reactions": reactions,
-            "num_metabolites": len(graph.nodes),
-            "num_reactions": len(graph.edges),
+            "num_metabolites": num_metabolites,
+            "num_reactions": num_reactions,
             "key_metabolites": self._identify_key_metabolites(graph),
             "flux_distribution": flux_analysis["flux_distribution"]
         }
@@ -109,29 +114,82 @@ class SyntheticBiologyInsights:
 
     def _perform_flux_balance_analysis(self, graph: nx.DiGraph) -> Dict:
         """Perform flux balance analysis using linear programming."""
-        num_reactions = len(graph.edges)
-        num_metabolites = len(graph.nodes)
+        logger.info("Starting flux balance analysis")
+        num_reactions = graph.number_of_edges()
+        num_metabolites = graph.number_of_nodes()
+        logger.debug(f"Number of reactions: {num_reactions}, Number of metabolites: {num_metabolites}")
 
         # Create stoichiometric matrix
         S = np.zeros((num_metabolites, num_reactions))
-        for i, (_, _, data) in enumerate(graph.edges(data=True)):
-            S[list(graph.nodes).index(data['substrate']), i] = -1
-            S[list(graph.nodes).index(data['product']), i] = 1
+        node_list = list(graph.nodes) if isinstance(graph.nodes, list) else list(graph.nodes())
+        edges = sorted(list(graph.edges()))  # Sort edges alphabetically
+        logger.debug(f"Sorted edges: {edges}")
+        for i, (source, target) in enumerate(edges):
+            S[node_list.index(source), i] = -1
+            S[node_list.index(target), i] = 1
+        logger.debug(f"Stoichiometric matrix shape: {S.shape}")
+        logger.debug(f"Stoichiometric matrix:\n{S}")
+
+        # Check the rank of the stoichiometric matrix
+        S_rank = np.linalg.matrix_rank(S)
+        logger.debug(f"Rank of stoichiometric matrix: {S_rank}")
+        if S_rank < min(num_metabolites, num_reactions):
+            logger.warning("Stoichiometric matrix is not full rank. The system may be underdetermined.")
 
         # Objective function (maximize biomass production)
         c = np.zeros(num_reactions)
         c[-1] = 1  # Assume last reaction is biomass production
+        logger.debug(f"Objective function: {c}")
 
-        # Constraints
+        # Steady-state constraints (S * v = 0)
         b = np.zeros(num_metabolites)
+        logger.debug(f"Steady-state constraints: {b}")
+
+        # Adjust bounds for flux variables
+        bounds = [(-100, 100) for _ in range(num_reactions - 1)]  # Reduced bounds for reversible reactions
+        bounds.append((0, 100))  # Biomass production should be non-negative
+        logger.debug(f"Flux bounds: {bounds}")
+
+        # Add small tolerance to equality constraints
+        tolerance = 1e-9
+        A_ub = np.vstack([S, -S])
+        b_ub = np.concatenate([b + tolerance, -b + tolerance])
 
         # Solve linear programming problem
-        res = linprog(-c, A_eq=S, b_eq=b, method='interior-point')
+        logger.info("Solving linear programming problem")
+        try:
+            logger.debug(f"linprog input parameters: c={-c}, A_ub={A_ub}, b_ub={b_ub}, bounds={bounds}, method='interior-point'")
+            res = linprog(-c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method='interior-point')
+            logger.debug(f"Linear programming result: {res}")
+            logger.debug(f"linprog output: success={res.success}, x={res.x}, fun={res.fun}, message={res.message}")
 
-        return {
-            "flux_distribution": dict(zip(graph.edges, res.x)),
-            "optimal_biomass_flux": -res.fun
-        }
+            if res.success:
+                # Check for near-zero solution
+                if np.allclose(res.x, 0, atol=1e-6):
+                    logger.warning("Near-zero solution detected. All flux values are close to zero.")
+                    raise ValueError("Near-zero solution detected. The model may be poorly constrained.")
+
+                flux_distribution = dict(zip(edges, res.x))
+                optimal_biomass_flux = -res.fun
+                logger.info(f"Flux balance analysis successful. Optimal biomass flux: {optimal_biomass_flux}")
+                logger.debug(f"Flux distribution: {flux_distribution}")
+                logger.debug(f"Flux values: {res.x}")
+
+                # Additional check for realistic flux values
+                if optimal_biomass_flux < 1e-6:
+                    logger.warning(f"Very low optimal biomass flux: {optimal_biomass_flux}")
+                    raise ValueError("Unrealistically low optimal biomass flux. The model may need adjustment.")
+
+                return {
+                    "flux_distribution": flux_distribution,
+                    "optimal_biomass_flux": optimal_biomass_flux
+                }
+            else:
+                logger.error(f"Flux balance analysis optimization failed. Reason: {res.message}")
+                raise ValueError(f"Flux balance analysis optimization failed: {res.message}")
+        except Exception as e:
+            logger.error(f"Error during flux balance analysis: {str(e)}")
+            raise ValueError(f"Error during flux balance analysis: {str(e)}")
 
     def _identify_key_metabolites(self, graph: nx.DiGraph) -> List[str]:
         """Identify key metabolites based on their connectivity."""
@@ -142,8 +200,10 @@ class SyntheticBiologyInsights:
         Predict the function of a protein given its sequence.
         """
         seq_obj = Seq(sequence)
-        molecular_weight = SeqIO.SeqUtils.molecular_weight(seq_obj)
-        isoelectric_point = SeqIO.SeqUtils.IsoelectricPoint(seq_obj)
+        from Bio.SeqUtils.ProtParam import ProteinAnalysis
+        protein_analysis = ProteinAnalysis(str(seq_obj))
+        molecular_weight = protein_analysis.molecular_weight()
+        isoelectric_point = protein_analysis.isoelectric_point()
 
         # Use AlphaFold to predict protein structure
         features = self.alphafold_pipeline.process(sequence)

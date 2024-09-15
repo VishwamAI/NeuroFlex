@@ -1,4 +1,5 @@
 import time
+import torch
 import NeuroFlex
 from . import ddpm
 import numpy as np
@@ -13,6 +14,7 @@ from NeuroFlex.alphafold_integration import AlphaFoldIntegration
 from NeuroFlex.xarray_integration import XarrayIntegration
 from NeuroFlex.quantum_nn_module import QuantumNeuralNetwork
 from NeuroFlex.tokenisation import tokenize_text
+from NeuroFlex.Transformers.unified_transformer import UnifiedTransformer, get_unified_transformer
 
 # Define your model
 class SelfCuringAlgorithm:
@@ -102,7 +104,7 @@ model = NeuroFlex(
     jax_model=JAXModel,
     tensorflow_model=TensorFlowModel,
     pytorch_model=PyTorchModel,
-    quantum_model=QuantumModel,
+    quantum_model=QuantumNeuralNetwork,
     bioinformatics_integration=BioinformaticsIntegration(),
     scikit_bio_integration=ScikitBioIntegration(),
     ete_integration=ETEIntegration(),
@@ -186,6 +188,19 @@ xarray_integration.save_dataset('merged_bio_data', 'path/to/save/merged_bio_data
 train_data = None  # Replace with actual training data
 val_data = None    # Replace with actual validation data
 
+# Initialize the UnifiedTransformer
+vocab_size = 30000  # Adjust this based on your tokenizer
+unified_transformer = get_unified_transformer(
+    backend='pytorch',
+    vocab_size=vocab_size,
+    d_model=512,
+    num_heads=8,
+    num_layers=6,
+    d_ff=2048,
+    max_seq_length=512,
+    dropout=0.1
+)
+
 # Train your model
 trained_state, trained_model = train_model(
     model, train_data, val_data,
@@ -194,5 +209,13 @@ trained_state, trained_model = train_model(
     use_alphafold=True,
     use_quantum=True,
     alphafold_structures=alphafold_structures,
-    quantum_params=quantum_model.get_params()
+    transformer=unified_transformer
 )
+
+# Fine-tune the transformer for a specific task (e.g., classification)
+unified_transformer.fine_tune(task='classification', num_labels=2)  # Adjust num_labels as needed
+
+# Example of using the transformer for a specific task
+input_ids = torch.randint(0, vocab_size, (1, 512))  # Replace with actual input data
+attention_mask = torch.ones_like(input_ids)
+output = unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')

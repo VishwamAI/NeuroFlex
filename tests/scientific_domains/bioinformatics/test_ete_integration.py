@@ -34,6 +34,7 @@ class TestETEIntegration(unittest.TestCase):
             result = self.ete_integration.render_tree(mock_tree)
             mock_tree.render.assert_called_once_with("phylo.png", tree_style=mock_tree_style_instance)
             self.assertEqual(result, "rendered_tree.png")
+            self.assertIsNotNone(result)
 
     def test_render_tree_invalid_input(self):
         with self.assertRaises(TypeError):
@@ -43,20 +44,31 @@ class TestETEIntegration(unittest.TestCase):
         mock_tree = MagicMock(spec=Tree)
         mock_tree.get_leaf_names.return_value = ['A', 'B', 'C', 'D']
         mock_tree.get_distance.return_value = 10.0
+        mock_tree.get_tree_root.return_value = MagicMock()
+        mock_tree.get_farthest_leaf.return_value = (MagicMock(), 10.0)
+
         result = self.ete_integration.analyze_tree(mock_tree)
+
         self.assertIsInstance(result, dict)
         self.assertIn('num_leaves', result)
-        self.assertEqual(result['num_leaves'], 4)
         self.assertIn('total_branch_length', result)
+        self.assertEqual(result['num_leaves'], 4)
         self.assertEqual(result['total_branch_length'], 10.0)
 
     def test_analyze_tree_empty(self):
         mock_tree = MagicMock(spec=Tree)
         mock_tree.get_leaf_names.return_value = []
         mock_tree.get_distance.return_value = 0.0
+        mock_tree.get_tree_root.return_value = MagicMock()
+        mock_tree.get_farthest_leaf.return_value = (MagicMock(), 0.0)
+
         result = self.ete_integration.analyze_tree(mock_tree)
+
         self.assertEqual(result['num_leaves'], 0)
         self.assertEqual(result['total_branch_length'], 0.0)
+        self.assertIn('root', result)
+        self.assertIn('farthest_leaf', result)
+        self.assertEqual(result['farthest_leaf'][1], 0.0)
 
 if __name__ == '__main__':
     unittest.main()
