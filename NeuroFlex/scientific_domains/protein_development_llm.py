@@ -33,15 +33,35 @@ class ProteinDevelopmentLLM(nn.Module):
         return structure_pred, function_pred
 
     def predict_structure(self, sequence):
-        if not sequence or not isinstance(sequence, str) or not sequence.isalpha():
-            raise ValueError("Invalid sequence. Must be a non-empty string containing only alphabetic characters.")
+        if not sequence or not isinstance(sequence, str):
+            raise ValueError("Invalid sequence. Must be a non-empty string.")
+        if not sequence.isalpha():
+            raise ValueError("Sequence must contain only alphabetic characters.")
         if len(sequence) > 1000:
             raise ValueError("Sequence too long. Maximum length is 1000 characters.")
+
+        # Check cache for previously predicted structures
+        if hasattr(self, '_structure_cache') and sequence in self._structure_cache:
+            return self._structure_cache[sequence]
+
         # Use AlphaFold integration from ProteinDevelopment
         try:
-            return self.protein_dev.predict_structure(sequence)
+            structure = self.protein_dev.predict_structure(sequence)
+            confidence_score = self.protein_dev.get_prediction_confidence(structure)
+
+            # Cache the result
+            if not hasattr(self, '_structure_cache'):
+                self._structure_cache = {}
+            self._structure_cache[sequence] = (structure, confidence_score)
+
+            return structure, confidence_score
         except Exception as e:
-            raise RuntimeError(f"Error predicting structure: {str(e)}")
+            if isinstance(e, ValueError):
+                raise ValueError(f"AlphaFold prediction error: {str(e)}")
+            elif isinstance(e, RuntimeError):
+                raise RuntimeError(f"AlphaFold runtime error: {str(e)}")
+            else:
+                raise RuntimeError(f"Unexpected error during structure prediction: {str(e)}")
 
     def run_molecular_dynamics(self, structure, steps):
         if not isinstance(structure, object):  # Replace with specific structure type if available
