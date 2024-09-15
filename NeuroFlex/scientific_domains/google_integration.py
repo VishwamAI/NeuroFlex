@@ -30,10 +30,6 @@ class GoogleIntegration:
 
         return CNN(num_classes=self.num_classes)
 
-        return CNN(num_classes=self.num_classes)
-
-        return CNN()
-
     def create_rnn_model(self) -> nn.Module:
         class RNN(nn.Module):
             @nn.compact

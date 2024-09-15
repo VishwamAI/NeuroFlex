@@ -12,7 +12,6 @@ class TestGoogleIntegration(unittest.TestCase):
         self.num_classes = 10
         self.google_integration = GoogleIntegration(self.input_shape, self.num_classes)
 
-    @pytest.mark.skip(reason="AttributeError: 'CNN' object has no attribute 'num_classes'. Need to review and update CNN implementation.")
     def test_create_cnn_model(self):
         cnn_model = self.google_integration.create_cnn_model()
         self.assertIsInstance(cnn_model, nn.Module)
