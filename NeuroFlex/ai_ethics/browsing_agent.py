@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import torch
 from typing import List, Dict, Any, Literal
 from dataclasses import dataclass
 from NeuroFlex.ai_ethics.aif360_integration import AIF360Integration
@@ -86,9 +87,11 @@ class BrowsingAgent:
             relevant_memories=", ".join(relevant_memories)
         )
 
-    def select_action(self, state: jnp.ndarray) -> str:
-        # This is a placeholder. In a real implementation, this would use the RL model to select an action
-        return jax.random.choice(jax.random.PRNGKey(0), self.action_space.subsets)
+    def select_action(self, state: torch.Tensor) -> str:
+        # Convert torch tensor to jax array
+        jax_state = jnp.array(state.numpy())
+        # Use the jax state for action selection
+        return jax.random.choice(jax.random.PRNGKey(0), self.action_space.subsets, p=jax_state)
 
     def update_fairness_metrics(self, data: Dict[str, Any]):
         self.aif360.load_dataset(data['df'], data['label_name'], data['favorable_classes'],

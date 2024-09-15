@@ -1,6 +1,7 @@
 import unittest
 import torch
 import numpy as np
+import pandas as pd
 from NeuroFlex.cognitive_architectures.advanced_thinking import CDSTDP, create_cdstdp
 from NeuroFlex.ai_ethics.aif360_integration import AIF360Integration
 from NeuroFlex.ai_ethics.browsing_agent import BrowsingAgent, BrowsingAgentConfig
@@ -65,17 +66,36 @@ class TestAdvancedAIEthics(unittest.TestCase):
         self.assertTrue(torch.numel(decision[decision > 0.1]) > 1, "Model should consider multiple factors in decision-making")
 
     def test_fairness_in_decision_making(self):
-        data = {
-            "features": torch.rand(100, self.input_size),
-            "labels": torch.randint(0, 2, (100,)),
-            "protected_attribute": torch.randint(0, 2, (100,))
-        }
+        # Create a more structured dataset
+        num_samples = 100
+        features = torch.rand(num_samples, self.input_size)
+        labels = torch.randint(0, 2, (num_samples,))
+        protected_attribute = torch.randint(0, 2, (num_samples,))
+
+        # Convert to pandas DataFrame
+        df = pd.DataFrame(torch.cat([features, labels.unsqueeze(1), protected_attribute.unsqueeze(1)], dim=1).numpy())
+        df.columns = [f'feature_{i}' for i in range(self.input_size)] + ['label', 'protected_attribute']
+
+        # Load dataset into AIF360
+        self.aif360.load_dataset(
+            df=df,
+            label_name='label',
+            favorable_classes=[1],
+            protected_attribute_names=['protected_attribute'],
+            privileged_classes=[[1]]
+        )
+
+        # Train the CDSTDP model
         for _ in range(10):
-            self.cdstdp.train_step(data["features"], data["labels"].float().unsqueeze(1), dopamine=0.5)
-        predictions = self.cdstdp(data["features"]).squeeze()
+            self.cdstdp.train_step(features, labels.float().unsqueeze(1), dopamine=0.5)
+
+        # Compute fairness metrics
         fairness_metrics = self.aif360.compute_metrics()
+
+        # Assert fairness conditions
         self.assertGreater(fairness_metrics['disparate_impact'], 0.8, "Disparate impact should be greater than 0.8")
         self.assertLess(fairness_metrics['disparate_impact'], 1.25, "Disparate impact should be less than 1.25")
+        self.assertLess(abs(fairness_metrics['statistical_parity_difference']), 0.1, "Statistical parity difference should be close to 0")
 
     def test_bias_mitigation(self):
         biased_data = {

@@ -114,5 +114,51 @@ class CDSTDP(nn.Module):
         performance = 1.0 / (1.0 + loss.item())  # Convert loss to performance metric (0 to 1)
         return performance
 
+    def explain_adaptation(self) -> str:
+        if len(self.performance_history) < 2:
+            return "Not enough data to explain adaptation."
+
+        recent_performance = self.performance_history[-1]
+        previous_performance = self.performance_history[-2]
+        performance_change = recent_performance - previous_performance
+
+        if performance_change > 0:
+            explanation = f"The model has improved its performance by {performance_change:.4f}. "
+        elif performance_change < 0:
+            explanation = f"The model's performance has decreased by {abs(performance_change):.4f}. "
+        else:
+            explanation = "The model's performance has remained stable. "
+
+        if self.performance < 0.8:
+            explanation += "The model is still underperforming and may need further training or optimization."
+        elif self.performance >= 0.9:
+            explanation += "The model is performing well and has successfully adapted to the task."
+        else:
+            explanation += "The model is performing adequately but there's room for improvement."
+
+        return explanation
+
+    def explain_prediction(self, input_data: torch.Tensor) -> str:
+        with torch.no_grad():
+            layer1_output = self.input_layer(input_data)
+            layer2_output = self.hidden_layer(torch.relu(layer1_output))
+            final_output = self.output_layer(torch.relu(layer2_output))
+
+        most_influential_input = torch.argmax(torch.abs(self.input_layer.weight.sum(dim=0)))
+        most_influential_hidden = torch.argmax(torch.abs(self.hidden_layer.weight.sum(dim=0)))
+
+        explanation = f"The model's prediction is based primarily on input feature {most_influential_input} "
+        explanation += f"and hidden neuron {most_influential_hidden}. "
+
+        if final_output.item() > 0.5:
+            explanation += "The model predicts a positive outcome with "
+        else:
+            explanation += "The model predicts a negative outcome with "
+
+        confidence = abs(final_output.item() - 0.5) * 2  # Scale to 0-1
+        explanation += f"a confidence of {confidence:.2f}."
+
+        return explanation
+
 def create_cdstdp(input_size: int, hidden_size: int, output_size: int, learning_rate: float = 0.001) -> CDSTDP:
     return CDSTDP(input_size, hidden_size, output_size, learning_rate)
