@@ -6,7 +6,7 @@ from alphafold.common import protein
 from alphafold.model import model
 from alphafold.model import config
 from alphafold.data import pipeline
-from alphafold.data.tools import utils as data_utils
+from alphafold.model import data
 import ml_collections
 import jax
 from Bio.PDB import PDBParser, DSSP
@@ -25,32 +25,53 @@ class ProteinDevelopment:
         self.dssp = None
 
     def setup_alphafold(self):
-        model_config = config.model_config('model_3_ptm')  # Using the latest AlphaFold 3 model
-        model_params = data_utils.get_model_haiku_params(model_name='model_3_ptm', data_dir='/path/to/alphafold/data')
-        self.alphafold_model = model.AlphaFold(model_config)
-        self.alphafold_model.init_params(model_params)
+        try:
+            model_config = config.model_config('model_3_ptm')  # Using the latest AlphaFold 3 model
+            model_params = data.get_model_haiku_params(model_name='model_3_ptm', data_dir='/path/to/alphafold/data')
+            self.alphafold_model = model.RunModel(model_config, model_params)
+        except FileNotFoundError as e:
+            raise ValueError(f"AlphaFold data files not found: {str(e)}")
+        except ValueError as e:
+            raise ValueError(f"Invalid AlphaFold configuration: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to set up AlphaFold model: {str(e)}")
 
     def predict_structure(self, sequence):
         if not self.alphafold_model:
             raise ValueError("AlphaFold model not set up. Call setup_alphafold() first.")
 
-        features = pipeline.make_sequence_features(sequence, description="", num_res=len(sequence))
-        prediction = self.alphafold_model.predict(features)
+        if not isinstance(sequence, str) or not sequence.isalpha():
+            raise ValueError("Invalid sequence. Must be a string containing only alphabetic characters.")
+
+        try:
+            features = pipeline.make_sequence_features(sequence, description="", num_res=len(sequence))
+        except Exception as e:
+            raise ValueError(f"Error creating sequence features: {str(e)}")
+
+        try:
+            prediction = self.alphafold_model.predict(features)
+        except Exception as e:
+            raise RuntimeError(f"Error during structure prediction: {str(e)}")
 
         # Extract confidence metrics
-        plddt = prediction['plddt']
+        plddt = prediction.get('plddt')
         predicted_tm_score = prediction.get('predicted_tm_score')
         pae = prediction.get('predicted_aligned_error')
 
-        # Create a ProteinStructure object from the prediction
-        structure = protein.from_prediction(prediction, features)
+        if plddt is None:
+            raise ValueError("pLDDT score not found in prediction output")
+
+        try:
+            structure = protein.from_prediction(prediction, features)
+        except Exception as e:
+            raise RuntimeError(f"Error creating protein structure from prediction: {str(e)}")
 
         return {
             'structure': structure,
             'plddt': plddt,
             'predicted_tm_score': predicted_tm_score,
             'pae': pae,
-            'unrelaxed_protein': prediction['unrelaxed_protein']
+            'unrelaxed_protein': prediction.get('unrelaxed_protein')
         }
 
     def setup_openmm_simulation(self, protein_structure):
