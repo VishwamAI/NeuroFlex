@@ -22,8 +22,15 @@ class ETEIntegration:
     def analyze_tree(self, tree):
         if not isinstance(tree, Tree):
             raise TypeError("Input must be an ete3 Tree object")
+
+        root = tree.get_tree_root()
+        farthest_leaf, distance = tree.get_farthest_leaf()
+
         analysis = {
             'num_leaves': len(tree.get_leaf_names()),
-            'total_branch_length': tree.get_distance(tree.get_tree_root(), tree.get_farthest_leaf()[0])
+            'total_branch_length': distance,
+            'root': root,
+            'farthest_leaf': (farthest_leaf, distance)
         }
+
         return analysis

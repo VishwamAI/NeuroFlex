@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
+from openmm import unit
 from NeuroFlex.scientific_domains.protein_development import ProteinDevelopment
 
 class TestProteinDevelopment(unittest.TestCase):
@@ -41,7 +42,8 @@ class TestProteinDevelopment(unittest.TestCase):
             'plddt': np.random.rand(len(sequence)),
             'predicted_tm_score': 0.85,
             'final_atom_positions': np.random.rand(len(sequence), 37, 3),
-            'final_atom_mask': np.ones((len(sequence), 37))
+            'final_atom_mask': np.ones((len(sequence), 37)),
+            'unrelaxed_protein': MagicMock()  # Add mock unrelaxed_protein
         }
         self.protein_dev.alphafold_model = MagicMock()
         self.protein_dev.alphafold_model.predict.return_value = mock_prediction
@@ -59,9 +61,11 @@ class TestProteinDevelopment(unittest.TestCase):
         self.assertIn('structure', result)
         self.assertIn('plddt', result)
         self.assertIn('predicted_tm_score', result)
+        self.assertIn('unrelaxed_protein', result)  # Add assertion for unrelaxed_protein
         self.assertEqual(result['structure'], mock_structure)
         np.testing.assert_array_equal(result['plddt'], mock_prediction['plddt'])
         self.assertEqual(result['predicted_tm_score'], mock_prediction['predicted_tm_score'])
+        self.assertEqual(result['unrelaxed_protein'], mock_prediction['unrelaxed_protein'])  # Add assertion for unrelaxed_protein
 
     def test_predict_structure_no_model(self):
         with self.assertRaises(ValueError):
@@ -90,7 +94,11 @@ class TestProteinDevelopment(unittest.TestCase):
         self.protein_dev.openmm_simulation = MagicMock()
         self.protein_dev.run_molecular_dynamics(1000)
         self.protein_dev.openmm_simulation.minimizeEnergy.assert_called_once()
-        self.protein_dev.openmm_simulation.step.assert_called_once_with(1000)
+        self.protein_dev.openmm_simulation.context.setVelocitiesToTemperature.assert_called_once_with(300 * unit.kelvin)
+        self.protein_dev.openmm_simulation.step.assert_has_calls([
+            unittest.mock.call(1000),  # Equilibration step
+            unittest.mock.call(1000)   # Main simulation step
+        ])
 
     def test_run_molecular_dynamics_no_simulation(self):
         with self.assertRaises(ValueError):
