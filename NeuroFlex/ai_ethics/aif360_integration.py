@@ -25,7 +25,7 @@ class AIF360Integration:
 
         self.privileged_groups = [{protected_attribute_names[i]: privileged_classes[i][0]}
                                   for i in range(len(protected_attribute_names))]
-        self.unprivileged_groups = [{protected_attribute_names[i]: privileged_classes[i][1]}
+        self.unprivileged_groups = [{protected_attribute_names[i]: privileged_classes[i][-1]}
                                     for i in range(len(protected_attribute_names))]
 
     def compute_metrics(self):
@@ -38,9 +38,7 @@ class AIF360Integration:
 
         return {
             'disparate_impact': metrics.disparate_impact(),
-            'statistical_parity_difference': metrics.statistical_parity_difference(),
-            'equal_opportunity_difference': metrics.equal_opportunity_difference(),
-            'average_odds_difference': metrics.average_odds_difference()
+            'statistical_parity_difference': metrics.statistical_parity_difference()
         }
 
     def mitigate_bias(self, method='reweighing'):
