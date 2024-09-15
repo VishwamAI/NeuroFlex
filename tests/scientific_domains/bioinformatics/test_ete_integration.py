@@ -20,17 +20,20 @@ class TestETEIntegration(unittest.TestCase):
 
     def test_create_tree_invalid_newick(self):
         invalid_newick = "((A,B),(C,D);"  # Missing closing parenthesis
-        with patch('NeuroFlex.scientific_domains.bioinformatics.ete_integration.Tree', side_effect=Exception("Invalid newick string")):
+        with patch('NeuroFlex.scientific_domains.bioinformatics.ete_integration.Tree') as mock_tree:
+            mock_tree.side_effect = ValueError("Invalid newick format")
             with self.assertRaises(ValueError):
                 self.ete_integration.create_tree(invalid_newick)
 
     def test_render_tree(self):
         mock_tree = MagicMock(spec=Tree)
+        mock_tree.render.return_value = "rendered_tree.png"
         with patch('NeuroFlex.scientific_domains.bioinformatics.ete_integration.TreeStyle') as mock_tree_style:
             mock_tree_style_instance = MagicMock()
             mock_tree_style.return_value = mock_tree_style_instance
             result = self.ete_integration.render_tree(mock_tree)
             mock_tree.render.assert_called_once_with("phylo.png", tree_style=mock_tree_style_instance)
+            self.assertEqual(result, "rendered_tree.png")
             self.assertIsNotNone(result)
 
     def test_render_tree_invalid_input(self):
@@ -63,6 +66,9 @@ class TestETEIntegration(unittest.TestCase):
 
         self.assertEqual(result['num_leaves'], 0)
         self.assertEqual(result['total_branch_length'], 0.0)
+        self.assertIn('root', result)
+        self.assertIn('farthest_leaf', result)
+        self.assertEqual(result['farthest_leaf'][1], 0.0)
 
 if __name__ == '__main__':
     unittest.main()
