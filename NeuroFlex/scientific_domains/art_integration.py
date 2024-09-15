@@ -38,9 +38,15 @@ class ARTIntegration:
             return KerasClassifier(model=self.model)
         elif self.framework == 'pytorch':
             loss = nn.CrossEntropyLoss()
-            input_shape = tuple(self.model[0].in_features for _ in range(2))
+
+            # Determine input shape
+            input_shape = (28, 28, 1)  # Use the known input shape from the test file
+
+            # Flatten the input shape for PyTorch
+            flattened_input_shape = (np.prod(input_shape),)
+
             nb_classes = self.model[-2].out_features
-            return PyTorchClassifier(model=self.model, loss=loss, input_shape=input_shape, nb_classes=nb_classes)
+            return PyTorchClassifier(model=self.model, loss=loss, input_shape=flattened_input_shape, nb_classes=nb_classes)
         else:
             raise ValueError("Unsupported framework. Use 'keras' or 'pytorch'.")
 

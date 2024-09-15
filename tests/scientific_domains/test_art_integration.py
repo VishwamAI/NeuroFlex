@@ -2,6 +2,7 @@ import unittest
 import pytest
 import numpy as np
 import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 import torch
 import torch.nn as nn
 from NeuroFlex.scientific_domains.art_integration import ARTIntegration, ARTPreprocessorWrapper
@@ -34,7 +35,6 @@ class TestARTIntegration(unittest.TestCase):
         )
         return model
 
-    @pytest.mark.skip(reason="ValueError: TensorFlow is executing eagerly. Please disable eager execution.")
     def test_set_model(self):
         # Test for Keras
         self.assertIsNotNone(self.art_integration_keras.art_classifier)
