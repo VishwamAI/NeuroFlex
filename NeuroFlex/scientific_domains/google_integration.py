@@ -12,6 +12,8 @@ class GoogleIntegration:
 
     def create_cnn_model(self) -> nn.Module:
         class CNN(nn.Module):
+            num_classes: int
+
             @nn.compact
             def __call__(self, x):
                 x = nn.Conv(features=32, kernel_size=(3, 3))(x)
@@ -25,6 +27,10 @@ class GoogleIntegration:
                 x = nn.relu(x)
                 x = nn.Dense(features=self.num_classes)(x)
                 return x
+
+        return CNN(num_classes=self.num_classes)
+
+        return CNN(num_classes=self.num_classes)
 
         return CNN()
 
