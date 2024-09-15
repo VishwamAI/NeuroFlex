@@ -149,3 +149,8 @@ wrapt
 xarray
 yarl
 zipp
+PyQt5
+einops
+prophet
+psutil
+tensorboard
