@@ -3,10 +3,16 @@ import jax.numpy as jnp
 import flax.linen as nn
 from tensorflow import keras
 import tensorflow as tf
-from typing import List, Callable
+from typing import Callable, Tuple
+
+
 
 class GoogleIntegration:
     def __init__(self, input_shape, num_classes):
+        if len(input_shape) != 3:
+            raise ValueError("Input shape must be 3-dimensional (height, width, channels)")
+        if num_classes <= 0:
+            raise ValueError("Number of classes must be positive")
         self.input_shape = input_shape
         self.num_classes = num_classes
 
@@ -30,50 +36,14 @@ class GoogleIntegration:
 
         return CNN(num_classes=self.num_classes)
 
-    def create_rnn_model(self) -> nn.Module:
-        class RNN(nn.Module):
-            @nn.compact
-            def __call__(self, x):
-                lstm = nn.scan(nn.LSTMCell(256), variable_broadcast="params", split_rngs={"params": False})
-                x, _ = lstm(x)
-                x = x[:, -1, :]  # Take the last output
-                x = nn.Dense(features=self.num_classes)(x)
-                return x
 
-        return RNN()
 
-    def create_transformer_model(self) -> nn.Module:
-        class Transformer(nn.Module):
-            @nn.compact
-            def __call__(self, x):
-                # Simulate focus through attention
-                focus_attention = nn.MultiHeadDotProductAttention(num_heads=8, name="focus")(x, x)
-                x = x + focus_attention
-                x = nn.LayerNorm()(x)
 
-                # Simulate memory recall
-                memory = self.variable("memory", "long_term", lambda: jnp.zeros_like(x))
-                recall_attention = nn.MultiHeadDotProductAttention(num_heads=4, name="recall")(x, memory.value)
-                x = x + recall_attention
-                x = nn.LayerNorm()(x)
-
-                # Update memory
-                memory.value = 0.9 * memory.value + 0.1 * x
-
-                # Process information
-                x = nn.Dense(features=512)(x)
-                x = nn.relu(x)
-                x = nn.Dense(features=self.num_classes)(x)
-
-                # Use vmap for efficient batch processing
-                return jax.vmap(lambda y: y)(x)
-
-        return Transformer()
 
     def xla_compilation(self, model: nn.Module, input_shape: tuple) -> Callable:
         @jax.jit
-        def forward(params, inputs):
-            return model.apply({'params': params}, inputs)
+        def forward(variables, inputs):
+            return model.apply(variables, inputs)
 
         return forward
 
@@ -93,6 +63,4 @@ class GoogleIntegration:
 # Example usage:
 # google_integration = GoogleIntegration((28, 28, 1), 10)
 # cnn_model = google_integration.create_cnn_model()
-# rnn_model = google_integration.create_rnn_model()
-# transformer_model = google_integration.create_transformer_model()
 # compiled_cnn = google_integration.xla_compilation(cnn_model, (1, 28, 28, 1))
