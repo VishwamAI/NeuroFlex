@@ -70,7 +70,15 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
         k = k.softmax(dim=-2)
 
         if mask is not None:
-            k = k * mask.unsqueeze(1)
+            # Ensure mask has the correct shape for broadcasting
+            while mask.dim() < k.dim():
+                mask = mask.unsqueeze(1)
+            # Expand mask to match the batch size, number of heads, and sequence length
+            mask = mask.expand(k.size(0), k.size(1), k.size(2), -1)
+            # Expand mask to match the last dimension of k
+            mask = mask.unsqueeze(-1).expand_as(k)
+            # Apply the mask to k
+            k = k * mask.to(k.dtype)
 
         context = k.transpose(-2, -1) @ v
         out = q @ context
