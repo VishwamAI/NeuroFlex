@@ -1,6 +1,7 @@
 import numpy as np
 import sympy as sp
 from scipy import optimize, integrate, linalg
+import warnings
 
 class MathSolver:
     def __init__(self):
@@ -22,7 +23,32 @@ class MathSolver:
         """
         Find the minimum of a function using numerical optimization.
         """
-        return optimize.minimize(func, initial_guess, method=method)
+        return self._optimize_with_fallback(func, initial_guess, method)
+
+    def _optimize_with_fallback(self, func, initial_guess, method='BFGS'):
+        """
+        Perform optimization with fallback methods and custom error handling.
+        """
+        methods = [method, 'Nelder-Mead', 'Powell', 'CG', 'L-BFGS-B']
+        for m in methods:
+            try:
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")
+                    result = optimize.minimize(func, initial_guess, method=m)
+                    if len(w) == 0:  # No warnings
+                        return result
+                    elif "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
+                        print(f"Warning in {m}: {w[-1].message}. Trying next method.")
+                    else:
+                        print(f"Unexpected warning in {m}: {w[-1].message}. Trying next method.")
+            except Exception as e:
+                if "ABNORMAL_TERMINATION_IN_LNSRCH" in str(e):
+                    print(f"LNSRCH termination in {m}. Trying next method.")
+                else:
+                    print(f"Unexpected error in {m}: {str(e)}. Trying next method.")
+
+        # If all methods fail, return the best result so far
+        return optimize.minimize(func, initial_guess, method='Nelder-Mead')
 
     def linear_algebra_operations(self, matrix_a, matrix_b, operation='multiply'):
         """
