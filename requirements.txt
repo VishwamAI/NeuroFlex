@@ -23,6 +23,7 @@ deap
 decorator
 dill
 dm-haiku==0.0.9
+dm-sonnet
 dm-tree
 docker
 dpath
