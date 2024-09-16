@@ -87,12 +87,6 @@ class NeuroFlex:
             self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)
 
     def process_text(self, text):
-        if self.unified_transformer:
-            return self.unified_transformer.tokenize(text)
-        else:
-            return tokenize_text(text)
-
-    def process_text(self, text):
         """
         Process the input text by tokenizing using UnifiedTransformer if available,
         otherwise fall back to the default tokenization method.
@@ -103,8 +97,7 @@ class NeuroFlex:
         Returns:
             List[int] or List[str]: A list of token ids or tokens from the processed text.
         """
-        if hasattr(self, 'unified_transformer'):
-            # Assuming UnifiedTransformer has a tokenize method
+        if self.unified_transformer:
             return self.unified_transformer.tokenize(text)
         else:
             return tokenize_text(text)
@@ -237,10 +230,19 @@ input_ids = torch.randint(0, vocab_size, (1, 512))  # Replace with actual input 
 attention_mask = torch.ones_like(input_ids)
 output = unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
 
-# Fine-tune the transformer for a specific task (e.g., classification)
-unified_transformer.fine_tune(task='classification', num_labels=2)  # Adjust num_labels as needed
+# Example of using the transformer for text generation
+input_text = "This is an example input for text generation."
+tokenized_input = model.process_text(input_text)
+input_ids = torch.tensor([tokenized_input])
+generated_text = unified_transformer.generate(input_ids, max_length=100)
+print("Generated text:", generated_text)
 
-# Example of using the transformer for a specific task
-input_ids = torch.randint(0, vocab_size, (1, 512))  # Replace with actual input data
-attention_mask = torch.ones_like(input_ids)
-output = unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
+# Example of few-shot learning with the transformer
+support_set = [
+    torch.randint(0, vocab_size, (1, 20)),  # Example 1
+    torch.randint(0, vocab_size, (1, 20)),  # Example 2
+    torch.randint(0, vocab_size, (1, 20))   # Example 3
+]
+query = torch.randint(0, vocab_size, (1, 10))
+few_shot_output = unified_transformer.few_shot_learning(support_set, query)
+print("Few-shot learning output:", few_shot_output)

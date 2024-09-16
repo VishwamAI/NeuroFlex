@@ -1,10 +1,13 @@
 import numpy as np
-from neuroflex import NeuroFlex
-from neuroflex.utils import Config
+import torch
+from NeuroFlex import NeuroFlex
+from NeuroFlex.utils import Config
 
 def main():
     # Initialize NeuroFlex
     config = Config.get_config()
+    config['USE_UNIFIED_TRANSFORMER'] = True
+    config['UNIFIED_TRANSFORMER_VOCAB_SIZE'] = 30000  # Adjust as needed
     neuroflex = NeuroFlex(config)
     neuroflex.setup()
 
@@ -55,6 +58,20 @@ def main():
     # Example: Edge AI optimization
     optimized_model = neuroflex.optimize_for_edge(neuroflex.core_model)
     print("Model optimized for edge deployment")
+
+    # Example: Using UnifiedTransformer
+    if neuroflex.unified_transformer:
+        input_text = "This is an example sentence for the UnifiedTransformer."
+        tokenized_input = neuroflex.process_text(input_text)
+        input_ids = torch.tensor([tokenized_input])
+        attention_mask = torch.ones_like(input_ids)
+
+        # Fine-tune for classification task
+        neuroflex.unified_transformer.fine_tune(task='classification', num_labels=2)
+
+        # Perform classification
+        output = neuroflex.unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
+        print("UnifiedTransformer classification output:", output)
 
 if __name__ == "__main__":
     main()
