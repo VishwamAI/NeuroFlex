@@ -9,6 +9,7 @@ from .cognitive_architectures import ConsciousnessSimulation
 from .scientific_domains import AlphaFoldIntegration, MathSolver
 from .edge_ai import EdgeAIOptimization
 from .utils import Config, setup_logging
+from .Transformers.unified_transformer import UnifiedTransformer
 
 class NeuroFlex:
     def __init__(self, config=None):
@@ -23,6 +24,7 @@ class NeuroFlex:
         self.alphafold = None
         self.math_solver = None
         self.edge_optimizer = None
+        self.unified_transformer = None
 
     def setup(self):
         self.logger.info("Setting up NeuroFlex components...")
@@ -35,6 +37,7 @@ class NeuroFlex:
         self._setup_alphafold()
         self._setup_math_solver()
         self._setup_edge_optimizer()
+        self._setup_unified_transformer()
         self.logger.info("NeuroFlex setup complete.")
 
     def _setup_core_model(self):
@@ -81,6 +84,18 @@ class NeuroFlex:
     def _setup_edge_optimizer(self):
         if self.config['USE_EDGE_OPTIMIZATION']:
             self.edge_optimizer = EdgeAIOptimization()
+
+    def _setup_unified_transformer(self):
+        if self.config['USE_UNIFIED_TRANSFORMER']:
+            self.unified_transformer = UnifiedTransformer(
+                vocab_size=self.config['UNIFIED_TRANSFORMER_VOCAB_SIZE'],
+                d_model=self.config['UNIFIED_TRANSFORMER_D_MODEL'],
+                num_heads=self.config['UNIFIED_TRANSFORMER_NUM_HEADS'],
+                num_layers=self.config['UNIFIED_TRANSFORMER_NUM_LAYERS'],
+                d_ff=self.config['UNIFIED_TRANSFORMER_D_FF'],
+                max_seq_length=self.config['UNIFIED_TRANSFORMER_MAX_SEQ_LENGTH'],
+                dropout=self.config['UNIFIED_TRANSFORMER_DROPOUT']
+            )
 
     def train(self, data, labels):
         # Implement training logic here
