@@ -15,6 +15,9 @@ from NeuroFlex.xarray_integration import XarrayIntegration
 from NeuroFlex.quantum_nn_module import QuantumNeuralNetwork
 from NeuroFlex.tokenisation import tokenize_text
 from NeuroFlex.Transformers.unified_transformer import UnifiedTransformer, get_unified_transformer
+from NeuroFlex.robustness import adversarial_attack_detection, model_drift_detection
+from NeuroFlex.fairness import fairness_metrics, bias_mitigation
+from NeuroFlex.ethics import ethical_ai_guidelines
 
 # Define your model
 class SelfCuringAlgorithm:
@@ -29,6 +32,13 @@ class SelfCuringAlgorithm:
             issues.append("Model performance is below threshold")
         if not hasattr(self.model, 'last_update') or (time.time() - self.model.last_update > 86400):
             issues.append("Model hasn't been updated in 24 hours")
+
+        # New security diagnostics
+        if adversarial_attack_detection(self.model):
+            issues.append("Potential adversarial attack detected")
+        if model_drift_detection(self.model):
+            issues.append("Model drift detected")
+
         return issues
 
     def heal(self, issues):
@@ -39,6 +49,10 @@ class SelfCuringAlgorithm:
                 self.improve_model()
             elif issue == "Model hasn't been updated in 24 hours":
                 self.update_model()
+            elif issue == "Potential adversarial attack detected":
+                self.mitigate_adversarial_attack()
+            elif issue == "Model drift detected":
+                self.correct_model_drift()
 
     def train_model(self):
         print("Training model...")
@@ -56,11 +70,22 @@ class SelfCuringAlgorithm:
         # Logic to update the model with new data would go here
         self.model.last_update = time.time()
 
+    def mitigate_adversarial_attack(self):
+        print("Mitigating potential adversarial attack...")
+        # Implement adversarial training or other mitigation strategies
+        pass
+
+    def correct_model_drift(self):
+        print("Correcting model drift...")
+        # Implement model recalibration or retraining on recent data
+        pass
+
 class NeuroFlex:
     def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
                  use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
                  pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
-                 ete_integration=None, alphafold_integration=None, alphafold_params=None, use_unified_transformer=False,
+                 ete_integration=None, alphafold_integration=None, alphafold_params=None,
+                 fairness_threshold=0.8, ethical_guidelines=None, use_unified_transformer=False,
                  unified_transformer_params=None):
         self.features = features
         self.use_cnn = use_cnn
@@ -79,6 +104,8 @@ class NeuroFlex:
         self.ete_integration = ete_integration
         self.alphafold_integration = alphafold_integration
         self.alphafold_params = alphafold_params or {}
+        self.fairness_threshold = fairness_threshold
+        self.ethical_guidelines = ethical_guidelines or {}
         self.use_unified_transformer = use_unified_transformer
         self.unified_transformer = None
         self.unified_transformer_params = unified_transformer_params or {}
@@ -108,6 +135,40 @@ class NeuroFlex:
             return self.unified_transformer.tokenize(text)
         else:
             return tokenize_text(text)
+
+    def check_fairness(self, predictions, sensitive_attributes):
+        """
+        Check if the model's predictions satisfy the fairness constraints.
+
+        Args:
+            predictions (numpy.ndarray): Model predictions.
+            sensitive_attributes (numpy.ndarray): Sensitive attributes of the data.
+
+        Returns:
+            bool: True if fairness constraints are satisfied, False otherwise.
+        """
+        # Implement fairness metric calculation (e.g., demographic parity, equal opportunity)
+        fairness_score = self._calculate_fairness_score(predictions, sensitive_attributes)
+        return fairness_score >= self.fairness_threshold
+
+    def _calculate_fairness_score(self, predictions, sensitive_attributes):
+        # Placeholder for fairness metric calculation
+        # Implement actual fairness metric calculation here
+        return 1.0
+
+    def apply_ethical_guidelines(self, decision):
+        """
+        Apply ethical guidelines to the model's decision.
+
+        Args:
+            decision: The model's decision or output.
+
+        Returns:
+            The decision after applying ethical guidelines.
+        """
+        for guideline, action in self.ethical_guidelines.items():
+            decision = action(decision)
+        return decision
 
 model = NeuroFlex(
     features=[64, 32, 10],
@@ -141,8 +202,13 @@ processed_sequences = bio_integration.process_sequences(sequences)
 sequence_summaries = bio_integration.sequence_summary(processed_sequences)
 
 # Prepare ScikitBio data
-dna_sequences = [seq.seq for seq in processed_sequences]
-alignments = scikit_bio_integration.align_dna_sequences(dna_sequences)
+dna_sequences = [str(seq.seq) for seq in processed_sequences if bio_integration._is_dna(seq.seq)]
+alignments = []
+for i in range(len(dna_sequences)):
+    for j in range(i+1, len(dna_sequences)):
+        alignment = scikit_bio_integration.align_dna_sequences(dna_sequences[i], dna_sequences[j])
+        if alignment[0] is not None:
+            alignments.append(alignment)
 msa = scikit_bio_integration.msa_maker(dna_sequences)
 gc_contents = [scikit_bio_integration.dna_gc_content(seq) for seq in dna_sequences]
 

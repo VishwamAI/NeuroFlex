@@ -153,4 +153,4 @@ PyQt5
 einops
 prophet
 psutil
-tensorboard
+aif360
