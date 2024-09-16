@@ -85,7 +85,8 @@ class NeuroFlex:
                  use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
                  pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
                  ete_integration=None, alphafold_integration=None, alphafold_params=None,
-                 fairness_threshold=0.8, ethical_guidelines=None):
+                 fairness_threshold=0.8, ethical_guidelines=None, use_unified_transformer=False,
+                 unified_transformer_params=None):
         self.features = features
         self.use_cnn = use_cnn
         self.use_rnn = use_rnn
@@ -105,19 +106,35 @@ class NeuroFlex:
         self.alphafold_params = alphafold_params or {}
         self.fairness_threshold = fairness_threshold
         self.ethical_guidelines = ethical_guidelines or {}
+        self.use_unified_transformer = use_unified_transformer
+        self.unified_transformer = None
+        self.unified_transformer_params = unified_transformer_params or {}
+
+        if self.use_unified_transformer:
+            self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)
+
+    def process_text(self, text):
+        if self.unified_transformer:
+            return self.unified_transformer.tokenize(text)
+        else:
+            return tokenize_text(text)
 
     def process_text(self, text):
         """
-        Process the input text by tokenizing.
+        Process the input text by tokenizing using UnifiedTransformer if available,
+        otherwise fall back to the default tokenization method.
 
         Args:
             text (str): The input text to be processed.
 
         Returns:
-            List[str]: A list of tokens from the processed text.
+            List[int] or List[str]: A list of token ids or tokens from the processed text.
         """
-        tokens = tokenize_text(text)
-        return tokens
+        if hasattr(self, 'unified_transformer'):
+            # Assuming UnifiedTransformer has a tokenize method
+            return self.unified_transformer.tokenize(text)
+        else:
+            return tokenize_text(text)
 
     def check_fairness(self, predictions, sensitive_attributes):
         """
@@ -277,6 +294,14 @@ trained_state, trained_model = train_model(
     alphafold_structures=alphafold_structures,
     transformer=unified_transformer
 )
+
+# Fine-tune the transformer for a specific task (e.g., classification)
+unified_transformer.fine_tune(task='classification', num_labels=2)  # Adjust num_labels as needed
+
+# Example of using the transformer for a specific task
+input_ids = torch.randint(0, vocab_size, (1, 512))  # Replace with actual input data
+attention_mask = torch.ones_like(input_ids)
+output = unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
 
 # Fine-tune the transformer for a specific task (e.g., classification)
 unified_transformer.fine_tune(task='classification', num_labels=2)  # Adjust num_labels as needed

@@ -1,14 +1,13 @@
 import torch
-from torch import nn
+from torch import nn as torch_nn
 import math
 import jax
 import jax.numpy as jnp
-import flax.linen as fnn
+import flax.linen as flax_nn
 import haiku as hk
 import sonnet as snt
 import tensorflow as tf
 from jax import random
-from flax import linen as nn
 from typing import Any, Callable
 
 class FrameworkWrapper:
@@ -21,15 +20,15 @@ class FrameworkWrapper:
         elif self.backend == 'jax':
             return hk.to_module(module_class)
         elif self.backend == 'flax':
-            return fnn.Module(module_class)
+            return flax_nn.Module
         elif self.backend == 'sonnet':
-            return snt.Module(module_class)
+            return snt.Module
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
 framework = FrameworkWrapper()
 
-class MultiHeadAttention(framework.get_module(nn.Module)):
+class MultiHeadAttention(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, num_heads):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
@@ -38,20 +37,20 @@ class MultiHeadAttention(framework.get_module(nn.Module)):
 
         self.depth = d_model // self.num_heads
         if framework.backend == 'pytorch':
-            self.wq = nn.Linear(d_model, d_model)
-            self.wk = nn.Linear(d_model, d_model)
-            self.wv = nn.Linear(d_model, d_model)
-            self.dense = nn.Linear(d_model, d_model)
+            self.wq = torch_nn.Linear(d_model, d_model)
+            self.wk = torch_nn.Linear(d_model, d_model)
+            self.wv = torch_nn.Linear(d_model, d_model)
+            self.dense = torch_nn.Linear(d_model, d_model)
         elif framework.backend == 'jax':
             self.wq = hk.Linear(d_model)
             self.wk = hk.Linear(d_model)
             self.wv = hk.Linear(d_model)
             self.dense = hk.Linear(d_model)
         elif framework.backend == 'flax':
-            self.wq = fnn.Dense(d_model)
-            self.wk = fnn.Dense(d_model)
-            self.wv = fnn.Dense(d_model)
-            self.dense = fnn.Dense(d_model)
+            self.wq = flax_nn.Dense(d_model)
+            self.wk = flax_nn.Dense(d_model)
+            self.wv = flax_nn.Dense(d_model)
+            self.dense = flax_nn.Dense(d_model)
         elif framework.backend == 'sonnet':
             self.wq = snt.Linear(d_model)
             self.wk = snt.Linear(d_model)
@@ -60,12 +59,30 @@ class MultiHeadAttention(framework.get_module(nn.Module)):
 
     def split_heads(self, x, batch_size):
         if framework.backend == 'pytorch':
-            x = x.view(batch_size, -1, self.num_heads, self.depth)
-            return x.permute(0, 2, 1, 3)
+            return x.view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
         elif framework.backend in ['jax', 'flax']:
-            return jnp.reshape(x, (batch_size, -1, self.num_heads, self.depth)).transpose(0, 2, 1, 3)
+            return jnp.transpose(x.reshape(batch_size, -1, self.num_heads, self.depth), (0, 2, 1, 3))
         elif framework.backend == 'sonnet':
             return tf.transpose(tf.reshape(x, (batch_size, -1, self.num_heads, self.depth)), perm=[0, 2, 1, 3])
+
+    def linear_attention(self, q, k, v, mask=None):
+        q = q.softmax(dim=-1)
+        k = k.softmax(dim=-2)
+
+        if mask is not None:
+            # Ensure mask has the correct shape for broadcasting
+            while mask.dim() < k.dim():
+                mask = mask.unsqueeze(1)
+            # Expand mask to match the batch size, number of heads, and sequence length
+            mask = mask.expand(k.size(0), k.size(1), k.size(2), -1)
+            # Expand mask to match the last dimension of k
+            mask = mask.unsqueeze(-1).expand_as(k)
+            # Apply the mask to k
+            k = k * mask.to(k.dtype)
+
+        context = k.transpose(-2, -1) @ v
+        out = q @ context
+        return out
 
     def forward(self, q, k, v, mask=None):
         batch_size = q.shape[0]
@@ -79,90 +96,107 @@ class MultiHeadAttention(framework.get_module(nn.Module)):
         v = self.split_heads(v, batch_size)
 
         if framework.backend == 'pytorch':
-            scaled_attention_logits = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(self.depth)
+            output = self.linear_attention(q, k, v, mask)
         elif framework.backend in ['jax', 'flax']:
-            scaled_attention_logits = jnp.matmul(q, jnp.swapaxes(k, -1, -2)) / jnp.sqrt(self.depth)
+            output = jax.vmap(self.linear_attention)(q, k, v, mask)
         elif framework.backend == 'sonnet':
-            scaled_attention_logits = tf.matmul(q, tf.transpose(k, perm=[0, 1, 3, 2])) / tf.math.sqrt(float(self.depth))
-
-        if mask is not None:
-            if framework.backend == 'pytorch':
-                # Reshape mask to match the scaled attention logits shape
-                if mask.dim() == 2:
-                    mask = mask.unsqueeze(1).unsqueeze(2)
-                elif mask.dim() == 3:
-                    mask = mask.unsqueeze(1)
-
-                # Ensure mask has the correct number of dimensions
-                while mask.dim() < 4:
-                    mask = mask.unsqueeze(1)
-
-                # Expand mask to match batch size and number of heads
-                mask = mask.expand(batch_size, self.num_heads, -1, mask.size(-1))
-
-                scaled_attention_logits = scaled_attention_logits.masked_fill(mask == 0, float('-inf'))
-            elif framework.backend in ['jax', 'flax']:
-                mask = jnp.expand_dims(mask, axis=(1, 2))
-                scaled_attention_logits = jnp.where(mask == 0, -1e9, scaled_attention_logits)
-            elif framework.backend == 'sonnet':
-                mask = tf.expand_dims(mask, axis=[1, 2])
-                scaled_attention_logits = tf.where(mask == 0, -1e9, scaled_attention_logits)
+            output = tf.vectorized_map(lambda x: self.linear_attention(*x), (q, k, v, mask))
 
         if framework.backend == 'pytorch':
-            attention_weights = torch.softmax(scaled_attention_logits, dim=-1)
+            output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
         elif framework.backend in ['jax', 'flax']:
-            attention_weights = jax.nn.softmax(scaled_attention_logits, axis=-1)
+            output = jnp.transpose(output, (0, 2, 1, 3)).reshape(batch_size, -1, self.d_model)
         elif framework.backend == 'sonnet':
-            attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
-
-        if framework.backend == 'pytorch':
-            output = torch.matmul(attention_weights, v)
-            output = output.permute(0, 2, 1, 3).contiguous()
-            output = output.view(batch_size, -1, self.d_model)
-        elif framework.backend in ['jax', 'flax']:
-            output = jnp.matmul(attention_weights, v)
-            output = jnp.transpose(output, (0, 2, 1, 3))
-            output = jnp.reshape(output, (batch_size, -1, self.d_model))
-        elif framework.backend == 'sonnet':
-            output = tf.matmul(attention_weights, v)
-            output = tf.transpose(output, perm=[0, 2, 1, 3])
-            output = tf.reshape(output, (batch_size, -1, self.d_model))
+            output = tf.reshape(tf.transpose(output, perm=[0, 2, 1, 3]), (batch_size, -1, self.d_model))
 
         output = self.dense(output)
 
-        return output, attention_weights
+        return output, None  # Return None instead of attention weights for consistency
 
-class PositionalEncoding(nn.Module):
+class PositionalEncoding(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+        self.d_model = d_model
+        self.max_len = max_len
+
+    def _get_angles(self, pos, i):
+        if framework.backend == 'pytorch':
+            angle_rates = 1 / torch.pow(10000, (2 * (i // 2)) / self.d_model)
+            return pos * angle_rates
+        elif framework.backend in ['jax', 'flax']:
+            angle_rates = 1 / jnp.power(10000, (2 * (i // 2)) / self.d_model)
+            return pos * angle_rates
+        elif framework.backend in ['sonnet', 'tensorflow']:
+            angle_rates = 1 / tf.pow(10000, (2 * (i // 2)) / tf.cast(self.d_model, tf.float32))
+            return pos * angle_rates
 
     def forward(self, x):
-        return x + self.pe[:x.size(0), :]
+        if framework.backend == 'pytorch':
+            position = torch.arange(0, x.size(1), dtype=torch.float32).unsqueeze(1)
+            div_term = torch.arange(0, self.d_model, 2, dtype=torch.float32)
+            angles = self._get_angles(position, div_term)
+            emb = torch.zeros(x.size(1), self.d_model).to(x.device)
+            emb[:, 0::2] = torch.sin(angles)
+            emb[:, 1::2] = torch.cos(angles)
+            return x + emb.unsqueeze(0)
+        elif framework.backend in ['jax', 'flax']:
+            position = jnp.arange(0, x.shape[1], dtype=jnp.float32)[:, jnp.newaxis]
+            div_term = jnp.arange(0, self.d_model, 2, dtype=jnp.float32)
+            angles = self._get_angles(position, div_term)
+            emb = jnp.zeros((x.shape[1], self.d_model))
+            emb = emb.at[:, 0::2].set(jnp.sin(angles))
+            emb = emb.at[:, 1::2].set(jnp.cos(angles))
+            return x + emb[jnp.newaxis, :, :]
+        elif framework.backend in ['sonnet', 'tensorflow']:
+            position = tf.range(0, tf.shape(x)[1], dtype=tf.float32)[:, tf.newaxis]
+            div_term = tf.range(0, self.d_model, 2, dtype=tf.float32)
+            angles = self._get_angles(position, div_term)
+            emb = tf.zeros((tf.shape(x)[1], self.d_model))
+            emb = emb + tf.scatter_nd(tf.constant([[0, 1]]), tf.sin(angles), tf.shape(emb))
+            emb = emb + tf.scatter_nd(tf.constant([[1, 0]]), tf.cos(angles), tf.shape(emb))
+            return x + tf.expand_dims(emb, 0)
 
-class FeedForward(nn.Module):
+class FeedForward(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, d_ff):
         super(FeedForward, self).__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
+        if framework.backend == 'pytorch':
+            self.linear1 = torch_nn.Linear(d_model, d_ff)
+            self.linear2 = torch_nn.Linear(d_ff, d_model)
+        elif framework.backend == 'jax':
+            self.linear1 = hk.Linear(d_ff)
+            self.linear2 = hk.Linear(d_model)
+        elif framework.backend == 'flax':
+            self.linear1 = flax_nn.Dense(d_ff)
+            self.linear2 = flax_nn.Dense(d_model)
+        elif framework.backend == 'sonnet':
+            self.linear1 = snt.Linear(d_ff)
+            self.linear2 = snt.Linear(d_model)
 
     def forward(self, x):
-        return self.linear2(torch.relu(self.linear1(x)))
+        if framework.backend == 'pytorch':
+            return self.linear2(torch.relu(self.linear1(x)))
+        elif framework.backend in ['jax', 'flax']:
+            return self.linear2(jax.nn.relu(self.linear1(x)))
+        elif framework.backend == 'sonnet':
+            return self.linear2(tf.nn.relu(self.linear1(x)))
 
-class EncoderLayer(nn.Module):
+class EncoderLayer(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
         super(EncoderLayer, self).__init__()
         self.mha = MultiHeadAttention(d_model, num_heads)
         self.ffn = FeedForward(d_model, d_ff)
-        self.layernorm1 = nn.LayerNorm(d_model)
-        self.layernorm2 = nn.LayerNorm(d_model)
-        self.dropout = nn.Dropout(dropout)
+        if framework.backend == 'pytorch':
+            self.layernorm1 = torch_nn.LayerNorm(d_model)
+            self.layernorm2 = torch_nn.LayerNorm(d_model)
+            self.dropout = torch_nn.Dropout(dropout)
+        elif framework.backend in ['jax', 'flax']:
+            self.layernorm1 = flax_nn.LayerNorm()
+            self.layernorm2 = flax_nn.LayerNorm()
+            self.dropout = lambda x: flax_nn.Dropout(rate=dropout)(x, deterministic=False)
+        elif framework.backend == 'sonnet':
+            self.layernorm1 = snt.LayerNorm(axis=-1, create_scale=True, create_offset=True)
+            self.layernorm2 = snt.LayerNorm(axis=-1, create_scale=True, create_offset=True)
+            self.dropout = lambda x: tf.nn.dropout(x, rate=dropout)
 
     def forward(self, x, mask=None):
         attn_output, _ = self.mha(x, x, x, mask)
@@ -171,7 +205,7 @@ class EncoderLayer(nn.Module):
         out2 = self.layernorm2(out1 + self.dropout(ffn_output))
         return out2
 
-class UnifiedTransformer(nn.Module):
+class UnifiedTransformer(framework.get_module(torch_nn.Module)):
     """
     UnifiedTransformer: A transformer architecture that combines elements from BERT, GPT, LLaMA, and T5 models.
 
@@ -203,27 +237,26 @@ class UnifiedTransformer(nn.Module):
             dropout (float): Dropout rate (default: 0.1).
         """
         super(UnifiedTransformer, self).__init__()
+        self.vocab_size = vocab_size
         self.d_model = d_model
-        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.embedding = torch_nn.Embedding(vocab_size, d_model)
         self.pos_encoding = PositionalEncoding(d_model, max_seq_length)
         # Encoder layers for bidirectional context understanding (BERT-like)
-        self.encoder_layers = nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.encoder_layers = torch_nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
         # Decoder layers for autoregressive generation (GPT-like)
-        self.decoder_layers = nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
-        self.dropout = nn.Dropout(dropout)
-        self.final_layer_norm = nn.LayerNorm(d_model)
+        self.decoder_layers = torch_nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.dropout = torch_nn.Dropout(dropout)
+        self.final_layer_norm = torch_nn.LayerNorm(d_model)
         # Language model head for text generation and task-specific outputs
-        self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
+        self.lm_head = torch_nn.Linear(d_model, vocab_size, bias=False)
 
     def forward(self, x, mask=None, decoder_input_ids=None):
-        vocab_size = self.lm_head.out_features
-
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.long)
         else:
             x = x.long()
 
-        x = torch.clamp(x, 0, vocab_size - 1)
+        x = torch.clamp(x, 0, self.vocab_size - 1)
         x = self.embedding(x) * math.sqrt(self.d_model)
         x = self.pos_encoding(x)
         x = self.dropout(x)
@@ -245,7 +278,7 @@ class UnifiedTransformer(nn.Module):
             else:
                 decoder_input_ids = decoder_input_ids.long()
 
-            decoder_input_ids = torch.clamp(decoder_input_ids, 0, vocab_size - 1)
+            decoder_input_ids = torch.clamp(decoder_input_ids, 0, self.vocab_size - 1)
             decoder_input = self.embedding(decoder_input_ids) * math.sqrt(self.d_model)
             decoder_input = self.pos_encoding(decoder_input)
             for layer in self.decoder_layers:
@@ -277,15 +310,14 @@ class UnifiedTransformer(nn.Module):
         Returns:
             torch.Tensor: Generated token ids.
         """
-        generated = input_ids.clamp(0, self.lm_head.out_features - 1)
-        past_key_values = None
-        for _ in range(max_length):
+        generated = input_ids.clamp(0, self.vocab_size - 1)
+        while generated.size(1) < max_length:
             outputs = self.forward(generated)
             next_token_logits = self.lm_head(outputs[:, -1, :])
             next_token_logits = next_token_logits / temperature
 
             # Top-k filtering
-            top_k_logits, top_k_indices = torch.topk(next_token_logits, k=top_k, dim=-1)
+            top_k_logits, top_k_indices = torch.topk(next_token_logits, k=min(top_k, self.vocab_size), dim=-1)
             next_token_probs = torch.softmax(top_k_logits, dim=-1)
 
             # Sample from the filtered distribution
@@ -293,7 +325,8 @@ class UnifiedTransformer(nn.Module):
             next_token = top_k_indices.gather(-1, next_token_index)
 
             generated = torch.cat([generated, next_token], dim=-1)
-        return generated.clamp(0, self.lm_head.out_features - 1)
+
+        return generated[:, :max_length]
 
     def text_to_text(self, input_ids, target_ids):
         """
@@ -318,9 +351,8 @@ class UnifiedTransformer(nn.Module):
 
     def _text_to_text_pytorch(self, input_ids, target_ids):
         torch.manual_seed(42)  # Set a fixed seed for deterministic behavior
-        vocab_size = self.lm_head.out_features
-        input_ids = torch.clamp(input_ids, 0, vocab_size - 1)
-        target_ids = torch.clamp(target_ids, 0, vocab_size - 1)
+        input_ids = torch.clamp(input_ids, 0, self.vocab_size - 1)
+        target_ids = torch.clamp(target_ids, 0, self.vocab_size - 1)
 
         try:
             encoder_output = self.forward(input_ids)
@@ -334,7 +366,7 @@ class UnifiedTransformer(nn.Module):
             decoder_input = self.pos_encoding(decoder_input)
 
             for layer in self.decoder_layers:
-                decoder_input = layer(decoder_input, deterministic=True)
+                decoder_input = layer(decoder_input)
 
             decoder_output = self.final_layer_norm(decoder_input)
             lm_logits = self.lm_head(decoder_output)
@@ -346,9 +378,8 @@ class UnifiedTransformer(nn.Module):
 
     def _text_to_text_jax(self, input_ids, target_ids):
         key = jax.random.PRNGKey(42)  # Set a fixed seed for deterministic behavior
-        vocab_size = self.lm_head.out_features
-        input_ids = jnp.clip(input_ids, 0, vocab_size - 1)
-        target_ids = jnp.clip(target_ids, 0, vocab_size - 1)
+        input_ids = jnp.clip(input_ids, 0, self.vocab_size - 1)
+        target_ids = jnp.clip(target_ids, 0, self.vocab_size - 1)
 
         try:
             encoder_output = self.forward(input_ids)
@@ -362,7 +393,7 @@ class UnifiedTransformer(nn.Module):
             decoder_input = self.pos_encoding(decoder_input)
 
             for layer in self.decoder_layers:
-                decoder_input = layer(decoder_input, deterministic=True)
+                decoder_input = layer(decoder_input)
 
             decoder_output = self.final_layer_norm(decoder_input)
             lm_logits = self.lm_head(decoder_output)
@@ -386,11 +417,10 @@ class UnifiedTransformer(nn.Module):
         Returns:
             torch.Tensor: Probability distribution over the vocabulary for the query.
         """
-        vocab_size = self.lm_head.out_features
         if not support_set:
             raise ValueError("Support set cannot be empty")
-        context = torch.cat([torch.clamp(s, 0, vocab_size - 1) for s in support_set], dim=1)
-        query = torch.clamp(query, 0, vocab_size - 1)
+        context = torch.cat([torch.clamp(s, 0, self.vocab_size - 1) for s in support_set], dim=1)
+        query = torch.clamp(query, 0, self.vocab_size - 1)
         full_input = torch.cat([context, query], dim=1)
         output = self.forward(full_input)
         logits = self.lm_head(output[:, -query.size(1):, :])
@@ -407,7 +437,16 @@ class UnifiedTransformer(nn.Module):
             num_labels (int): Number of labels for classification task.
         """
         if task == 'classification':
-            self.task_head = nn.Linear(self.d_model, num_labels)
+            if framework.backend == 'pytorch':
+                self.task_head = torch_nn.Linear(self.d_model, num_labels)
+            elif framework.backend == 'jax':
+                self.task_head = hk.Linear(num_labels)
+            elif framework.backend == 'flax':
+                self.task_head = flax_nn.Dense(num_labels)
+            elif framework.backend == 'sonnet':
+                self.task_head = snt.Linear(num_labels)
+            else:
+                raise ValueError(f"Unsupported backend: {framework.backend}")
         elif task == 'generation':
             self.task_head = self.lm_head
         else:
@@ -454,7 +493,7 @@ class JAXUnifiedTransformer(UnifiedTransformer):
         super().__init__(vocab_size)
         # JAX-specific initialization
 
-class FlaxUnifiedTransformer(nn.Module):
+class FlaxUnifiedTransformer(flax_nn.Module):
     vocab_size: int
     d_model: int = 512
     num_heads: int = 8
@@ -464,17 +503,17 @@ class FlaxUnifiedTransformer(nn.Module):
     dropout: float = 0.1
 
     def setup(self):
-        self.embedding = nn.Embed(num_embeddings=self.vocab_size, features=self.d_model)
+        self.embedding = flax_nn.Embed(num_embeddings=self.vocab_size, features=self.d_model)
         self.pos_encoding = PositionalEncoding(self.d_model, self.max_seq_length)
         self.encoder_layers = [EncoderLayer(self.d_model, self.num_heads, self.d_ff, self.dropout) for _ in range(self.num_layers)]
         self.decoder_layers = [EncoderLayer(self.d_model, self.num_heads, self.d_ff, self.dropout) for _ in range(self.num_layers)]
-        self.final_layer_norm = nn.LayerNorm(self.d_model)
-        self.lm_head = nn.Dense(self.vocab_size)
+        self.final_layer_norm = flax_nn.LayerNorm(epsilon=1e-5)
+        self.lm_head = flax_nn.Dense(self.vocab_size)
 
     def __call__(self, x, mask=None, decoder_input_ids=None):
         x = self.embedding(x) * jnp.sqrt(self.d_model)
         x = self.pos_encoding(x)
-        x = nn.Dropout(rate=self.dropout)(x, deterministic=False)
+        x = flax_nn.Dropout(rate=self.dropout)(x, deterministic=False)
 
         for layer in self.encoder_layers:
             x = layer(x, mask)
