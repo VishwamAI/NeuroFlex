@@ -59,12 +59,22 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
 
     def split_heads(self, x, batch_size):
         if framework.backend == 'pytorch':
-            x = x.view(batch_size, -1, self.num_heads, self.depth)
-            return x.permute(0, 2, 1, 3)
+            return x.view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
         elif framework.backend in ['jax', 'flax']:
-            return jnp.reshape(x, (batch_size, -1, self.num_heads, self.depth)).transpose(0, 2, 1, 3)
+            return jnp.transpose(x.reshape(batch_size, -1, self.num_heads, self.depth), (0, 2, 1, 3))
         elif framework.backend == 'sonnet':
             return tf.transpose(tf.reshape(x, (batch_size, -1, self.num_heads, self.depth)), perm=[0, 2, 1, 3])
+
+    def linear_attention(self, q, k, v, mask=None):
+        q = q.softmax(dim=-1)
+        k = k.softmax(dim=-2)
+
+        if mask is not None:
+            k = k * mask.unsqueeze(1)
+
+        context = k.transpose(-2, -1) @ v
+        out = q @ context
+        return out
 
     def forward(self, q, k, v, mask=None):
         batch_size = q.shape[0]
@@ -78,92 +88,65 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
         v = self.split_heads(v, batch_size)
 
         if framework.backend == 'pytorch':
-            scaled_attention_logits = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(self.depth)
+            output = self.linear_attention(q, k, v, mask)
         elif framework.backend in ['jax', 'flax']:
-            scaled_attention_logits = jnp.matmul(q, jnp.swapaxes(k, -1, -2)) / jnp.sqrt(self.depth)
+            output = jax.vmap(self.linear_attention)(q, k, v, mask)
         elif framework.backend == 'sonnet':
-            scaled_attention_logits = tf.matmul(q, tf.transpose(k, perm=[0, 1, 3, 2])) / tf.math.sqrt(float(self.depth))
-
-        if mask is not None:
-            if framework.backend == 'pytorch':
-                # Reshape mask to match the scaled attention logits shape
-                if mask.dim() == 2:
-                    mask = mask.unsqueeze(1).unsqueeze(2)
-                elif mask.dim() == 3:
-                    mask = mask.unsqueeze(1)
-
-                # Ensure mask has the correct number of dimensions
-                while mask.dim() < 4:
-                    mask = mask.unsqueeze(1)
-
-                # Expand mask to match batch size and number of heads
-                mask = mask.expand(batch_size, self.num_heads, -1, mask.size(-1))
-
-                scaled_attention_logits = scaled_attention_logits.masked_fill(mask == 0, float('-inf'))
-            elif framework.backend in ['jax', 'flax']:
-                mask = jnp.expand_dims(mask, axis=(1, 2))
-                scaled_attention_logits = jnp.where(mask == 0, -1e9, scaled_attention_logits)
-            elif framework.backend == 'sonnet':
-                mask = tf.expand_dims(mask, axis=[1, 2])
-                scaled_attention_logits = tf.where(mask == 0, -1e9, scaled_attention_logits)
+            output = tf.vectorized_map(lambda x: self.linear_attention(*x), (q, k, v, mask))
 
         if framework.backend == 'pytorch':
-            attention_weights = torch.softmax(scaled_attention_logits, dim=-1)
+            output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
         elif framework.backend in ['jax', 'flax']:
-            attention_weights = jax.nn.softmax(scaled_attention_logits, axis=-1)
+            output = jnp.transpose(output, (0, 2, 1, 3)).reshape(batch_size, -1, self.d_model)
         elif framework.backend == 'sonnet':
-            attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)
-
-        if framework.backend == 'pytorch':
-            output = torch.matmul(attention_weights, v)
-            output = output.permute(0, 2, 1, 3).contiguous()
-            output = output.view(batch_size, -1, self.d_model)
-        elif framework.backend in ['jax', 'flax']:
-            output = jnp.matmul(attention_weights, v)
-            output = jnp.transpose(output, (0, 2, 1, 3))
-            output = jnp.reshape(output, (batch_size, -1, self.d_model))
-        elif framework.backend == 'sonnet':
-            output = tf.matmul(attention_weights, v)
-            output = tf.transpose(output, perm=[0, 2, 1, 3])
-            output = tf.reshape(output, (batch_size, -1, self.d_model))
+            output = tf.reshape(tf.transpose(output, perm=[0, 2, 1, 3]), (batch_size, -1, self.d_model))
 
         output = self.dense(output)
 
-        return output, attention_weights
+        return output, None  # Return None instead of attention weights for consistency
 
 class PositionalEncoding(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
+        self.d_model = d_model
+        self.max_len = max_len
+
+    def _get_angles(self, pos, i):
         if framework.backend == 'pytorch':
-            pe = torch.zeros(max_len, d_model)
-            position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-            div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term)
-            pe = pe.unsqueeze(0).transpose(0, 1)
-            self.register_buffer('pe', pe)
+            angle_rates = 1 / torch.pow(10000, (2 * (i // 2)) / self.d_model)
+            return pos * angle_rates
         elif framework.backend in ['jax', 'flax']:
-            self.pe = jnp.zeros((max_len, d_model))
-            position = jnp.arange(0, max_len, dtype=jnp.float32)[:, jnp.newaxis]
-            div_term = jnp.exp(jnp.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-            self.pe = self.pe.at[:, 0::2].set(jnp.sin(position * div_term))
-            self.pe = self.pe.at[:, 1::2].set(jnp.cos(position * div_term))
-            self.pe = self.pe[jnp.newaxis, :, :]
+            angle_rates = 1 / jnp.power(10000, (2 * (i // 2)) / self.d_model)
+            return pos * angle_rates
         elif framework.backend in ['sonnet', 'tensorflow']:
-            self.pe = tf.zeros((max_len, d_model))
-            position = tf.range(0, max_len, dtype=tf.float32)[:, tf.newaxis]
-            div_term = tf.exp(tf.range(0, d_model, 2, dtype=tf.float32) * (-math.log(10000.0) / d_model))
-            self.pe = self.pe + tf.scatter_nd(tf.constant([[0, 1]]), tf.sin(position * div_term), tf.shape(self.pe))
-            self.pe = self.pe + tf.scatter_nd(tf.constant([[1, 0]]), tf.cos(position * div_term), tf.shape(self.pe))
-            self.pe = tf.expand_dims(self.pe, 0)
+            angle_rates = 1 / tf.pow(10000, (2 * (i // 2)) / tf.cast(self.d_model, tf.float32))
+            return pos * angle_rates
 
     def forward(self, x):
         if framework.backend == 'pytorch':
-            return x + self.pe[:x.size(0), :]
+            position = torch.arange(0, x.size(1), dtype=torch.float32).unsqueeze(1)
+            div_term = torch.arange(0, self.d_model, 2, dtype=torch.float32)
+            angles = self._get_angles(position, div_term)
+            emb = torch.zeros(x.size(1), self.d_model).to(x.device)
+            emb[:, 0::2] = torch.sin(angles)
+            emb[:, 1::2] = torch.cos(angles)
+            return x + emb.unsqueeze(0)
         elif framework.backend in ['jax', 'flax']:
-            return x + self.pe[:x.shape[0], :]
+            position = jnp.arange(0, x.shape[1], dtype=jnp.float32)[:, jnp.newaxis]
+            div_term = jnp.arange(0, self.d_model, 2, dtype=jnp.float32)
+            angles = self._get_angles(position, div_term)
+            emb = jnp.zeros((x.shape[1], self.d_model))
+            emb = emb.at[:, 0::2].set(jnp.sin(angles))
+            emb = emb.at[:, 1::2].set(jnp.cos(angles))
+            return x + emb[jnp.newaxis, :, :]
         elif framework.backend in ['sonnet', 'tensorflow']:
-            return x + self.pe[:tf.shape(x)[0], :]
+            position = tf.range(0, tf.shape(x)[1], dtype=tf.float32)[:, tf.newaxis]
+            div_term = tf.range(0, self.d_model, 2, dtype=tf.float32)
+            angles = self._get_angles(position, div_term)
+            emb = tf.zeros((tf.shape(x)[1], self.d_model))
+            emb = emb + tf.scatter_nd(tf.constant([[0, 1]]), tf.sin(angles), tf.shape(emb))
+            emb = emb + tf.scatter_nd(tf.constant([[1, 0]]), tf.cos(angles), tf.shape(emb))
+            return x + tf.expand_dims(emb, 0)
 
 class FeedForward(framework.get_module(torch_nn.Module)):
     def __init__(self, d_model, d_ff):
