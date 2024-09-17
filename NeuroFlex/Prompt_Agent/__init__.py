@@ -1,1 +1,1 @@
-# comming soon
+from .agentic_behavior import NeuroFlexAgenticBehavior
