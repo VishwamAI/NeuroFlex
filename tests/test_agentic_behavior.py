@@ -5,12 +5,12 @@ from NeuroFlex.Prompt_Agent.agentic_behavior import ZeroShotAgent, FewShotAgent,
 import flax.linen as nn
 from NeuroFlex.utils.utils import tokenize_text
 
-class TestBaseAgent(unittest.TestCase):
+class TestZeroShotAgent(unittest.TestCase):
     def setUp(self):
         self.mock_model = Mock(spec=nn.Module)
         self.mock_model.params = {'mock_params': 'value'}
         self.mock_model.apply = Mock()
-        self.agent = BaseAgent(self.mock_model)
+        self.agent = ZeroShotAgent(self.mock_model)
 
     def test_self_correct(self):
         output = "The capital of France is London."
@@ -34,13 +34,6 @@ class TestBaseAgent(unittest.TestCase):
             self.agent.self_update(feedback)
             mock_print.assert_called_once_with(f"Received feedback for self-update: {feedback}")
 
-class TestZeroShotAgent(unittest.TestCase):
-    def setUp(self):
-        self.mock_model = Mock(spec=nn.Module)
-        self.mock_model.params = {'mock_params': 'value'}
-        self.mock_model.apply = Mock()
-        self.agent = ZeroShotAgent(self.mock_model)
-
     def test_zero_shot(self):
         prompt = "Translate 'Hello' to French"
         expected_tokens = tokenize_text(prompt)
@@ -55,6 +48,8 @@ class TestZeroShotAgent(unittest.TestCase):
                     mock_apply.assert_called_once_with({'params': self.mock_model.params}, expected_encoded_input)
                     self.assertTrue(jnp.allclose(mock_decode.call_args[0][0], jnp.array([1.0, 2.0, 3.0])))
                     self.assertEqual(result, "Bonjour")
+
+
 
 class TestFewShotAgent(unittest.TestCase):
     def setUp(self):
