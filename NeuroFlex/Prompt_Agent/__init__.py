@@ -3,5 +3,7 @@ from .agentic_behavior import (
     FewShotAgent,
     ChainOfThoughtAgent,
     MetaPromptingAgent,
-    BaseAgent
+    BaseAgent,
+    SelfConsistencyAgent,
+    GenerateKnowledgePromptingAgent
 )
