@@ -37,8 +37,6 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
         logging.info("Initializing integration classes...")
         bio_integration = BioinformaticsIntegration()
         scikit_bio_integration = ScikitBioIntegration()
-        logging.info(f"ScikitBioIntegration object initialized: {scikit_bio_integration}")
-        logging.info(f"Available methods in ScikitBioIntegration: {dir(scikit_bio_integration)}")
         ete_integration = ETEIntegration()
         alphafold_integration = AlphaFoldIntegration()
         xarray_integration = XarrayIntegration()
@@ -52,35 +50,23 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
         logging.info("Preparing DNA sequences for ScikitBio processing...")
         dna_sequences = [str(seq.seq) for seq in sequences if isinstance(seq.seq, Seq) and set(seq.seq.upper()).issubset({'A', 'C', 'G', 'T', 'N'})]
         logging.info(f"Number of DNA sequences: {len(dna_sequences)}")
+
         alignments = []
         for i in range(len(dna_sequences)):
             for j in range(i+1, len(dna_sequences)):
                 try:
-                    logging.debug(f"Aligning sequences {i} and {j}")
                     aligned_seq1, aligned_seq2, score = scikit_bio_integration.align_dna_sequences(dna_sequences[i], dna_sequences[j])
                     if aligned_seq1 is not None and aligned_seq2 is not None:
                         alignments.append((aligned_seq1, aligned_seq2, score))
                 except Exception as e:
-                    logging.error(f"Error in align_dna_sequences: {str(e)}")
-                    logging.error(f"ScikitBioIntegration object: {scikit_bio_integration}")
-                    logging.error(f"Method call: align_dna_sequences({dna_sequences[i]}, {dna_sequences[j]})")
-                    # Continue with the next pair instead of raising the exception
-                    continue
+                    logging.warning(f"Error aligning sequences {i} and {j}: {str(e)}")
 
-        logging.info(f"ScikitBioIntegration object before msa_maker: {scikit_bio_integration}")
-        logging.info(f"Input data for msa_maker: {dna_sequences}")
         try:
-            logging.info("Attempting to call msa_maker method...")
             msa = scikit_bio_integration.msa_maker(dna_sequences)
-            logging.info("msa_maker method called successfully")
-        except AttributeError as e:
-            logging.error(f"AttributeError in msa_maker: {str(e)}")
-            logging.error(f"ScikitBioIntegration object: {scikit_bio_integration}")
-            logging.error(f"Input data: {dna_sequences}")
-            raise
+            logging.info("Multiple sequence alignment completed successfully")
         except Exception as e:
-            logging.error(f"Unexpected error in msa_maker: {str(e)}")
-            raise
+            logging.error(f"Error in multiple sequence alignment: {str(e)}")
+            msa = None
 
         logging.info("Calculating GC contents...")
         gc_contents = [scikit_bio_integration.dna_gc_content(seq) for seq in dna_sequences]
@@ -94,6 +80,7 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
         if not skip_visualization:
             try:
                 ete_integration.visualize_tree(tree, "output_tree.png")
+                logging.info("Tree visualization completed successfully")
             except Exception as e:
                 logging.warning(f"Tree visualization failed: {str(e)}")
 
@@ -111,6 +98,7 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
                 pae_scores = alphafold_integration.get_predicted_aligned_error()
                 alphafold_plddt_scores.append(plddt_scores)
                 alphafold_pae_scores.append(pae_scores)
+            logging.info("AlphaFold predictions completed successfully")
         except Exception as e:
             logging.error(f"Error in AlphaFold integration: {str(e)}")
 
@@ -148,22 +136,51 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
             logging.info("Successfully registered merged dataset")
 
             # Save merged dataset
+            import os
+            save_dir = os.path.dirname(file_path)
+            save_path = os.path.join(save_dir, 'merged_bio_data.nc')
+
+            # Ensure the directory exists
+            os.makedirs(save_dir, exist_ok=True)
+
             try:
-                xarray_integration.save_dataset('merged_bio_data', 'path/to/save/merged_bio_data.nc')
-                logging.info("Successfully saved merged dataset")
-            except IOError as ioe:
-                logging.error(f"Error saving merged dataset: {str(ioe)}")
-                raise
-        except ValueError as ve:
-            logging.error(f"Error in Xarray operations: {str(ve)}")
-            raise
+                xarray_integration.save_dataset('merged_bio_data', save_path)
+                logging.info(f"Successfully saved merged dataset to {save_path}")
+            except Exception as save_error:
+                logging.error(f"Failed to save merged dataset: {str(save_error)}")
+                logging.debug(f"Save directory: {save_dir}")
+                logging.debug(f"Save path: {save_path}")
+                logging.debug(f"Directory exists: {os.path.exists(save_dir)}")
+                logging.debug(f"Directory is writable: {os.access(save_dir, os.W_OK)}")
+                raise IOError(f"Failed to save merged dataset to {save_path}: {str(save_error)}")
+
+            # Verify that the file was actually created
+            if not os.path.exists(save_path):
+                logging.error(f"File not found at {save_path} after saving attempt")
+                logging.debug(f"Directory contents: {os.listdir(save_dir)}")
+                raise IOError(f"Failed to create file at {save_path}")
+
+            # Attempt to load the saved dataset to ensure it's valid
+            try:
+                loaded_dataset = xarray_integration.load_dataset(save_path)
+                if loaded_dataset is None:
+                    logging.error("Loaded dataset is None")
+                    raise ValueError("Loaded dataset is None")
+                logging.info("Successfully verified the saved dataset")
+                # Ensure the dataset is registered in memory
+                xarray_integration.datasets['merged_bio_data'] = loaded_dataset
+            except Exception as load_error:
+                logging.error(f"Failed to load the saved dataset: {str(load_error)}")
+                logging.debug(f"File size: {os.path.getsize(save_path) if os.path.exists(save_path) else 'File does not exist'}")
+                raise IOError(f"Failed to load the saved dataset from {save_path}: {str(load_error)}")
+
         except Exception as e:
-            logging.error(f"Unexpected error in Xarray operations: {str(e)}")
+            logging.error(f"Error in Xarray operations: {str(e)}")
             raise
 
-        # Verify that the merged dataset exists
+        # Verify that the merged dataset exists in memory
         if 'merged_bio_data' not in xarray_integration.datasets:
-            raise ValueError("'merged_bio_data' dataset not found after merging and saving")
+            raise ValueError("'merged_bio_data' dataset not found in memory after merging and saving")
 
         logging.info("Bioinformatics data processing completed successfully")
         return {
@@ -186,7 +203,7 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
             'merged_dataset': merged_dataset
         }
     except Exception as e:
-        logging.error(f"Error in load_bioinformatics_data: {str(e)}")
+        logging.error(f"Critical error in load_bioinformatics_data: {str(e)}")
         raise
 
 # Define your model
