@@ -15,5 +15,4 @@ __all__ = [
     'JAXUnifiedTransformer',
     'FlaxUnifiedTransformer',
     'SonnetUnifiedTransformer',
-    'RLTextAgent'
 ]
