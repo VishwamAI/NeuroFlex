@@ -241,3 +241,68 @@ class MetaPromptingAgent(BaseAgent):
         encoded_input = self._encode_input(tokens)
         output = self.model.apply({'params': self.model.params}, encoded_input)
         return self._decode_output(output)
+
+class SelfConsistencyAgent(BaseAgent):
+    def __init__(self, model: nn.Module, num_samples: int = 5):
+        super().__init__(model)
+        self.num_samples = num_samples
+
+    def generate_samples(self, prompt: str) -> List[str]:
+        samples = []
+        for _ in range(self.num_samples):
+            tokens = tokenize_text(prompt)
+            encoded_input = self._encode_input(tokens)
+            output = self.model.apply({'params': self.model.params}, encoded_input)
+            samples.append(self._decode_output(output))
+        return samples
+
+    def select_most_consistent(self, samples: List[str]) -> str:
+        # Simple implementation: return the most common sample
+        from collections import Counter
+        return Counter(samples).most_common(1)[0][0]
+
+    def zero_shot(self, prompt: str) -> str:
+        samples = self.generate_samples(prompt)
+        return self.select_most_consistent(samples)
+
+    def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
+        raise NotImplementedError("SelfConsistencyAgent does not support few-shot learning")
+
+    def chain_of_thought(self, prompt: str) -> str:
+        raise NotImplementedError("SelfConsistencyAgent does not support chain-of-thought reasoning")
+
+    def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
+        raise NotImplementedError("SelfConsistencyAgent does not support meta-prompting")
+
+class GenerateKnowledgePromptingAgent(BaseAgent):
+    def __init__(self, model: nn.Module, knowledge_base: Dict[str, str]):
+        super().__init__(model)
+        self.knowledge_base = knowledge_base
+
+    def generate_knowledge(self, prompt: str) -> str:
+        # Simple implementation: retrieve relevant knowledge from the knowledge base
+        relevant_knowledge = []
+        for key, value in self.knowledge_base.items():
+            if key.lower() in prompt.lower():
+                relevant_knowledge.append(value)
+        return " ".join(relevant_knowledge)
+
+    def integrate_knowledge(self, prompt: str, knowledge: str) -> str:
+        return f"Given the following knowledge: {knowledge}\n\nAnswer the question: {prompt}"
+
+    def zero_shot(self, prompt: str) -> str:
+        knowledge = self.generate_knowledge(prompt)
+        integrated_prompt = self.integrate_knowledge(prompt, knowledge)
+        tokens = tokenize_text(integrated_prompt)
+        encoded_input = self._encode_input(tokens)
+        output = self.model.apply({'params': self.model.params}, encoded_input)
+        return self._decode_output(output)
+
+    def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
+        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support few-shot learning")
+
+    def chain_of_thought(self, prompt: str) -> str:
+        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support chain-of-thought reasoning")
+
+    def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
+        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support meta-prompting")
