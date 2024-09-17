@@ -1,1 +1,7 @@
-from .agentic_behavior import NeuroFlexAgenticBehavior
+from .agentic_behavior import (
+    ZeroShotAgent,
+    FewShotAgent,
+    ChainOfThoughtAgent,
+    MetaPromptingAgent,
+    BaseAgent
+)
