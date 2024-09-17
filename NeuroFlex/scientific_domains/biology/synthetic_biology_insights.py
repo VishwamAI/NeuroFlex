@@ -3,7 +3,7 @@
 import numpy as np
 from typing import List, Dict, Tuple
 from Bio.Seq import Seq
-from Bio.SeqUtils import gc_fraction
+from Bio.SeqUtils import GC
 from Bio import SeqIO
 from Bio import SCOP
 import networkx as nx
@@ -53,7 +53,7 @@ class SyntheticBiologyInsights:
                 "circuit_name": circuit_name,
                 "components": validated_components,
                 "sequence": str(circuit),
-                "gc_content": gc_fraction(circuit) * 100  # Convert to percentage
+                "gc_content": GC(circuit)  # GC already returns a percentage
             }
             logger.info(f"Successfully designed genetic circuit: {circuit_name}")
             return result
