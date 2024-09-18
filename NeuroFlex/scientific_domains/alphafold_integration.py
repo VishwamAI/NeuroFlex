@@ -2,6 +2,11 @@
 
 import sys
 import os
+import re
+import random
+import jax
+import numpy as np
+from typing import Dict, List, Union
 
 # Add the AlphaFold directory to the Python path
 alphafold_path = os.environ.get('ALPHAFOLD_PATH')
@@ -36,12 +41,53 @@ class AlphaFoldIntegration:
         self.hhsearch_module = hhsearch
         self.hmmsearch_module = hmmsearch
         self.jackhmmer_module = jackhmmer
+        self.model = None
+        self.model_params = None
+        self.config = None
+        self.feature_dict = None
+
+    def is_model_ready(self):
+        """Check if the AlphaFold model is ready for predictions."""
+        return self.model is not None and self.model_params is not None and self.config is not None and self.feature_dict is not None
 
     def get_plddt_bands(self):
         """
         Returns the pLDDT confidence bands used in AlphaFold.
         """
         return self.confidence_module.PLDDT_BANDS
+
+    def predict_structure(self):
+        """
+        Predict protein structure using AlphaFold and refine with OpenMM.
+
+        Returns:
+            protein.Protein: Predicted and refined protein structure.
+
+        Raises:
+            ValueError: If the model or features are not set up.
+        """
+        if not self.is_model_ready():
+            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
+
+        # Predict structure using AlphaFold
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
+        predicted_protein = self.protein_module.from_prediction(prediction_result)
+
+        # Set up and run OpenMM simulation for refinement
+        self.setup_openmm_simulation(predicted_protein)
+        if self.openmm_simulation:
+            # Run a short simulation to refine the structure
+            self.openmm_simulation.minimizeEnergy()
+            self.openmm_simulation.step(1000)  # Run for 1000 steps
+
+            # Get refined positions
+            refined_positions = self.openmm_simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+
+            # Update the predicted protein with refined positions
+            for i, residue in enumerate(predicted_protein.residue_index):
+                predicted_protein.atom_positions[residue] = refined_positions[i].value_in_unit(self.unit_module.angstrom)
+
+        return predicted_protein
 
     def calculate_plddt(self, logits):
         """
@@ -142,6 +188,80 @@ class AlphaFoldIntegration:
             'predicted_aligned_error': self.modules_multimer_module.PredictedAlignedErrorHead(**config),
             'predicted_tm_score': self.modules_multimer_module.PredictedTMScoreHead(**config),
         }
+
+    def get_plddt_scores(self):
+        """
+        Get pLDDT (predicted LDDT) scores for the predicted structure.
+
+        Returns:
+            np.ndarray: Array of pLDDT scores.
+
+        Raises:
+            ValueError: If the model or features are not set up.
+        """
+        if not self.is_model_ready():
+            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
+
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
+        logits = prediction_result['predicted_lddt']['logits']
+        plddt_scores = self.confidence_module.compute_plddt(logits)
+        return np.array(plddt_scores).flatten()
+
+    def get_predicted_aligned_error(self):
+        """
+        Get predicted aligned error for the structure.
+
+        Returns:
+            np.ndarray: 2D array of predicted aligned errors.
+
+        Raises:
+            ValueError: If the model or features are not set up, or if the output is invalid.
+        """
+        if not self.is_model_ready():
+            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
+
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
+
+        if 'predicted_aligned_error' not in prediction_result:
+            raise ValueError("Predicted aligned error not found in model output.")
+
+        pae_output = prediction_result['predicted_aligned_error']
+
+        if isinstance(pae_output, dict):
+            if 'logits' in pae_output and 'breaks' in pae_output:
+                try:
+                    pae = self.confidence_module.compute_predicted_aligned_error(pae_output['logits'], pae_output['breaks'])
+                except Exception as e:
+                    raise ValueError(f"Error computing predicted aligned error: {str(e)}")
+            else:
+                raise ValueError("Invalid structure of predicted aligned error in model output: missing 'logits' or 'breaks'.")
+        elif isinstance(pae_output, (np.ndarray, list)):
+            pae = np.array(pae_output)
+        else:
+            raise ValueError(f"Invalid type for predicted aligned error: {type(pae_output)}. Expected dict, list, or numpy.ndarray.")
+
+        if pae.size == 0:
+            raise ValueError("Computed PAE is empty.")
+
+        pae = np.atleast_1d(pae)  # Convert to at least 1D array
+
+        if pae.ndim == 1:
+            # Handle 1D array
+            size = int(np.sqrt(pae.size))
+            if size * size == pae.size:
+                pae = pae.reshape(size, size)
+            else:
+                # If perfect square reshaping is not possible, use the closest square size
+                size = int(np.ceil(np.sqrt(pae.size)))
+                pae = np.pad(pae, (0, size*size - pae.size), mode='constant', constant_values=np.nan)
+                pae = pae.reshape(size, size)
+        elif pae.ndim > 2:
+            raise ValueError(f"Invalid PAE shape. Expected 1D or 2D array, got shape {pae.shape}")
+
+        if pae.shape[0] != pae.shape[1]:
+            raise ValueError(f"Invalid PAE shape. Expected square array, got shape {pae.shape}")
+
+        return pae
 
     def get_residue_constants(self):
         """
@@ -375,6 +495,87 @@ class AlphaFoldIntegration:
             num_iterations=num_iterations
         )
 
+    def run_alphamissense_analysis(self, sequence: str, variant: str) -> Dict[str, float]:
+        """
+        Run AlphaMissense analysis on the given sequence and variant.
+
+        Args:
+            sequence (str): The amino acid sequence to analyze.
+            variant (str): The variant in the format 'OriginalAA{Position}NewAA' (e.g., 'G56A').
+
+        Returns:
+            Dict[str, float]: A dictionary containing 'pathogenic_score' and 'benign_score'.
+
+        Raises:
+            ValueError: If the input is invalid.
+        """
+        # Input validation
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type for sequence. Expected str, got {type(sequence).__name__}.")
+        if not isinstance(variant, str):
+            raise ValueError("Invalid input type for variant. Expected str, got {type(variant).__name__}.")
+        if not sequence:
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid(s) found in sequence.")
+
+        # Validate variant format
+        if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
+            raise ValueError("Invalid variant format. Use 'OriginalAA{Position}NewAA' (e.g., 'G56A').")
+
+        original_aa, position, new_aa = variant[0], int(variant[1:-1]), variant[-1]
+        if position < 1 or position > len(sequence):
+            raise ValueError("Invalid variant position.")
+        if sequence[position - 1] != original_aa:
+            raise ValueError(f"Original amino acid in variant ({original_aa}) does not match sequence at position {position} ({sequence[position - 1]}).")
+        if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
+            raise ValueError(f"Invalid new amino acid in variant: {new_aa}")
+
+        # Placeholder for actual AlphaMissense analysis
+        # In a real implementation, this would call the AlphaMissense model
+        pathogenic_score = random.uniform(0, 1)
+        benign_score = 1 - pathogenic_score
+
+        return {
+            'pathogenic_score': pathogenic_score,
+            'benign_score': benign_score
+        }
+
+    def run_alphaproteo_analysis(self, sequence: str) -> Dict[str, List[Union[str, float]]]:
+        """
+        Run AlphaProteo analysis on the given sequence.
+
+        Args:
+            sequence (str): The amino acid sequence to analyze.
+
+        Returns:
+            Dict[str, List[Union[str, float]]]: A dictionary containing 'novel_proteins' and 'binding_affinities'.
+
+        Raises:
+            ValueError: If the input is invalid.
+        """
+        # Input validation
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type. Sequence must be a string.")
+        if not sequence:
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid(s) found in sequence.")
+        if len(sequence) < 10:
+            raise ValueError("Sequence is too short. Minimum length is 10 amino acids.")
+        if len(sequence) > 2000:
+            raise ValueError("Sequence is too long. Maximum length is 2000 amino acids.")
+
+        # Placeholder for actual AlphaProteo analysis
+        # In a real implementation, this would call the AlphaProteo model
+        novel_proteins = [''.join(random.choices('ACDEFGHIKLMNPQRSTVWY', k=len(sequence))) for _ in range(3)]
+        binding_affinities = [random.uniform(0, 1) for _ in range(3)]
+
+        return {
+            'novel_proteins': novel_proteins,
+            'binding_affinities': binding_affinities
+        }
+
 if __name__ == "__main__":
     # Example usage
     af_integration = AlphaFoldIntegration()
@@ -429,6 +630,22 @@ if __name__ == "__main__":
     msa_description = "sp|P12345|EXAMPLE_HUMAN Example protein"
     parsed_msa = af_integration.parse_msa_identifier(msa_description)
     print("Parsed MSA identifier:", parsed_msa)
+
+    def get_predicted_aligned_error(self):
+        """
+        Get the predicted aligned error from the AlphaFold model.
+
+        Returns:
+            jnp.ndarray: The predicted aligned error matrix.
+
+        Raises:
+            ValueError: If the model or features are not set up.
+        """
+        if not self.is_model_ready():
+            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
+
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
+        return prediction_result['predicted_aligned_error']
 
     msa_type = af_integration.get_msa_identifier_type(msa_description)
     print("MSA identifier type:", msa_type)
