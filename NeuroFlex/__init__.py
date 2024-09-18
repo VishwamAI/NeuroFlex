@@ -10,4 +10,7 @@ from .scientific_domains import *
 from .utils import *
 from .edge_ai import *
 from .quantum_neural_networks import *
+from .generative_models import *
 from .Transformers import *
+from .utils import *
+from .Prompt_Agent import *
