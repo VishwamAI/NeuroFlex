@@ -1,19 +1,27 @@
 import unittest
 import jax
 import jax.numpy as jnp
-import pytest
 import sys
 from unittest.mock import patch, MagicMock
 import openmm
 import openmm.app as app
 import openmm.unit as unit
+import ml_collections
 sys.path.append('/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages')
 from NeuroFlex.scientific_domains.alphafold_integration import (
     AlphaFoldIntegration, protein, check_version,
     ALPHAFOLD_COMPATIBLE, JAX_COMPATIBLE, HAIKU_COMPATIBLE, OPENMM_COMPATIBLE
 )
 
-pytestmark = pytest.mark.skip(reason="Skipping AlphaFold-related tests")
+# Mock AlphaFold dependencies
+mock_alphafold = MagicMock()
+mock_alphafold.model = MagicMock()
+mock_alphafold.data = MagicMock()
+mock_alphafold.common = MagicMock()
+sys.modules['alphafold'] = mock_alphafold
+sys.modules['alphafold.model'] = mock_alphafold.model
+sys.modules['alphafold.data'] = mock_alphafold.data
+sys.modules['alphafold.common'] = mock_alphafold.common
 
 class TestAlphaFoldIntegration(unittest.TestCase):
     def setUp(self):
@@ -27,7 +35,6 @@ class TestAlphaFoldIntegration(unittest.TestCase):
             self.assertTrue(check_version("haiku", "0.0.9"))
             self.assertTrue(check_version("openmm", "7.7.0"))
 
-    @pytest.mark.skip(reason="Mocking issues with AlphaFold dependencies")
     @patch('NeuroFlex.scientific_domains.alphafold_integration.modules.AlphaFold')
     @patch('NeuroFlex.scientific_domains.alphafold_integration.hk.transform')
     @patch('NeuroFlex.scientific_domains.alphafold_integration.jax.random.PRNGKey')
@@ -41,7 +48,7 @@ class TestAlphaFoldIntegration(unittest.TestCase):
         self.assertIsNotNone(self.alphafold_integration.model)
         self.assertIsNotNone(self.alphafold_integration.model_params)
         self.assertIsNotNone(self.alphafold_integration.config)
-        self.assertIsInstance(self.alphafold_integration.config, MagicMock)
+        self.assertIsInstance(self.alphafold_integration.config, ml_collections.ConfigDict)
 
     def test_is_model_ready(self):
         self.assertFalse(self.alphafold_integration.is_model_ready())
