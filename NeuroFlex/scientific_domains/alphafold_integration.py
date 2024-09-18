@@ -1,611 +1,515 @@
-import jax
-import jax.numpy as jnp
-import haiku as hk
-from typing import List, Dict, Any, Tuple
-from alphafold.model import config, modules, data, model
-from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
-from alphafold.common import protein, confidence, residue_constants
-from alphafold.data import pipeline, pipeline_multimer, templates
-from alphafold.data.tools import hhblits, jackhmmer, hhsearch, hmmsearch
-from alphafold.relax import relax
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-import logging
-import copy
-import ml_collections
-from unittest.mock import MagicMock
-import importlib
-import importlib.metadata
-import openmm
-import openmm.app as app
-import openmm.unit as unit
-import re
-import random
+# alphafold_integration.py
 
-# Configure logging only if it hasn't been configured yet
-if not logging.getLogger().hasHandlers():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import sys
+import os
 
-logger = logging.getLogger(__name__)
+# Add the AlphaFold directory to the Python path
+alphafold_path = os.environ.get('ALPHAFOLD_PATH')
+if not alphafold_path:
+    print("Error: ALPHAFOLD_PATH environment variable is not set.")
+    print("Please set the ALPHAFOLD_PATH environment variable to the AlphaFold directory.")
+    sys.exit(1)
 
-from packaging import version
-
-def check_version(package_name: str, expected_version: str) -> bool:
-    try:
-        installed_version = importlib.metadata.version(package_name)
-        logger.info(f"{package_name} version: {installed_version}")
-        print(f"DEBUG: {package_name} version string: '{installed_version}'")
-        parsed_installed = version.parse(installed_version)
-        parsed_expected = version.parse(expected_version)
-        print(f"DEBUG: Parsed versions - Installed: {parsed_installed}, Expected: {parsed_expected}")
-        if parsed_installed != parsed_expected:
-            logger.warning(f"This integration was tested with {package_name} {expected_version}. You are using version {installed_version}. Some features may not work as expected.")
-            return False
-        logger.info(f"{package_name} version check passed.")
-        return True
-    except importlib.metadata.PackageNotFoundError:
-        logger.error(f"Unable to determine {package_name} version. Make sure it's installed correctly.")
-        return False
-
-# Check versions and set flags for fallback strategies
-ALPHAFOLD_COMPATIBLE = check_version("alphafold", "2.3.2")
-JAX_COMPATIBLE = check_version("jax", "0.4.13")
-print("DEBUG: Checking Haiku version")
-HAIKU_COMPATIBLE = check_version("dm-haiku", "0.0.9")
-print(f"DEBUG: HAIKU_COMPATIBLE = {HAIKU_COMPATIBLE}")
-OPENMM_COMPATIBLE = check_version("openmm", "8.1.1")  # Add OpenMM version check
-
-if not all([ALPHAFOLD_COMPATIBLE, JAX_COMPATIBLE, HAIKU_COMPATIBLE, OPENMM_COMPATIBLE]):
-    logger.warning("This integration may have compatibility issues. Some features might be missing or work differently.")
-    logger.info("Fallback strategies will be used where possible.")
-
-# Set up OpenMM simulation environment
-if OPENMM_COMPATIBLE:
-    logger.info("Setting up OpenMM simulation environment")
-    try:
-        platform = openmm.Platform.getPlatformByName('CUDA')
-        properties = {'CudaPrecision': 'mixed'}
-    except Exception:
-        logger.warning("CUDA platform not available for OpenMM. Falling back to CPU.")
-        platform = openmm.Platform.getPlatformByName('CPU')
-        properties = {}
-else:
-    logger.warning("OpenMM not compatible. Some molecular simulation features may be limited.")
+sys.path.append(alphafold_path)
 
 try:
-    from alphafold.model import modules_multimer
-except ImportError:
-    logging.warning("Failed to import alphafold.model.modules_multimer. Some functionality may be limited.")
-    modules_multimer = MagicMock()
-
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Global variable to track which version of PDBData is being used
-USING_BIO_PDB_DATA = False
-
-# Conditionally import PDBData
-try:
-    from Bio.Data import PDBData
-    USING_BIO_PDB_DATA = True
-    logging.info("Using PDBData from Bio.Data")
-except ImportError:
-    # Fallback PDBData
-    class PDBData:
-        protein_letters_3to1 = {
-            'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
-            'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-            'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
-            'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
-        }
-    USING_BIO_PDB_DATA = False
-    logging.warning("Failed to import PDBData from Bio.Data. Using fallback PDBData in alphafold_integration.py")
-
-# Export AlphaFoldIntegration, PDBData, and USING_BIO_PDB_DATA for use in other modules
-__all__ = ['AlphaFoldIntegration', 'PDBData', 'USING_BIO_PDB_DATA']
+    from alphafold.common import confidence, residue_constants
+    from alphafold.model import features, modules, modules_multimer
+    from alphafold.data import msa_identifiers, parsers, templates
+    from alphafold.data.tools import hhblits, hhsearch, hmmsearch, jackhmmer
+except ImportError as e:
+    print(f"Error importing AlphaFold modules: {e}")
+    print("Please ensure that the AlphaFold path is correctly set and all dependencies are installed.")
+    sys.exit(1)
 
 class AlphaFoldIntegration:
     def __init__(self):
-        self.model = None
-        self.model_params = None
-        self.feature_dict = None
-        self.msa_runner = None
-        self.template_searcher = None
-        self.config = None  # Will be initialized in setup_model
-        self.openmm_system = None
-        self.openmm_simulation = None
-        self.openmm_integrator = None
-        self.multimer_config = None
-        self.relaxation_config = None
-        logging.info("AlphaFoldIntegration initialized with OpenMM support")
+        self.confidence_module = confidence
+        self.features_module = features
+        self.modules_module = modules
+        self.modules_multimer_module = modules_multimer
+        self.residue_constants_module = residue_constants
+        self.msa_identifiers_module = msa_identifiers
+        self.parsers_module = parsers
+        self.templates_module = templates
+        self.hhblits_module = hhblits
+        self.hhsearch_module = hhsearch
+        self.hmmsearch_module = hmmsearch
+        self.jackhmmer_module = jackhmmer
 
-    def setup_model(self, model_params: Dict[str, Any] = None):
+    def get_plddt_bands(self):
         """
-        Set up the AlphaFold model with given parameters.
+        Returns the pLDDT confidence bands used in AlphaFold.
+        """
+        return self.confidence_module.PLDDT_BANDS
+
+    def calculate_plddt(self, logits):
+        """
+        Computes per-residue pLDDT from logits.
 
         Args:
-            model_params (Dict[str, Any], optional): Parameters for the AlphaFold model.
-                If None, default parameters will be used.
-        """
-        logging.info("Setting up AlphaFold model")
-
-        try:
-            if model_params is None:
-                model_params = {'max_recycling': 3, 'model_name': 'model_1'}
-
-            # Initialize the config
-            model_name = model_params.get('model_name', 'model_1')
-            if 'multimer' in model_name:
-                base_config = copy.deepcopy(CONFIG_MULTIMER)
-                self.multimer_config = base_config
-            else:
-                base_config = copy.deepcopy(CONFIG)
-
-            # Update the base config with model-specific differences
-            if model_name in CONFIG_DIFFS:
-                base_config.update_from_flattened_dict(CONFIG_DIFFS[model_name])
-
-            # Ensure global_config is present and correctly initialized
-            if 'global_config' not in base_config:
-                base_config.global_config = ml_collections.ConfigDict({
-                    'deterministic': False,
-                    'subbatch_size': 4,
-                    'use_remat': False,
-                    'zero_init': True,
-                    'eval_dropout': False,
-                })
-
-            # Update config with any additional parameters
-            base_config.update(model_params)
-
-            self.config = base_config
-            logging.debug(f"Config initialized: {self.config}")
-
-            def create_model(config):
-                logging.debug(f"Creating AlphaFold model with config: {config}")
-                try:
-                    model = modules.AlphaFold(config)
-                    def apply(params, rng, config, **inputs):
-                        logging.debug(f"Applying model with inputs: {inputs.keys()}")
-                        try:
-                            # Process inputs
-                            processed_inputs = {}
-                            required_inputs = {
-                                'aatype': (None, None),
-                                'residue_index': (None, None),
-                                'seq_mask': (None, None),
-                                'msa': (None, None, None),
-                                'msa_mask': (None, None, None),
-                                'num_alignments': (None,),
-                                'template_aatype': (None, None, None),
-                                'template_all_atom_masks': (None, None, None, None),
-                                'template_all_atom_positions': (None, None, None, None, 3)
-                            }
-
-                            for input_name, expected_shape in required_inputs.items():
-                                if input_name in inputs:
-                                    processed_inputs[input_name] = inputs[input_name]
-                                    logging.debug(f"Input '{input_name}' provided with shape: {inputs[input_name].shape}")
-                                else:
-                                    # Create dummy input if not provided
-                                    processed_inputs[input_name] = jnp.zeros(expected_shape, dtype=jnp.float32)
-                                    logging.warning(f"Input '{input_name}' not provided. Using dummy input with shape: {expected_shape}")
-
-                                if processed_inputs[input_name].ndim != len(expected_shape):
-                                    error_msg = f"Input '{input_name}' has incorrect number of dimensions. Expected {len(expected_shape)}, got {processed_inputs[input_name].ndim}"
-                                    logging.error(error_msg)
-                                    raise ValueError(error_msg)
-
-                            # Special handling for 'msa' input
-                            if isinstance(processed_inputs['msa'], str):
-                                processed_inputs['msa'] = jnp.array([[ord(c) for c in processed_inputs['msa']]])
-                                logging.debug("Converted string 'msa' input to numerical representation")
-
-                            # Ensure 'num_alignments' is set correctly
-                            processed_inputs['num_alignments'] = jnp.array([processed_inputs['msa'].shape[0]], dtype=jnp.int32)
-                            logging.debug(f"Set 'num_alignments' to {processed_inputs['num_alignments']}")
-
-                            logging.debug(f"Processed inputs: {processed_inputs.keys()}")
-                            return model.apply({'params': params}, **processed_inputs, rngs={'dropout': rng})
-                        except Exception as e:
-                            logging.error(f"Error applying model: {str(e)}", exc_info=True)
-                            raise
-                    return model, apply
-                except Exception as e:
-                    logging.error(f"Error creating AlphaFold model: {str(e)}", exc_info=True)
-                    raise
-
-            # Transform the model creation function
-            model_creator = hk.transform(create_model)
-
-            # Initialize random number generator
-            rng = jax.random.PRNGKey(0)
-
-            # Create dummy input for model initialization
-            dummy_seq_length = 256
-            dummy_input = {
-                'msa': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
-                'msa_mask': jnp.ones((1, 1, dummy_seq_length), dtype=jnp.float32),
-                'seq_mask': jnp.ones((1, dummy_seq_length), dtype=jnp.float32),
-                'aatype': jnp.zeros((1, dummy_seq_length), dtype=jnp.int32),
-                'residue_index': jnp.arange(dummy_seq_length)[None],
-                'template_aatype': jnp.zeros((1, 1, dummy_seq_length), dtype=jnp.int32),
-                'template_all_atom_masks': jnp.zeros((1, 1, dummy_seq_length, 37), dtype=jnp.float32),
-                'template_all_atom_positions': jnp.zeros((1, 1, dummy_seq_length, 37, 3), dtype=jnp.float32),
-            }
-
-            logging.debug("Initializing model parameters")
-            try:
-                # Initialize model parameters
-                self.model_params = model_creator.init(rng, self.config)
-                self.model = model_creator.apply
-                logging.info("AlphaFold model parameters initialized successfully")
-            except Exception as e:
-                logging.error(f"Error initializing model parameters: {str(e)}", exc_info=True)
-                raise ValueError(f"Failed to initialize AlphaFold model parameters: {str(e)}")
-
-            # Test the model with dummy input
-            logging.debug("Testing model with dummy input")
-            try:
-                _ = self.model(self.model_params, rng, self.config, **dummy_input)
-                logging.info("AlphaFold model initialized and tested successfully")
-            except Exception as e:
-                logging.error(f"Error during model test: {str(e)}")
-                logging.debug(f"Dummy input keys: {dummy_input.keys()}")
-                for key, value in dummy_input.items():
-                    logging.debug(f"Dummy input '{key}' shape: {value.shape}")
-                raise ValueError(f"Failed to test AlphaFold model: {str(e)}")
-
-            self.msa_runner = jackhmmer.Jackhmmer(
-                binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'),
-                database_path=model_params.get('database_path', '/path/to/default/database')
-            )
-            self.template_searcher = hhblits.HHBlits(binary_path=model_params.get('hhblits_binary_path', '/usr/bin/hhblits'))
-            logging.info("MSA runner and template searcher initialized")
-
-        except Exception as e:
-            logging.error(f"Error in AlphaFold setup: {str(e)}", exc_info=True)
-            raise ValueError(f"Failed to set up AlphaFold model: {str(e)}")
-
-    def is_model_ready(self) -> bool:
-        """Check if the AlphaFold model is ready for predictions."""
-        return self.model is not None and self.model_params is not None
-
-    def prepare_features(self, sequence: str):
-        """
-        Prepare feature dictionary for AlphaFold prediction.
-
-        Args:
-            sequence (str): Amino acid sequence.
+            logits: The logits output from the AlphaFold model.
 
         Returns:
-            Dict: Feature dictionary for AlphaFold.
-
-        Raises:
-            ValueError: If the sequence is invalid.
+            Per-residue pLDDT scores.
         """
-        if not sequence or not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
-            raise ValueError("Invalid amino acid sequence provided.")
+        return self.confidence_module.compute_plddt(logits)
 
-        sequence_features = pipeline.make_sequence_features(
+    def get_feature_names(self):
+        """
+        Returns a list of feature names used in AlphaFold.
+        """
+        return self.features_module.get_feature_names()
+
+    def make_sequence_features(self, sequence, description, num_res):
+        """
+        Creates sequence features for AlphaFold.
+
+        Args:
+            sequence: The protein sequence.
+            description: A description of the sequence.
+            num_res: The number of residues in the sequence.
+
+        Returns:
+            A dictionary of sequence features.
+        """
+        return self.features_module.make_sequence_features(
             sequence=sequence,
-            description="query",
-            num_res=len(sequence)
+            description=description,
+            num_res=num_res
         )
-        msa = self._run_msa(sequence)
-        msa_features = pipeline.make_msa_features(msas=[msa])
-        template_features = self._search_templates(sequence)
 
-        self.feature_dict = {**sequence_features, **msa_features, **template_features}
-
-    def _run_msa(self, sequence: str) -> List[Tuple[str, str]]:
-        """Run MSA and return results."""
-        with open("temp.fasta", "w") as f:
-            SeqIO.write(SeqRecord(Seq(sequence), id="query"), f, "fasta")
-        result = self.msa_runner.query("temp.fasta")
-        return [("query", sequence)] + [(hit.name, hit.sequence) for hit in result.hits]
-
-    def _search_templates(self, sequence: str) -> Dict[str, Any]:
-        """Search for templates and prepare features."""
-        with open("temp.fasta", "w") as f:
-            SeqIO.write(SeqRecord(Seq(sequence), id="query"), f, "fasta")
-        hits = self.template_searcher.query("temp.fasta")
-        templates_result = templates.TemplateHitFeaturizer(
-            mmcif_dir="/path/to/mmcif/files",
-            max_template_date="2021-11-01",
-            max_hits=20,
-            kalign_binary_path="/path/to/kalign"
-        ).get_templates(query_sequence=sequence, hits=hits)
-        return templates_result.features
-
-    def setup_openmm_simulation(self, protein: protein.Protein):
-        """Set up OpenMM simulation for the predicted protein structure."""
-        if not OPENMM_COMPATIBLE:
-            logging.warning("OpenMM is not compatible. Skipping molecular dynamics simulation.")
-            return
-
-        try:
-            # Convert AlphaFold protein to OpenMM topology and positions
-            topology = app.Topology()
-            chain = topology.addChain()
-            positions = []
-
-            for residue in protein.residue_index:
-                omm_residue = topology.addResidue(protein.sequence[residue], chain)
-                for atom_name, atom_position in zip(protein.atom_mask[residue], protein.atom_positions[residue]):
-                    if atom_name:
-                        topology.addAtom(atom_name, app.Element.getBySymbol(atom_name[0]), omm_residue)
-                        positions.append(atom_position * unit.angstrom)
-
-            # Create OpenMM system
-            forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
-            system = forcefield.createSystem(
-                topology,
-                nonbondedMethod=app.PME,
-                nonbondedCutoff=1*unit.nanometer,
-                constraints=app.HBonds
-            )
-
-            # Set up integrator and simulation
-            integrator = openmm.LangevinMiddleIntegrator(300*unit.kelvin, 1/unit.picosecond, 0.002*unit.picoseconds)
-            platform = openmm.Platform.getPlatformByName('CUDA')
-            properties = {'CudaPrecision': 'mixed'}
-            self.openmm_simulation = app.Simulation(topology, system, integrator, platform, properties)
-            self.openmm_simulation.context.setPositions(positions)
-
-            logging.info("OpenMM simulation set up successfully.")
-        except Exception as e:
-            logging.error(f"Error setting up OpenMM simulation: {str(e)}")
-            self.openmm_simulation = None
-
-    def predict_structure(self) -> protein.Protein:
+    def make_msa_features(self, msas):
         """
-        Predict protein structure using AlphaFold and refine with OpenMM.
-
-        Returns:
-            protein.Protein: Predicted and refined protein structure.
-        """
-        if self.model is None or self.feature_dict is None:
-            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
-
-        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
-        predicted_protein = protein.from_prediction(prediction_result)
-
-        # Set up and run OpenMM simulation for refinement
-        self.setup_openmm_simulation(predicted_protein)
-        if self.openmm_simulation:
-            # Run a short simulation to refine the structure
-            self.openmm_simulation.minimizeEnergy()
-            self.openmm_simulation.step(1000)  # Run for 1000 steps
-
-            # Get refined positions
-            refined_positions = self.openmm_simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-
-            # Validate refined positions
-            if refined_positions is None or len(refined_positions) == 0:
-                logging.warning("Refined positions are empty or None. Skipping structure refinement.")
-                return predicted_protein
-
-            if len(refined_positions) != len(predicted_protein.residue_index):
-                logging.error(f"Mismatch in number of residues: {len(refined_positions)} refined vs {len(predicted_protein.residue_index)} original")
-                raise ValueError("Refined positions do not match the original structure.")
-
-            # Update the predicted protein with refined positions
-            for i, residue in enumerate(predicted_protein.residue_index):
-                try:
-                    refined_pos = refined_positions[i].value_in_unit(unit.angstrom)
-                    if refined_pos.shape != (5, 3):  # Assuming 5 atoms per residue and 3D coordinates
-                        raise ValueError(f"Unexpected shape for refined position: {refined_pos.shape}")
-                    predicted_protein.atom_positions[residue] = refined_pos
-                except Exception as e:
-                    logging.error(f"Error updating atom positions for residue {residue}: {str(e)}")
-                    raise
-
-        return predicted_protein
-
-    def get_plddt_scores(self) -> jnp.ndarray:
-        """
-        Get pLDDT (predicted LDDT) scores for the predicted structure.
-
-        Returns:
-            jnp.ndarray: Array of pLDDT scores.
-        """
-        if self.model is None or self.feature_dict is None:
-            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
-
-        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
-        return prediction_result['plddt']
-
-    def get_predicted_aligned_error(self) -> jnp.ndarray:
-        """
-        Get predicted aligned error for the structure.
-
-        Returns:
-            jnp.ndarray: 2D array of predicted aligned errors.
-        """
-        if self.model is None or self.feature_dict is None:
-            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
-
-        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
-        return prediction_result['predicted_aligned_error']
-
-    def predict_multimer_structure(self, sequences: List[str]) -> protein.Protein:
-        """
-        Predict multimer protein structure using AlphaFold.
+        Creates MSA features for AlphaFold.
 
         Args:
-            sequences (List[str]): List of amino acid sequences for each chain.
+            msas: A list of MSAs, each MSA is a list of sequences.
 
         Returns:
-            protein.Protein: Predicted multimer protein structure.
+            A dictionary of MSA features.
         """
-        if self.multimer_config is None:
-            raise ValueError("Multimer configuration not set. Use a multimer model when calling setup_model().")
+        return self.features_module.make_msa_features(msas=msas)
 
-        # Prepare features for multimer prediction
-        multimer_features = pipeline_multimer.make_multimer_features(sequences)
-
-        # Run prediction
-        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.multimer_config, **multimer_features)
-        predicted_protein = protein.from_prediction(prediction_result, multimer=True)
-
-        return predicted_protein
-
-    def relax_structure(self, predicted_protein: protein.Protein) -> protein.Protein:
+    def create_embeddings_and_evoformer(self, config):
         """
-        Relax the predicted protein structure using OpenMM.
+        Creates an instance of EmbeddingsAndEvoformer module.
 
         Args:
-            predicted_protein (protein.Protein): Predicted protein structure.
+            config: A configuration dictionary for the module.
 
         Returns:
-            protein.Protein: Relaxed protein structure.
+            An instance of EmbeddingsAndEvoformer.
         """
-        if not OPENMM_COMPATIBLE:
-            logging.warning("OpenMM is not compatible. Skipping structure relaxation.")
-            return predicted_protein
+        return self.modules_module.EmbeddingsAndEvoformer(**config)
 
-        amber_relaxer = relax.AmberRelaxation(
-            max_iterations=0,
-            tolerance=2.39,
-            stiffness=10.0,
-            exclude_residues=[],
-            max_outer_iterations=20)
-
-        relaxed_pdb, _, _ = amber_relaxer.process(prot=predicted_protein)
-        relaxed_protein = protein.from_pdb_string(relaxed_pdb)
-
-        return relaxed_protein
-
-    def calculate_tm_score(self, predicted_protein: protein.Protein, native_protein: protein.Protein) -> float:
+    def create_embeddings_and_evoformer_multimer(self, config):
         """
-        Calculate TM-score between predicted and native protein structures.
+        Creates an instance of EmbeddingsAndEvoformer module for multimers.
 
         Args:
-            predicted_protein (protein.Protein): Predicted protein structure.
-            native_protein (protein.Protein): Native (experimental) protein structure.
+            config: A configuration dictionary for the module.
 
         Returns:
-            float: TM-score between the two structures.
+            An instance of EmbeddingsAndEvoformer for multimers.
         """
-        return confidence.tm_score(
-            predicted_protein.atom_positions,
-            native_protein.atom_positions,
-            predicted_protein.residue_index,
-            native_protein.residue_index)
+        return self.modules_multimer_module.EmbeddingsAndEvoformer(**config)
 
-    def get_residue_constants(self) -> Dict[str, Any]:
+    def create_structure_module_multimer(self, config):
         """
-        Get residue constants used in AlphaFold.
+        Creates an instance of StructureModule for multimers.
+
+        Args:
+            config: A configuration dictionary for the module.
 
         Returns:
-            Dict[str, Any]: Dictionary of residue constants.
+            An instance of StructureModule for multimers.
+        """
+        return self.modules_multimer_module.StructureModule(**config)
+
+    def create_heads_multimer(self, config):
+        """
+        Creates instances of prediction heads for multimers.
+
+        Args:
+            config: A configuration dictionary for the heads.
+
+        Returns:
+            A dictionary of prediction head instances for multimers.
         """
         return {
-            'restype_order': residue_constants.restype_order,
-            'restype_num': residue_constants.restype_num,
-            'restypes': residue_constants.restypes,
-            'atom_types': residue_constants.atom_types,
-            'atom_order': residue_constants.atom_order,
+            'predicted_lddt': self.modules_multimer_module.PredictedLDDTHead(**config),
+            'predicted_aligned_error': self.modules_multimer_module.PredictedAlignedErrorHead(**config),
+            'predicted_tm_score': self.modules_multimer_module.PredictedTMScoreHead(**config),
         }
 
-    def run_alphamissense_analysis(self, sequence: str, variant: str) -> Dict[str, float]:
+    def get_residue_constants(self):
         """
-        Run AlphaMissense analysis on the given sequence and variant.
-
-        Args:
-            sequence (str): The protein sequence.
-            variant (str): The variant to analyze (format: 'OriginalAA{Position}NewAA', e.g., 'G56A').
+        Returns the residue constants used in AlphaFold.
 
         Returns:
-            Dict[str, float]: A dictionary containing the pathogenicity scores.
-                              Keys: 'pathogenic_score', 'benign_score'
-
-        Raises:
-            ValueError: If the input sequence or variant is invalid.
+            A dictionary containing various residue-related constants.
         """
-        # Validate sequence
-        if not sequence:
-            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
-        if not isinstance(sequence, str):
-            raise ValueError("Invalid input type. Sequence must be a string.")
-        sequence = sequence.upper()
-        invalid_chars = set(sequence) - set('ACDEFGHIKLMNPQRSTVWY')
-        if invalid_chars:
-            raise ValueError(f"Invalid amino acid(s) found in sequence: {', '.join(invalid_chars)}. Only standard amino acids are allowed.")
-
-        # Validate variant
-        if not isinstance(variant, str):
-            raise ValueError("Invalid input type. Variant must be a string.")
-        if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
-            raise ValueError("Invalid variant format. Use 'OriginalAA{Position}NewAA' (e.g., 'G56A').")
-
-        # Validate variant position and original amino acid
-        original_aa, position_str, new_aa = variant[0], variant[1:-1], variant[-1]
-        try:
-            position = int(position_str)
-        except ValueError:
-            raise ValueError(f"Invalid position in variant: '{position_str}'. Must be an integer.")
-
-        if position < 1 or position > len(sequence):
-            raise ValueError(f"Invalid variant position: {position}. Must be between 1 and {len(sequence)}.")
-        if sequence[position - 1] != original_aa:
-            raise ValueError(f"Original amino acid in variant ({original_aa}) does not match sequence at position {position} ({sequence[position - 1]}).")
-        if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
-            raise ValueError(f"Invalid new amino acid in variant: '{new_aa}'. Must be a standard amino acid.")
-
-        # TODO: Implement actual AlphaMissense analysis
-        # This is a placeholder implementation
-        pathogenic_score = random.uniform(0, 1)
-        benign_score = 1 - pathogenic_score
-
         return {
-            'pathogenic_score': pathogenic_score,
-            'benign_score': benign_score
+            'restype_order': self.residue_constants.restype_order,
+            'restype_num': self.residue_constants.restype_num,
+            'restypes': self.residue_constants.restypes,
+            'hhblits_aa_to_id': self.residue_constants.hhblits_aa_to_id,
+            'atom_types': self.residue_constants.atom_types,
+            'atom_order': self.residue_constants.atom_order,
+            'restype_name_to_atom14_names': self.residue_constants.restype_name_to_atom14_names,
+            'restype_name_to_atom37_names': self.residue_constants.restype_name_to_atom37_names,
         }
 
-    def run_alphaproteo_analysis(self, sequence: str) -> Dict[str, Any]:
+    def sequence_to_onehot(self, sequence):
         """
-        Run AlphaProteo analysis on the given sequence to generate novel proteins.
+        Converts an amino acid sequence to one-hot encoding.
 
         Args:
-            sequence (str): The protein sequence to analyze.
+            sequence: A string of amino acid letters.
 
         Returns:
-            Dict[str, Any]: A dictionary containing the analysis results.
-                            Keys: 'novel_proteins', 'binding_affinities'
-
-        Raises:
-            ValueError: If the input sequence is invalid.
+            A numpy array of shape (len(sequence), 20) representing the one-hot encoding.
         """
-        if not sequence:
-            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        return self.residue_constants.sequence_to_onehot(sequence)
 
-        if not isinstance(sequence, str):
-            raise ValueError("Invalid input type. Sequence must be a string.")
+    def get_chi_angles(self, restype):
+        """
+        Returns the chi angles for a given residue type.
 
-        sequence = sequence.upper()
-        valid_amino_acids = set('ACDEFGHIKLMNPQRSTVWY')
-        invalid_chars = set(sequence) - valid_amino_acids
-        if invalid_chars:
-            raise ValueError(f"Invalid amino acid(s) found in sequence: {', '.join(invalid_chars)}. Only standard amino acids (ACDEFGHIKLMNPQRSTVWY) are allowed.")
+        Args:
+            restype: A string representing the residue type (e.g., 'ALA', 'GLY', etc.).
 
-        if len(sequence) < 20:
-            raise ValueError(f"Sequence is too short. Minimum length is 20 amino acids, but got {len(sequence)}.")
+        Returns:
+            A list of chi angles for the given residue type.
+        """
+        return self.residue_constants.chi_angles_atoms.get(restype, [])
 
-        if len(sequence) > 2000:
-            raise ValueError(f"Sequence is too long. Maximum length is 2000 amino acids, but got {len(sequence)}.")
+    def parse_msa_identifier(self, msa_identifier):
+        """
+        Parses an MSA identifier string into its components.
 
-        # TODO: Implement actual AlphaProteo analysis
-        # This is a placeholder implementation
-        novel_proteins = [
-            ''.join(random.choices(tuple(valid_amino_acids), k=len(sequence)))
-            for _ in range(3)
-        ]
-        binding_affinities = [random.uniform(0, 1) for _ in range(3)]
+        Args:
+            msa_identifier: A string representing the MSA identifier.
 
-        return {
-            'novel_proteins': novel_proteins,
-            'binding_affinities': binding_affinities
-        }
+        Returns:
+            A dictionary containing the parsed components of the MSA identifier.
+        """
+        return self.msa_identifiers_module.parse_msa_identifier(msa_identifier)
+
+    def get_msa_identifier_type(self, msa_identifier):
+        """
+        Determines the type of the MSA identifier.
+
+        Args:
+            msa_identifier: A string representing the MSA identifier.
+
+        Returns:
+            A string indicating the type of the MSA identifier.
+        """
+        return self.msa_identifiers_module.get_msa_identifier_type(msa_identifier)
+
+    def create_msa_identifier(self, database, sequence_id, chain_id=None):
+        """
+        Creates an MSA identifier string from its components.
+
+        Args:
+            database: The name of the database.
+            sequence_id: The sequence identifier.
+            chain_id: The chain identifier (optional).
+
+        Returns:
+            A string representing the MSA identifier.
+        """
+        return self.msa_identifiers_module.create_msa_identifier(database, sequence_id, chain_id)
+
+    def parse_pdb(self, pdb_string):
+        """
+        Parses a PDB file string.
+
+        Args:
+            pdb_string: A string containing the contents of a PDB file.
+
+        Returns:
+            A dictionary containing parsed PDB data.
+        """
+        return self.parsers_module.parse_pdb(pdb_string)
+
+    def parse_a3m(self, a3m_string):
+        """
+        Parses an A3M file string.
+
+        Args:
+            a3m_string: A string containing the contents of an A3M file.
+
+        Returns:
+            A tuple containing the parsed A3M data.
+        """
+        return self.parsers_module.parse_a3m(a3m_string)
+
+    def parse_hhr(self, hhr_string):
+        """
+        Parses an HHSearch result file string.
+
+        Args:
+            hhr_string: A string containing the contents of an HHSearch result file.
+
+        Returns:
+            A list of dictionaries containing parsed HHSearch results.
+        """
+        return self.parsers_module.parse_hhr(hhr_string)
+
+    def create_template_features(self, query_sequence, hits):
+        """
+        Creates template features for AlphaFold.
+
+        Args:
+            query_sequence: The query protein sequence.
+            hits: A list of template hits.
+
+        Returns:
+            A dictionary of template features.
+        """
+        return self.templates_module.create_template_features(
+            query_sequence=query_sequence,
+            hits=hits
+        )
+
+    def realign_templates(self, query_sequence, template_features):
+        """
+        Realigns templates to the query sequence.
+
+        Args:
+            query_sequence: The query protein sequence.
+            template_features: A dictionary of template features.
+
+        Returns:
+            A dictionary of realigned template features.
+        """
+        return self.templates_module.realign_templates(
+            query_sequence=query_sequence,
+            template_features=template_features
+        )
+
+    def get_template_hits(self, query_sequence, mmcif_dir):
+        """
+        Retrieves template hits for a given query sequence.
+
+        Args:
+            query_sequence: The query protein sequence.
+            mmcif_dir: Directory containing mmCIF files.
+
+        Returns:
+            A list of template hits.
+        """
+        return self.templates_module.get_template_hits(
+            query_sequence=query_sequence,
+            mmcif_dir=mmcif_dir
+        )
+
+    def run_hhblits(self, input_fasta_path, database_paths, num_iterations=3):
+        """
+        Runs HHBlits search using the provided input sequence and databases.
+
+        Args:
+            input_fasta_path: Path to the input FASTA file.
+            database_paths: List of paths to the HHBlits databases.
+            num_iterations: Number of HHBlits iterations to perform (default: 3).
+
+        Returns:
+            A tuple containing the output A3M string and the HHBlits output string.
+        """
+        return self.hhblits_module.run_hhblits(
+            input_fasta_path=input_fasta_path,
+            database_paths=database_paths,
+            num_iterations=num_iterations
+        )
+
+    def run_hhsearch(self, input_a3m_path, database_path):
+        """
+        Runs HHSearch using the provided input A3M file and database.
+
+        Args:
+            input_a3m_path: Path to the input A3M file.
+            database_path: Path to the HHSearch database.
+
+        Returns:
+            A tuple containing the output HHR string and the HHSearch output string.
+        """
+        return self.hhsearch_module.run_hhsearch(
+            input_a3m_path=input_a3m_path,
+            database_path=database_path
+        )
+
+    def run_hmmsearch(self, input_fasta_path, database_path):
+        """
+        Runs HMMSearch using the provided input FASTA file and database.
+
+        Args:
+            input_fasta_path: Path to the input FASTA file.
+            database_path: Path to the HMMSearch database.
+
+        Returns:
+            A tuple containing the output HMM string and the HMMSearch output string.
+        """
+        return self.hmmsearch_module.run_hmmsearch(
+            input_fasta_path=input_fasta_path,
+            database_path=database_path
+        )
+
+    def run_jackhmmer(self, input_fasta_path, database_path, num_iterations=1):
+        """
+        Runs Jackhmmer search using the provided input FASTA file and database.
+
+        Args:
+            input_fasta_path: Path to the input FASTA file.
+            database_path: Path to the Jackhmmer database.
+            num_iterations: Number of Jackhmmer iterations to perform (default: 1).
+
+        Returns:
+            A tuple containing the output A3M string and the Jackhmmer output string.
+        """
+        return self.jackhmmer_module.run_jackhmmer(
+            input_fasta_path=input_fasta_path,
+            database_path=database_path,
+            num_iterations=num_iterations
+        )
+
+if __name__ == "__main__":
+    # Example usage
+    af_integration = AlphaFoldIntegration()
+    print("pLDDT bands:", af_integration.get_plddt_bands())
+
+    # You would typically get logits from the AlphaFold model output
+    # This is just a placeholder for demonstration
+    import numpy as np
+    dummy_logits = np.random.randn(100, 50)  # 100 residues, 50 bins
+    plddt_scores = af_integration.calculate_plddt(dummy_logits)
+    print("Example pLDDT scores (first 5 residues):", plddt_scores[:5])
+
+    # Example usage of new feature-related methods
+    print("Feature names:", af_integration.get_feature_names())
+
+    # Example sequence features
+    sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"
+    description = "Example protein"
+    num_res = len(sequence)
+    seq_features = af_integration.make_sequence_features(sequence, description, num_res)
+    print("Sequence features keys:", seq_features.keys())
+
+    # Example MSA features
+    msas = [["MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV",
+             "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"]]
+    msa_features = af_integration.make_msa_features(msas)
+    print("MSA features keys:", msa_features.keys())
+
+    # Example usage of EmbeddingsAndEvoformer
+    config = {
+        "num_features": 384,
+        "num_msa": 512,
+        "num_extra_msa": 1024,
+        "num_evoformer_blocks": 48,
+        "evoformer_config": {
+            "msa_row_attention_with_pair_bias": {"dropout_rate": 0.15},
+            "msa_column_attention": {"dropout_rate": 0.0},
+            "msa_transition": {"dropout_rate": 0.0},
+            "outer_product_mean": {"chunk_size": 128},
+            "triangle_attention_starting_node": {"dropout_rate": 0.25},
+            "triangle_attention_ending_node": {"dropout_rate": 0.25},
+            "triangle_multiplication_outgoing": {"dropout_rate": 0.25},
+            "triangle_multiplication_incoming": {"dropout_rate": 0.25},
+            "pair_transition": {"dropout_rate": 0.0},
+        },
+    }
+    embeddings_and_evoformer = af_integration.create_embeddings_and_evoformer(config)
+    print("EmbeddingsAndEvoformer created successfully")
+
+    # Example usage of MSA identifier methods
+    msa_sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"
+    msa_description = "sp|P12345|EXAMPLE_HUMAN Example protein"
+    parsed_msa = af_integration.parse_msa_identifier(msa_description)
+    print("Parsed MSA identifier:", parsed_msa)
+
+    msa_type = af_integration.get_msa_identifier_type(msa_description)
+    print("MSA identifier type:", msa_type)
+
+    # Example usage of new parsing methods
+    pdb_string = """ATOM      1  N   ASP A   1      22.981  23.225  50.360  1.00 18.79           N
+ATOM      2  CA  ASP A   1      21.967  22.778  49.506  1.00 17.87           C
+ATOM      3  C   ASP A   1      21.980  23.431  48.129  1.00 15.88           C
+END
+"""
+    parsed_pdb = af_integration.parse_pdb(pdb_string)
+    print("Parsed PDB data keys:", parsed_pdb.keys())
+
+    a3m_string = """>seq1
+MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV
+>seq2
+MK--KFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV
+"""
+    parsed_a3m = af_integration.parse_a3m(a3m_string)
+    print("Number of sequences in parsed A3M:", len(parsed_a3m[0]))
+
+    hhr_string = """
+HHsearch 1.5
+Query         query
+Match_columns 50
+No_of_seqs    1 out of 1
+Neff          1.0
+Searched_HMMs 85718
+
+No 1
+>1aab_A
+Probab=99.96 E-value=5.5e-35 Score=146.42 Aligned_cols=50 Identities=100% Similarity=1.542 Sum_probs=49.4
+
+Q query            1 MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV   50 (50)
+Q Consensus        1 mkflkfslltavllsvvfafsscgddddtgylppsqaiqdllkrmkv   50 (50)
+                     |||||||||||||||||||||||||||||||||||||||||||||||||
+T Consensus        1 mkflkfslltavllsvvfafsscgddddtgylppsqaiqdllkrmkv   50 (50)
+T 1aab_A           1 MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV   50 (50)
+T ss_dssp             CCHHHHHHHHHHHHHHCCCCCCCCCCCHHHHHHHHHHHHHHHHHHHH
+T ss_pred             CCHHHHHHHHHHHHHHCCCCCCCCCCCHHHHHHHHHHHHHHHHHHHH
+Confidence            9999999999999999999999999999999999999999999999
+"""
+    parsed_hhr = af_integration.parse_hhr(hhr_string)
+    print("Number of HHSearch results:", len(parsed_hhr))
+    if parsed_hhr:
+        print("First HHSearch result keys:", parsed_hhr[0].keys())
+
+    # Example usage of template-related methods
+    template_hits = [
+        {"name": "1xyz", "aligned_sequence": "MKF-KFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"}
+    ]
+    template_features = af_integration.create_template_features(
+        query_sequence=sequence,
+        hits=template_hits
+    )
+    print("Template features keys:", template_features.keys())
+
+    # Example of getting template hits
+    mmcif_dir = "/path/to/mmcif/files"  # Replace with actual path
+    template_hits = af_integration.get_template_hits(sequence, mmcif_dir)
+    print("Number of template hits:", len(template_hits))
+    if template_hits:
+        print("First template hit:", template_hits[0])
+
+    # Example of creating template features
+    template_features = af_integration.create_template_features(sequence, template_hits)
+    print("Template features keys:", template_features.keys())
+
+    # Example usage of run_jackhmmer
+    input_fasta_path = "/path/to/input.fasta"  # Replace with actual path
+    database_path = "/path/to/jackhmmer/database"  # Replace with actual path
+    jackhmmer_binary_path = "/path/to/jackhmmer"  # Replace with actual path
+
+    try:
+        jackhmmer_result = af_integration.run_jackhmmer(
+            input_fasta_path=input_fasta_path,
+            database_path=database_path,
+            jackhmmer_binary_path=jackhmmer_binary_path
+        )
+        print("Jackhmmer search completed successfully")
+        print("Number of hits:", len(jackhmmer_result[0]))
+        print("Jackhmmer output:", jackhmmer_result[1][:100] + "...")  # Print first 100 characters
+    except Exception as e:
+        print(f"Error running Jackhmmer: {str(e)}")
