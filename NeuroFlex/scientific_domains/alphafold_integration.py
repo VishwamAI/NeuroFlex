@@ -2,11 +2,12 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 from typing import List, Dict, Any, Tuple
-from alphafold.model import config, modules
+from alphafold.model import config, modules, data, model
 from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
-from alphafold.common import protein
-from alphafold.data import pipeline, templates
-from alphafold.data.tools import hhblits, jackhmmer
+from alphafold.common import protein, confidence, residue_constants
+from alphafold.data import pipeline, pipeline_multimer, templates
+from alphafold.data.tools import hhblits, jackhmmer, hhsearch, hmmsearch
+from alphafold.relax import relax
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -19,6 +20,8 @@ import importlib.metadata
 import openmm
 import openmm.app as app
 import openmm.unit as unit
+import re
+import random
 
 # Configure logging only if it hasn't been configured yet
 if not logging.getLogger().hasHandlers():
@@ -113,6 +116,8 @@ class AlphaFoldIntegration:
         self.openmm_system = None
         self.openmm_simulation = None
         self.openmm_integrator = None
+        self.multimer_config = None
+        self.relaxation_config = None
         logging.info("AlphaFoldIntegration initialized with OpenMM support")
 
     def setup_model(self, model_params: Dict[str, Any] = None):
@@ -133,6 +138,7 @@ class AlphaFoldIntegration:
             model_name = model_params.get('model_name', 'model_1')
             if 'multimer' in model_name:
                 base_config = copy.deepcopy(CONFIG_MULTIMER)
+                self.multimer_config = base_config
             else:
                 base_config = copy.deepcopy(CONFIG)
 
@@ -251,7 +257,10 @@ class AlphaFoldIntegration:
                     logging.debug(f"Dummy input '{key}' shape: {value.shape}")
                 raise ValueError(f"Failed to test AlphaFold model: {str(e)}")
 
-            self.msa_runner = jackhmmer.Jackhmmer(binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'))
+            self.msa_runner = jackhmmer.Jackhmmer(
+                binary_path=model_params.get('jackhmmer_binary_path', '/usr/bin/jackhmmer'),
+                database_path=model_params.get('database_path', '/path/to/default/database')
+            )
             self.template_searcher = hhblits.HHBlits(binary_path=model_params.get('hhblits_binary_path', '/usr/bin/hhblits'))
             logging.info("MSA runner and template searcher initialized")
 
@@ -331,11 +340,18 @@ class AlphaFoldIntegration:
 
             # Create OpenMM system
             forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
-            system = forcefield.createSystem(topology, nonbondedMethod=app.PME, nonbondedCutoff=1*unit.nanometer, constraints=app.HBonds)
+            system = forcefield.createSystem(
+                topology,
+                nonbondedMethod=app.PME,
+                nonbondedCutoff=1*unit.nanometer,
+                constraints=app.HBonds
+            )
 
             # Set up integrator and simulation
             integrator = openmm.LangevinMiddleIntegrator(300*unit.kelvin, 1/unit.picosecond, 0.002*unit.picoseconds)
-            self.openmm_simulation = app.Simulation(topology, system, integrator, platform)
+            platform = openmm.Platform.getPlatformByName('CUDA')
+            properties = {'CudaPrecision': 'mixed'}
+            self.openmm_simulation = app.Simulation(topology, system, integrator, platform, properties)
             self.openmm_simulation.context.setPositions(positions)
 
             logging.info("OpenMM simulation set up successfully.")
@@ -366,9 +382,25 @@ class AlphaFoldIntegration:
             # Get refined positions
             refined_positions = self.openmm_simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
 
+            # Validate refined positions
+            if refined_positions is None or len(refined_positions) == 0:
+                logging.warning("Refined positions are empty or None. Skipping structure refinement.")
+                return predicted_protein
+
+            if len(refined_positions) != len(predicted_protein.residue_index):
+                logging.error(f"Mismatch in number of residues: {len(refined_positions)} refined vs {len(predicted_protein.residue_index)} original")
+                raise ValueError("Refined positions do not match the original structure.")
+
             # Update the predicted protein with refined positions
             for i, residue in enumerate(predicted_protein.residue_index):
-                predicted_protein.atom_positions[residue] = refined_positions[i].value_in_unit(unit.angstrom)
+                try:
+                    refined_pos = refined_positions[i].value_in_unit(unit.angstrom)
+                    if refined_pos.shape != (5, 3):  # Assuming 5 atoms per residue and 3D coordinates
+                        raise ValueError(f"Unexpected shape for refined position: {refined_pos.shape}")
+                    predicted_protein.atom_positions[residue] = refined_pos
+                except Exception as e:
+                    logging.error(f"Error updating atom positions for residue {residue}: {str(e)}")
+                    raise
 
         return predicted_protein
 
@@ -397,3 +429,183 @@ class AlphaFoldIntegration:
 
         prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
         return prediction_result['predicted_aligned_error']
+
+    def predict_multimer_structure(self, sequences: List[str]) -> protein.Protein:
+        """
+        Predict multimer protein structure using AlphaFold.
+
+        Args:
+            sequences (List[str]): List of amino acid sequences for each chain.
+
+        Returns:
+            protein.Protein: Predicted multimer protein structure.
+        """
+        if self.multimer_config is None:
+            raise ValueError("Multimer configuration not set. Use a multimer model when calling setup_model().")
+
+        # Prepare features for multimer prediction
+        multimer_features = pipeline_multimer.make_multimer_features(sequences)
+
+        # Run prediction
+        prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.multimer_config, **multimer_features)
+        predicted_protein = protein.from_prediction(prediction_result, multimer=True)
+
+        return predicted_protein
+
+    def relax_structure(self, predicted_protein: protein.Protein) -> protein.Protein:
+        """
+        Relax the predicted protein structure using OpenMM.
+
+        Args:
+            predicted_protein (protein.Protein): Predicted protein structure.
+
+        Returns:
+            protein.Protein: Relaxed protein structure.
+        """
+        if not OPENMM_COMPATIBLE:
+            logging.warning("OpenMM is not compatible. Skipping structure relaxation.")
+            return predicted_protein
+
+        amber_relaxer = relax.AmberRelaxation(
+            max_iterations=0,
+            tolerance=2.39,
+            stiffness=10.0,
+            exclude_residues=[],
+            max_outer_iterations=20)
+
+        relaxed_pdb, _, _ = amber_relaxer.process(prot=predicted_protein)
+        relaxed_protein = protein.from_pdb_string(relaxed_pdb)
+
+        return relaxed_protein
+
+    def calculate_tm_score(self, predicted_protein: protein.Protein, native_protein: protein.Protein) -> float:
+        """
+        Calculate TM-score between predicted and native protein structures.
+
+        Args:
+            predicted_protein (protein.Protein): Predicted protein structure.
+            native_protein (protein.Protein): Native (experimental) protein structure.
+
+        Returns:
+            float: TM-score between the two structures.
+        """
+        return confidence.tm_score(
+            predicted_protein.atom_positions,
+            native_protein.atom_positions,
+            predicted_protein.residue_index,
+            native_protein.residue_index)
+
+    def get_residue_constants(self) -> Dict[str, Any]:
+        """
+        Get residue constants used in AlphaFold.
+
+        Returns:
+            Dict[str, Any]: Dictionary of residue constants.
+        """
+        return {
+            'restype_order': residue_constants.restype_order,
+            'restype_num': residue_constants.restype_num,
+            'restypes': residue_constants.restypes,
+            'atom_types': residue_constants.atom_types,
+            'atom_order': residue_constants.atom_order,
+        }
+
+    def run_alphamissense_analysis(self, sequence: str, variant: str) -> Dict[str, float]:
+        """
+        Run AlphaMissense analysis on the given sequence and variant.
+
+        Args:
+            sequence (str): The protein sequence.
+            variant (str): The variant to analyze (format: 'OriginalAA{Position}NewAA', e.g., 'G56A').
+
+        Returns:
+            Dict[str, float]: A dictionary containing the pathogenicity scores.
+                              Keys: 'pathogenic_score', 'benign_score'
+
+        Raises:
+            ValueError: If the input sequence or variant is invalid.
+        """
+        # Validate sequence
+        if not sequence:
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type. Sequence must be a string.")
+        sequence = sequence.upper()
+        invalid_chars = set(sequence) - set('ACDEFGHIKLMNPQRSTVWY')
+        if invalid_chars:
+            raise ValueError(f"Invalid amino acid(s) found in sequence: {', '.join(invalid_chars)}. Only standard amino acids are allowed.")
+
+        # Validate variant
+        if not isinstance(variant, str):
+            raise ValueError("Invalid input type. Variant must be a string.")
+        if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
+            raise ValueError("Invalid variant format. Use 'OriginalAA{Position}NewAA' (e.g., 'G56A').")
+
+        # Validate variant position and original amino acid
+        original_aa, position_str, new_aa = variant[0], variant[1:-1], variant[-1]
+        try:
+            position = int(position_str)
+        except ValueError:
+            raise ValueError(f"Invalid position in variant: '{position_str}'. Must be an integer.")
+
+        if position < 1 or position > len(sequence):
+            raise ValueError(f"Invalid variant position: {position}. Must be between 1 and {len(sequence)}.")
+        if sequence[position - 1] != original_aa:
+            raise ValueError(f"Original amino acid in variant ({original_aa}) does not match sequence at position {position} ({sequence[position - 1]}).")
+        if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
+            raise ValueError(f"Invalid new amino acid in variant: '{new_aa}'. Must be a standard amino acid.")
+
+        # TODO: Implement actual AlphaMissense analysis
+        # This is a placeholder implementation
+        pathogenic_score = random.uniform(0, 1)
+        benign_score = 1 - pathogenic_score
+
+        return {
+            'pathogenic_score': pathogenic_score,
+            'benign_score': benign_score
+        }
+
+    def run_alphaproteo_analysis(self, sequence: str) -> Dict[str, Any]:
+        """
+        Run AlphaProteo analysis on the given sequence to generate novel proteins.
+
+        Args:
+            sequence (str): The protein sequence to analyze.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the analysis results.
+                            Keys: 'novel_proteins', 'binding_affinities'
+
+        Raises:
+            ValueError: If the input sequence is invalid.
+        """
+        if not sequence:
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type. Sequence must be a string.")
+
+        sequence = sequence.upper()
+        valid_amino_acids = set('ACDEFGHIKLMNPQRSTVWY')
+        invalid_chars = set(sequence) - valid_amino_acids
+        if invalid_chars:
+            raise ValueError(f"Invalid amino acid(s) found in sequence: {', '.join(invalid_chars)}. Only standard amino acids (ACDEFGHIKLMNPQRSTVWY) are allowed.")
+
+        if len(sequence) < 20:
+            raise ValueError(f"Sequence is too short. Minimum length is 20 amino acids, but got {len(sequence)}.")
+
+        if len(sequence) > 2000:
+            raise ValueError(f"Sequence is too long. Maximum length is 2000 amino acids, but got {len(sequence)}.")
+
+        # TODO: Implement actual AlphaProteo analysis
+        # This is a placeholder implementation
+        novel_proteins = [
+            ''.join(random.choices(tuple(valid_amino_acids), k=len(sequence)))
+            for _ in range(3)
+        ]
+        binding_affinities = [random.uniform(0, 1) for _ in range(3)]
+
+        return {
+            'novel_proteins': novel_proteins,
+            'binding_affinities': binding_affinities
+        }
