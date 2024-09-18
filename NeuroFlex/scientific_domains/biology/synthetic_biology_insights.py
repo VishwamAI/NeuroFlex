@@ -13,6 +13,9 @@ from scipy.optimize import linprog
 # import alphafold.data.pipeline as af_pipeline
 import logging
 
+# GC content calculation is now directly imported from Bio.SeqUtils
+# No fallback mechanism needed
+
 # Set up basic logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
