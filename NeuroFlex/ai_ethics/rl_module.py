@@ -26,6 +26,9 @@ class ReplayBuffer:
             'dones': jnp.array(dones)
         }
 
+    def __len__(self):
+        return len(self.buffer)
+
 def create_train_state(rng, model, input_shape):
     # Placeholder function, actual implementation would depend on the model structure
     return None
