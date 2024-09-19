@@ -25,7 +25,7 @@ __all__ = [
     'SyntheticBiologyInsights',
     'GoogleIntegration',
     'IBMIntegration',
-    'AlphaFoldIntegration',  # Temporarily removed
+    # 'AlphaFoldIntegration',  # Temporarily removed
     'XarrayIntegration',
     'get_scientific_domains_version',
     'SUPPORTED_SCIENTIFIC_DOMAINS',
