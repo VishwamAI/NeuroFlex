@@ -232,7 +232,7 @@ def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgen
             if len(agent.replay_buffer) > agent.replay_buffer.batch_size:
                 batch = agent.replay_buffer.sample(agent.replay_buffer.batch_size)
                 loss = agent.update(batch)
-                logging.debug(f"Agent {i} update - Step: {step}, Loss: {loss:.4f}")
+                logging.debug(f"Agent {i} update - Step: {step}, Loss: {loss}")
 
             # Update performance using moving average
             agent.episode_rewards.append(reward)
