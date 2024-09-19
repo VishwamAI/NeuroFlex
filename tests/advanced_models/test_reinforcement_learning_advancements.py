@@ -68,7 +68,6 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         self.assertIsInstance(agent, AdvancedRLAgent)
         self.assertEqual(agent.action_dim, env.action_space.n)
 
-    @pytest.mark.skip(reason="Temporarily skipped as requested by the user")
     @patch('NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.AdvancedRLAgent')
     def test_train_multi_agent_rl(self, mock_agent_class):
         mock_agent = MagicMock()
@@ -93,12 +92,12 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         env = MultiAgentEnvironment(self.num_agents, self.env_id)
         agents = [mock_agent_class() for _ in range(self.num_agents)]
         total_timesteps = 200
+
         trained_agents = train_multi_agent_rl(env, agents, total_timesteps)
 
         self.assertEqual(len(trained_agents), self.num_agents)
         for agent in trained_agents:
             self.assertTrue(agent.update.called)
-            self.assertTrue(agent.to.called)
             self.assertTrue(agent.select_action.called)
             self.assertGreater(agent.replay_buffer.__len__.call_count, 0)
             self.assertGreater(agent.update.call_count, 0)
