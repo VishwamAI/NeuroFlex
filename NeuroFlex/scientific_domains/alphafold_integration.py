@@ -1,12 +1,34 @@
 # alphafold_integration.py
 
-import sys
+import jax
+import jax.numpy as jnp
+import haiku as hk
+from typing import List, Dict, Any, Tuple, Union
+from alphafold.model import config, modules, features, modules_multimer
+from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
+from alphafold.common import protein, confidence, residue_constants
+from alphafold.data import pipeline, templates, msa_identifiers, parsers
+from alphafold.data.tools import hhblits, jackhmmer, hhsearch, hmmsearch
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+import logging
+import copy
+import ml_collections
+from unittest.mock import MagicMock
+import importlib
+import importlib.metadata
+import openmm
+import openmm.app as app
+import openmm.unit as unit
 import os
+import sys
 import re
 import random
-import jax
 import numpy as np
-from typing import Dict, List, Union
+import tempfile
+import pickle
+import traceback
 
 # Add the AlphaFold directory to the Python path
 alphafold_path = os.environ.get('ALPHAFOLD_PATH')
@@ -17,15 +39,8 @@ if not alphafold_path:
 
 sys.path.append(alphafold_path)
 
-try:
-    from alphafold.common import confidence, residue_constants
-    from alphafold.model import features, modules, modules_multimer
-    from alphafold.data import msa_identifiers, parsers, templates
-    from alphafold.data.tools import hhblits, hhsearch, hmmsearch, jackhmmer
-except ImportError as e:
-    print(f"Error importing AlphaFold modules: {e}")
-    print("Please ensure that the AlphaFold path is correctly set and all dependencies are installed.")
-    sys.exit(1)
+# Define the path to the AlphaFold parameters
+ALPHAFOLD_PARAMS_DIR = "/home/ubuntu/NeuroFlex/alphafold_data/params/"
 
 class AlphaFoldIntegration:
     def __init__(self):
@@ -45,10 +60,293 @@ class AlphaFoldIntegration:
         self.model_params = None
         self.config = None
         self.feature_dict = None
+        self.msa_runner = None
+        self.template_searcher = None
+        self.alphafold_params = None
 
     def is_model_ready(self):
         """Check if the AlphaFold model is ready for predictions."""
-        return self.model is not None and self.model_params is not None and self.config is not None and self.feature_dict is not None
+        logging.info("Checking if AlphaFold model is ready")
+        components = {
+            'model': self.model,
+            'model_params': self.model_params,
+            'config': self.config,
+            'feature_dict': self.feature_dict
+        }
+        for name, component in components.items():
+            if component is None:
+                logging.error(f"{name} is not initialized")
+            else:
+                logging.debug(f"{name} is initialized")
+        is_ready = all(component is not None for component in components.values())
+        logging.info(f"AlphaFold model ready: {is_ready}")
+        return is_ready
+
+    def prepare_features(self, sequence: str):
+        """
+        Prepare feature dictionary for AlphaFold prediction.
+
+        Args:
+            sequence (str): Amino acid sequence.
+
+        Raises:
+            ValueError: If the sequence is invalid.
+        """
+        if not sequence or not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid sequence provided.")
+
+        sequence_features = self.features_module.make_sequence_features(
+            sequence=sequence,
+            description="query",
+            num_res=len(sequence)
+        )
+        msa = self._run_msa(sequence)
+        msa_features = self.features_module.make_msa_features(msas=[msa])
+        template_features = self._search_templates(sequence)
+
+        self.feature_dict = {**sequence_features, **msa_features, **template_features}
+
+    def _search_templates(self, sequence: str) -> Dict[str, Any]:
+        """Search for templates and prepare features."""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+            SeqIO.write(SeqRecord(Seq(sequence), id="query"), temp_file, "fasta")
+            temp_file_path = temp_file.name
+
+        try:
+            hits = self.template_searcher.query(temp_file_path)
+            templates_result = self.templates_module.TemplateHitFeaturizer(
+                mmcif_dir=os.path.join(alphafold_path, "alphafold", "data", "pdb_mmcif"),
+                max_template_date="2021-11-01",
+                max_hits=20,
+                kalign_binary_path="kalign"
+            ).get_templates(query_sequence=sequence, hits=hits)
+            return templates_result.features
+        finally:
+            os.remove(temp_file_path)
+
+    def _run_msa(self, sequence: str) -> List[Tuple[str, str]]:
+        """Run Multiple Sequence Alignment (MSA) for the given protein sequence."""
+        if self.msa_runner is None:
+            database_path = os.environ.get('JACKHMMER_DATABASE_PATH', '/path/to/jackhmmer/database')
+            binary_path = os.environ.get('JACKHMMER_BINARY_PATH', '/usr/bin/jackhmmer')
+            try:
+                self.msa_runner = self.jackhmmer_module.Jackhmmer(
+                    binary_path=binary_path,
+                    database_path=database_path
+                )
+            except Exception as e:
+                logging.error(f"Failed to initialize Jackhmmer: {str(e)}")
+                return [("query", sequence)]
+
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+                SeqIO.write(SeqRecord(Seq(sequence), id="query"), temp_file, "fasta")
+                temp_file_path = temp_file.name
+
+            result = self.msa_runner.query(temp_file_path)
+            return [("query", sequence)] + [(hit.name, hit.sequence) for hit in result.hits]
+        except Exception as e:
+            logging.error(f"Error running MSA: {str(e)}")
+            return [("query", sequence)]
+        finally:
+            if 'temp_file_path' in locals():
+                try:
+                    os.remove(temp_file_path)
+                except Exception as e:
+                    logging.warning(f"Failed to remove temporary file: {str(e)}")
+
+    def setup_model(self, model_params: Dict[str, Any] = None, use_cpu: bool = False):
+        """Set up the AlphaFold model with given parameters."""
+        try:
+            logging.info("Starting AlphaFold model setup")
+            if model_params is None:
+                model_params = {'max_recycling': 3, 'model_name': 'model_1'}
+            logging.info(f"Setting up AlphaFold model with parameters: {model_params}")
+            logging.info(f"Using CPU: {use_cpu}")
+
+            # Initialize the config
+            model_name = model_params.get('model_name', 'model_1')
+            base_config = CONFIG_MULTIMER if 'multimer' in model_name else CONFIG
+            logging.info(f"Using base config for model: {model_name}")
+
+            # Create a ConfigDict from the base config and update with model-specific differences
+            config = ml_collections.ConfigDict(base_config)
+            if model_name in CONFIG_DIFFS:
+                config.update_from_flattened_dict(CONFIG_DIFFS[model_name])
+                logging.info(f"Updated config with model-specific differences for {model_name}")
+
+            # Ensure global_config is present and correctly initialized
+            if 'global_config' not in config:
+                config.global_config = ml_collections.ConfigDict({
+                    'deterministic': False,
+                    'subbatch_size': 4,
+                    'use_remat': False,
+                    'zero_init': True,
+                    'eval_dropout': False,
+                })
+
+            # CPU-specific configurations
+            if use_cpu:
+                config.global_config.update({
+                    'use_cpu': True,
+                    'precision': jax.lax.Precision.DEFAULT,
+                    'subbatch_size': 1,  # Reduce subbatch size for CPU
+                })
+                logging.info("Applied CPU-specific configurations")
+
+            config.update(model_params)
+            self.config = config
+            logging.info("Configuration setup completed")
+            logging.debug(f"Final config: {self.config}")
+
+            # Load AlphaFold parameters
+            params_file = os.path.join(ALPHAFOLD_PARAMS_DIR, f"params_{model_name}.npz")
+            if not os.path.exists(params_file):
+                logging.error(f"AlphaFold parameters file not found: {params_file}")
+                raise FileNotFoundError(f"AlphaFold parameters file not found: {params_file}")
+
+            def convert_to_jax_array(item):
+                if isinstance(item, np.ndarray):
+                    return jnp.array(item)
+                elif isinstance(item, dict):
+                    return {k: convert_to_jax_array(v) for k, v in item.items()}
+                elif isinstance(item, list):
+                    return [convert_to_jax_array(v) for v in item]
+                else:
+                    return item
+
+            logging.info(f"Loading AlphaFold parameters from {params_file}")
+            with np.load(params_file) as loaded_params:
+                self.alphafold_params = convert_to_jax_array(dict(loaded_params))
+            logging.info(f"Loaded AlphaFold parameters from {params_file}")
+            logging.debug(f"AlphaFold parameters types: {jax.tree_map(lambda x: type(x).__name__, self.alphafold_params)}")
+            logging.debug(f"AlphaFold parameters shapes: {jax.tree_map(lambda x: x.shape if hasattr(x, 'shape') else None, self.alphafold_params)}")
+
+            # Initialize the model using hk.transform
+            def _init_alphafold(batch, config):
+                model = self.modules_module.AlphaFold(config)
+                return model(batch)
+
+            model_creator = hk.transform(_init_alphafold)
+            rng = jax.random.PRNGKey(0)
+            dummy_batch = {
+                'aatype': jnp.zeros((1, 50), dtype=jnp.int32),
+                'residue_index': jnp.arange(50)[None],
+                'seq_length': jnp.array([50], dtype=jnp.int32),
+                'is_distillation': jnp.array(0, dtype=jnp.int32),
+            }
+            logging.info("Initializing model with dummy batch")
+            logging.debug(f"Dummy batch types: {jax.tree_map(lambda x: type(x).__name__, dummy_batch)}")
+            logging.debug(f"Dummy batch shapes: {jax.tree_map(lambda x: x.shape if hasattr(x, 'shape') else None, dummy_batch)}")
+
+            try:
+                logging.info("Initializing model parameters")
+                with jax.default_device(jax.devices('cpu')[0] if use_cpu else None):
+                    self.model_params = model_creator.init(rng, dummy_batch, config=self.config)
+                logging.info("Model parameters initialized successfully")
+                logging.debug(f"Initial model_params structure: {jax.tree_map(lambda x: x.shape if hasattr(x, 'shape') else None, self.model_params)}")
+            except Exception as init_error:
+                logging.error(f"Error during model initialization: {str(init_error)}")
+                logging.debug(f"Config used for initialization: {self.config}")
+                logging.debug(f"Dummy batch used for initialization: {dummy_batch}")
+                raise ValueError(f"Failed to initialize AlphaFold model: {str(init_error)}")
+
+            # Log the structure and types of model_params and alphafold_params
+            logging.debug(f"Structure of model_params: {jax.tree_map(lambda x: x.shape if hasattr(x, 'shape') else None, self.model_params)}")
+            logging.debug(f"Structure of alphafold_params: {jax.tree_map(lambda x: x.shape if hasattr(x, 'shape') else None, self.alphafold_params)}")
+            logging.debug(f"Types in model_params: {jax.tree_map(lambda x: type(x).__name__, self.model_params)}")
+            logging.debug(f"Types in alphafold_params: {jax.tree_map(lambda x: type(x).__name__, self.alphafold_params)}")
+
+            # Integrate loaded AlphaFold parameters
+            try:
+                logging.info("Merging model parameters with AlphaFold parameters")
+
+                # Validate parameter compatibility
+                def validate_params(params1, params2, path=""):
+                    if isinstance(params1, dict) and isinstance(params2, dict):
+                        for k in params1:
+                            if k not in params2:
+                                logging.warning(f"Key '{path + k}' present in model_params but not in alphafold_params")
+                            else:
+                                validate_params(params1[k], params2[k], path + k + ".")
+                        for k in params2:
+                            if k not in params1:
+                                logging.warning(f"Key '{path + k}' present in alphafold_params but not in model_params")
+                    elif isinstance(params1, jnp.ndarray) and isinstance(params2, jnp.ndarray):
+                        if params1.shape != params2.shape:
+                            logging.warning(f"Mismatched shapes at {path}: {params1.shape} vs {params2.shape}")
+                    elif type(params1) != type(params2):
+                        logging.warning(f"Mismatched types at {path}: {type(params1)} vs {type(params2)}")
+
+                logging.info("Validating parameter compatibility")
+                validate_params(self.model_params, self.alphafold_params)
+                logging.info("Parameter compatibility validation completed")
+
+                # Merge parameters
+                def merge_params(params1, params2):
+                    if isinstance(params1, dict) and isinstance(params2, dict):
+                        return {k: merge_params(params1.get(k), params2.get(k)) for k in set(params1) | set(params2)}
+                    elif isinstance(params1, jnp.ndarray) and isinstance(params2, jnp.ndarray):
+                        return params2 if params1.shape == params2.shape else params1
+                    else:
+                        return params2 if params2 is not None else params1
+
+                merged_params = merge_params(self.model_params, self.alphafold_params)
+
+                # Log types and shapes after merging
+                logging.debug("Types and shapes after merging:")
+                logging.debug(f"merged_params: {jax.tree_map(lambda x: (type(x).__name__, x.shape if hasattr(x, 'shape') else None), merged_params)}")
+
+                self.model_params = merged_params
+                logging.info("Parameters merged successfully")
+
+                # Log final types and shapes
+                logging.debug("Final types and shapes:")
+                logging.debug(f"model_params: {jax.tree_map(lambda x: (type(x).__name__, x.shape if hasattr(x, 'shape') else None), self.model_params)}")
+
+            except Exception as merge_error:
+                logging.error(f"Error merging parameters: {str(merge_error)}")
+                logging.error(f"model_params structure: {jax.tree_util.tree_structure(self.model_params)}")
+                logging.error(f"alphafold_params structure: {jax.tree_util.tree_structure(self.alphafold_params)}")
+                logging.debug(f"model_params keys: {jax.tree_util.tree_leaves(self.model_params)}")
+                logging.debug(f"alphafold_params keys: {jax.tree_util.tree_leaves(self.alphafold_params)}")
+                raise ValueError(f"Failed to integrate AlphaFold parameters: {str(merge_error)}")
+
+            self.model = model_creator.apply
+            logging.info("Model initialization completed")
+
+            # Initialize MSA runner and template searcher
+            jackhmmer_binary_path = os.environ.get('JACKHMMER_BINARY_PATH', '/usr/bin/jackhmmer')
+            hhblits_binary_path = os.environ.get('HHBLITS_BINARY_PATH', '/usr/bin/hhblits')
+            jackhmmer_database_path = os.environ.get('JACKHMMER_DATABASE_PATH', '/path/to/jackhmmer/database')
+            hhblits_database_path = os.environ.get('HHBLITS_DATABASE_PATH', '/path/to/hhblits/database')
+
+            if jackhmmer_database_path == '/path/to/jackhmmer/database':
+                logging.warning(f"JACKHMMER_DATABASE_PATH not set. Using default path: {jackhmmer_database_path}")
+            if hhblits_database_path == '/path/to/hhblits/database':
+                logging.warning(f"HHBLITS_DATABASE_PATH not set. Using default path: {hhblits_database_path}")
+
+            logging.info("Initializing MSA runner and template searcher")
+            self.msa_runner = self.jackhmmer_module.Jackhmmer(binary_path=jackhmmer_binary_path, database_path=jackhmmer_database_path)
+            self.template_searcher = self.hhblits_module.HHBlits(binary_path=hhblits_binary_path, databases=[hhblits_database_path])
+            logging.info("MSA runner and template searcher initialized")
+
+            # Initialize feature_dict with an empty dictionary
+            self.feature_dict = {}
+            logging.info("Initialized feature_dict with an empty dictionary")
+
+            # Verify that the model is set up correctly
+            logging.info("Verifying model setup")
+            if not self.is_model_ready():
+                logging.error("Failed to set up AlphaFold model correctly")
+                logging.debug(f"Model state: model={self.model}, model_params={bool(self.model_params)}, config={bool(self.config)}, feature_dict={bool(self.feature_dict)}")
+                raise ValueError("Failed to set up AlphaFold model correctly.")
+
+            logging.info("AlphaFold model set up successfully.")
+        except Exception as e:
+            logging.error(f"Error setting up AlphaFold model: {str(e)}")
+            logging.debug(f"Stack trace: {traceback.format_exc()}")
+            raise ValueError(f"Failed to set up AlphaFold model: {str(e)}")
 
     def get_plddt_bands(self):
         """

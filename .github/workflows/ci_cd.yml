@@ -24,12 +24,15 @@ jobs:
         run: |
           mkdir -p ${{ github.workspace }}/data
           mkdir -p ${{ github.workspace }}/path/to/save
+      - name: Set ALPHAFOLD_PATH environment variable
+        run: echo "ALPHAFOLD_PATH=${{ github.workspace }}/alphafold" >> $GITHUB_ENV
       - name: Run tests
         run: |
           pytest tests/ --disable-warnings
         env:
           NEUROFLEX_DATA_DIR: ${{ github.workspace }}/data
           NEUROFLEX_SAVE_DIR: ${{ github.workspace }}/path/to/save
+          ALPHAFOLD_PATH: ${{ env.ALPHAFOLD_PATH }}
       - name: Debug file-related issues
         if: failure()
         run: |
