@@ -166,9 +166,10 @@ class MultiModalLearning(nn.Module):
             elif name == 'text':
                 # For text modality, ensure long type for embedding and float type for LSTM
                 text_input = inputs[name].long().clamp(0, 29999)  # Clamp to valid range
+                logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
                 embedded = modality['encoder'][0](text_input)
-                lstm_out, _ = modality['encoder'][1](embedded.float())
-                encoded_modalities[name] = modality['encoder'][2](lstm_out[:, -1, :])
+                lstm_out, (hidden, _) = modality['encoder'][1](embedded.float())
+                encoded_modalities[name] = modality['encoder'][2](hidden[-1])
             elif name == 'time_series':
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
@@ -209,6 +210,9 @@ class MultiModalLearning(nn.Module):
 
     def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5, batch_size: int = 32):
         """Train the multi-modal learning model."""
+        if len(data) == 0 or len(labels) == 0:
+            raise ValueError("Input data or labels are empty")
+
         if val_data is None or val_labels is None:
             train_data, val_data, train_labels, val_labels = self._split_data(data, labels)
         else:
