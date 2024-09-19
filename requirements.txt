@@ -10,7 +10,7 @@ attrs
 autograd
 autoray
 biom-format
-biopython==1.79
+biopython==1.80
 blosc2
 cachetools
 certifi
