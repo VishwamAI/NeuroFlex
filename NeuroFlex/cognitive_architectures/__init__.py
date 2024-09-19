@@ -37,5 +37,37 @@ __all__ = [
     'UPDATE_INTERVAL',
     'LEARNING_RATE_ADJUSTMENT',
     'MAX_HEALING_ATTEMPTS',
-    'CONSCIOUSNESS_BROADCAST_INTERVAL'
+    'CONSCIOUSNESS_BROADCAST_INTERVAL',
+    'get_cognitive_architectures_version',
+    'SUPPORTED_COGNITIVE_MODELS',
+    'initialize_cognitive_architectures',
+    'create_cognitive_model'
 ]
+
+def get_cognitive_architectures_version():
+    return "1.0.0"
+
+SUPPORTED_COGNITIVE_MODELS = [
+    "CognitiveArchitecture",
+    "ConsciousnessSimulation",
+    "ExtendedCognitiveArchitecture",
+    "CDSTDP"
+]
+
+def initialize_cognitive_architectures():
+    print("Initializing Cognitive Architectures Module...")
+    # Add any necessary initialization code here
+
+def create_cognitive_model(model_type, *args, **kwargs):
+    if model_type == "CognitiveArchitecture":
+        return CognitiveArchitecture(*args, **kwargs)
+    elif model_type == "ConsciousnessSimulation":
+        return ConsciousnessSimulation(*args, **kwargs)
+    elif model_type == "ExtendedCognitiveArchitecture":
+        return ExtendedCognitiveArchitecture(*args, **kwargs)
+    elif model_type == "CDSTDP":
+        return CDSTDP(*args, **kwargs)
+    else:
+        raise ValueError(f"Unsupported cognitive model type: {model_type}")
+
+# Add any other Cognitive Architectures-specific utility functions or constants as needed
