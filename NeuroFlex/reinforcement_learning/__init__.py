@@ -13,6 +13,12 @@ Recent updates:
 - Added support for multi-agent reinforcement learning
   - Includes functions for creating multi-agent environments and training multiple agents
 - Optimized performance for both single-agent and multi-agent scenarios
+- Implemented model-based RL techniques
+  - Includes environment models for sample-efficient learning
+  - Added model-based planning and decision-making functions
+- Integrated curiosity-driven exploration methods
+  - Implemented Intrinsic Curiosity Module (ICM) for better exploration
+  - Added novelty detection mechanisms to encourage exploration of new states
 """
 
 from .rl_module import RLAgent, RLEnvironment, PrioritizedReplayBuffer, train_rl_agent
