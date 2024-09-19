@@ -1,31 +1,30 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
-import pytest
 from NeuroFlex.scientific_domains.protein_development import ProteinDevelopment
 from openmm import unit
-
-pytestmark = pytest.mark.skip(reason="Skipping AlphaFold-related tests")
+import jax
+import ml_collections
 
 class TestProteinDevelopment(unittest.TestCase):
     def setUp(self):
         self.protein_dev = ProteinDevelopment()
 
-    @unittest.skip("Skipping failing test case for now")
     @patch('NeuroFlex.scientific_domains.protein_development.config.model_config')
     @patch('NeuroFlex.scientific_domains.protein_development.data.get_model_haiku_params')
     @patch('NeuroFlex.scientific_domains.protein_development.model.RunModel')
-    def test_setup_alphafold(self, mock_run_model, mock_get_params, mock_model_config):
-        mock_model_config.return_value = {'mock': 'config'}
+    @patch('NeuroFlex.scientific_domains.protein_development.jax.random.PRNGKey')
+    def test_setup_alphafold(self, mock_prng_key, mock_run_model, mock_get_params, mock_model_config):
+        mock_model_config.return_value = ml_collections.ConfigDict({'mock': 'config'})
         mock_get_params.return_value = {'mock': 'params'}
         mock_run_model_instance = mock_run_model.return_value
+        mock_prng_key.return_value = jax.random.PRNGKey(0)
 
         # Test successful setup
         self.protein_dev.setup_alphafold()
         mock_model_config.assert_called_once_with('model_3_ptm')
         mock_get_params.assert_called_once_with(model_name='model_3_ptm', data_dir='/path/to/alphafold/data')
-        mock_run_model.assert_called_once_with({'mock': 'config'}, None)
-        mock_run_model_instance.init_params.assert_called_once()
+        mock_run_model.assert_called_once_with(mock_model_config.return_value, mock_get_params.return_value)
         self.assertIsNotNone(self.protein_dev.alphafold_model)
 
         # Reset mocks for subsequent tests

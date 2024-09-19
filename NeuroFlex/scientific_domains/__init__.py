@@ -6,7 +6,7 @@ from .art_integration import ARTIntegration
 from .biology.synthetic_biology_insights import SyntheticBiologyInsights
 from .google_integration import GoogleIntegration
 from .ibm_integration import IBMIntegration
-# from .alphafold_integration import AlphaFoldIntegration  # Temporarily commented out
+from .alphafold_integration import AlphaFoldIntegration
 from .xarray_integration import XarrayIntegration
 
 __all__ = [
@@ -16,6 +16,6 @@ __all__ = [
     'SyntheticBiologyInsights',
     'GoogleIntegration',
     'IBMIntegration',
-    # 'AlphaFoldIntegration',  # Temporarily removed
+    'AlphaFoldIntegration',
     'XarrayIntegration'
 ]
