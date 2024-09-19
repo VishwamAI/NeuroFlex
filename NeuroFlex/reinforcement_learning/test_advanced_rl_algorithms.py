@@ -5,7 +5,7 @@ Test script for advanced reinforcement learning algorithms (SAC and TD3)
 import jax
 import jax.numpy as jnp
 import numpy as np
-from advanced_rl_algorithms import SACAgent, TD3Agent, create_sac_agent, create_td3_agent
+from NeuroFlex.reinforcement_learning.advanced_rl_algorithms import SACAgent, TD3Agent, create_sac_agent, create_td3_agent
 
 def test_sac_agent():
     print("Testing SAC Agent...")
