@@ -12,6 +12,7 @@ from alphafold.model import modules
 import alphafold.data.pipeline as af_pipeline
 import logging
 import haiku as hk
+import asyncio
 
 # GC content calculation is now directly imported from Bio.SeqUtils
 # No fallback mechanism needed
@@ -30,6 +31,7 @@ class SyntheticBiologyInsights:
             "cds": ["GFP", "RFP", "LacZ"],
             "terminator": ["T1", "T7", "rrnB"]
         }
+        self.prediction_cache = {}  # Initialize prediction cache
         # Initialize AlphaFold models
         try:
             def init_alphafold():
@@ -210,6 +212,10 @@ class SyntheticBiologyInsights:
         """
         Predict the function of a protein given its sequence.
         """
+        # Implement caching mechanism
+        if sequence in self.prediction_cache:
+            return self.prediction_cache[sequence]
+
         seq_obj = Seq(sequence)
         from Bio.SeqUtils.ProtParam import ProteinAnalysis
         protein_analysis = ProteinAnalysis(str(seq_obj))
@@ -222,7 +228,23 @@ class SyntheticBiologyInsights:
 
         # In a real implementation, you would analyze the predicted structure
         # to infer potential function. Here, we'll just return basic info.
-        return f"Predicted function based on sequence and structure. MW: {molecular_weight:.2f}, pI: {isoelectric_point:.2f}, Confidence: {predicted_structure.plddt.mean():.2f}"
+        result = f"Predicted function based on sequence and structure. MW: {molecular_weight:.2f}, pI: {isoelectric_point:.2f}, Confidence: {predicted_structure.plddt.mean():.2f}"
+
+        # Cache the result
+        self.prediction_cache[sequence] = result
+        return result
+
+    async def predict_protein_functions(self, sequences: List[str]) -> List[str]:
+        """
+        Predict the functions of multiple proteins given their sequences.
+        """
+        return await asyncio.gather(*[self.predict_protein_function_async(seq) for seq in sequences])
+
+    async def predict_protein_function_async(self, sequence: str) -> str:
+        """
+        Asynchronous version of predict_protein_function for long-running predictions.
+        """
+        return await asyncio.to_thread(self.predict_protein_function, sequence)
 
     def design_crispr_experiment(self, target_gene: str, guide_rna: str) -> Dict:
         """
