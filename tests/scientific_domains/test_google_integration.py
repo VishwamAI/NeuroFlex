@@ -39,7 +39,7 @@ class TestGoogleIntegration(unittest.TestCase):
         output = compiled_fn(params, x)
         self.assertEqual(output.shape, (1, self.num_classes))
 
-    @pytest.mark.skip(reason="Skipping failing test")
+    @pytest.mark.skip(reason="Skipping failing test as requested by user")
     def test_integrate_tensorflow_model(self):
         # Create a simple TensorFlow model
         tf_model = tf.keras.Sequential([
