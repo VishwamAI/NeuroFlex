@@ -147,7 +147,26 @@ To set up your environment:
    pip install -r requirements.txt
    ```
 
-## Documentation
+## Documentation and Project Structure
+
+The NeuroFlex project is organized into several key directories and files, each serving a specific purpose:
+
+- **NeuroFlex.py**: Integrates various AI and neural network components, providing a unified interface for core neural networks, quantum neural networks, ethical frameworks, explainable AI, BCI integration, consciousness simulation, protein structure prediction, and more.
+- **Prompt_Agent**: Contains agentic behavior models and related functionalities.
+- **Transformers**: Includes advanced transformer models for text processing and classification.
+- **Advanced Models**: Contains advanced math solving, time series analysis, and multi-modal learning models.
+- **AI Ethics**: Implements ethical frameworks and guidelines for AI, including explainable AI and self-curing algorithms.
+- **BCI Integration**: Facilitates integration with brain-computer interfaces, providing tools for BCI data processing and neuroscience model integration.
+- **Cognitive Architectures**: Implements advanced cognitive architectures with self-healing mechanisms and adaptive algorithms.
+- **Config**: Contains configuration files and constants for the project.
+- **Core Neural Networks**: Provides core neural network models and functionalities.
+- **Edge AI**: Focuses on edge AI optimization and deployment.
+- **Generative Models**: Includes models for generative AI and creative problem-solving.
+- **Main.py**: Demonstrates various components of the NeuroFlex framework.
+- **Model Monitoring**: Contains tools for monitoring and analyzing model performance and health.
+- **NeuroFlex Integration**: Integrates various components of the NeuroFlex system.
+- **Threat Detection**: Provides methods for detecting and analyzing threats using anomaly detection, deep learning, and pattern recognition.
+- **Utils**: Offers utility functions for data handling, preprocessing, and analysis.
 
 For detailed documentation, including API references and tutorials, visit our [official documentation](https://neuroflex.readthedocs.io).
 

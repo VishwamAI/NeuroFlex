@@ -12,7 +12,35 @@ from .utils import Config, setup_logging
 from .Transformers.unified_transformer import UnifiedTransformer
 
 class NeuroFlex:
+    """
+    NeuroFlex is the main class for the NeuroFlex project, integrating various AI and neural network components.
+
+    This class provides a unified interface for setting up and using different AI models and tools,
+    including core neural networks, quantum neural networks, ethical frameworks, explainable AI,
+    BCI integration, consciousness simulation, protein structure prediction, and more.
+    """
+
     def __init__(self, config=None):
+        """
+        Initialize the NeuroFlex instance.
+
+        Args:
+            config (Config, optional): Configuration object for NeuroFlex. If None, default config is used.
+
+        Attributes:
+            config (Config): Configuration for NeuroFlex components.
+            logger (Logger): Logger for NeuroFlex operations.
+            core_model (CoreNeuroFlex): Core neural network model.
+            quantum_model (QuantumNeuralNetwork): Quantum neural network model.
+            ethical_framework (EthicalFramework): Ethical evaluation framework.
+            explainable_ai (ExplainableAI): Explainable AI component.
+            bci_processor (BCIProcessor): Brain-Computer Interface processor.
+            consciousness_sim (ConsciousnessSimulation): Consciousness simulation component.
+            alphafold (AlphaFoldIntegration): AlphaFold integration for protein structure prediction.
+            math_solver (MathSolver): Mathematical problem solver.
+            edge_optimizer (EdgeAIOptimization): Edge AI optimization component.
+            unified_transformer (UnifiedTransformer): Unified transformer model.
+        """
         self.config = config or Config.get_config()
         self.logger = setup_logging()
         self.core_model = None
