@@ -8,6 +8,7 @@ import optax
 from typing import Tuple, List, Dict, Any, Union
 from ..core_neural_networks.advanced_thinking import CDSTDP
 from .cognitive_architecture import CognitiveArchitecture
+from .research import GoogleResearch, AgenticTasks, integrate_research
 import sympy
 import logging
 
