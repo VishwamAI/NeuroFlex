@@ -34,34 +34,70 @@ class EdgeAIOptimizer:
         self.optimizer = optax.adam(learning_rate)
 
     def quantize_weights(self, params: Dict[str, Any], bits: Dict[str, int] = None) -> Dict[str, Any]:
-        """Quantize model weights using mixed precision to reduce model size."""
+        """Quantize model weights using adaptive mixed precision to reduce model size."""
         if bits is None:
             bits = {'default': 8, 'Conv': 4, 'Dense': 8}  # Example mixed precision configuration
 
-        def mixed_precision_quantize(x, layer_name):
+        def adaptive_mixed_precision_quantize(x, layer_name):
             layer_type = layer_name.split('_')[0]
             b = bits.get(layer_type, bits['default'])
-            return jnp.round(x * (2**b - 1)) / (2**b - 1)
 
-        return jax.tree_map(lambda x, name: mixed_precision_quantize(x, name), params, jax.tree_map(lambda _: jax.tree_util.keystr(_), params))
+            # Adaptive quantization based on weight distribution
+            abs_weights = jnp.abs(x)
+            max_weight = jnp.max(abs_weights)
+            min_weight = jnp.min(abs_weights)
+
+            # Adjust quantization range based on weight distribution
+            quantization_range = max_weight - min_weight
+            scale = (2**b - 1) / quantization_range
+
+            # Center the quantization around zero
+            zero_point = jnp.round(min_weight * scale)
+
+            # Quantize weights
+            quantized = jnp.round(x * scale - zero_point)
+
+            # Clip to ensure values are within the quantized range
+            quantized = jnp.clip(quantized, 0, 2**b - 1)
+
+            # Dequantize for further computations
+            return (quantized + zero_point) / scale
+
+        return jax.tree_map(lambda x, name: adaptive_mixed_precision_quantize(x, name), params, jax.tree_map(lambda _: jax.tree_util.keystr(_), params))
 
     def prune_weights(self, params: Dict[str, Any], sparsity: float = 0.5) -> Dict[str, Any]:
-        """Prune model weights using structured pruning to reduce model size and computation."""
-        def structured_prune(x, name):
+        """Prune model weights using dynamic structured pruning to reduce model size and computation."""
+        def dynamic_structured_prune(x, name):
             if 'kernel' in name:
                 if len(x.shape) == 4:  # Convolutional layer
-                    channel_l2_norms = jnp.sqrt(jnp.sum(x**2, axis=(0, 1, 2)))
-                    threshold = jnp.percentile(channel_l2_norms, sparsity * 100)
-                    mask = channel_l2_norms >= threshold
-                    return x * mask[jnp.newaxis, jnp.newaxis, jnp.newaxis, :]
+                    # Compute importance scores based on both L1 and L2 norms
+                    l1_norms = jnp.sum(jnp.abs(x), axis=(0, 1, 2))
+                    l2_norms = jnp.sqrt(jnp.sum(x**2, axis=(0, 1, 2)))
+                    importance_scores = l1_norms * l2_norms
+
+                    # Dynamic threshold based on the distribution of importance scores
+                    threshold = jnp.percentile(importance_scores, sparsity * 100)
+                    mask = importance_scores >= threshold
+
+                    # Apply gradual pruning
+                    pruning_factor = jnp.clip((importance_scores - threshold) / threshold, 0, 1)
+                    return x * pruning_factor[jnp.newaxis, jnp.newaxis, jnp.newaxis, :]
                 elif len(x.shape) == 2:  # Dense layer
-                    neuron_l2_norms = jnp.sqrt(jnp.sum(x**2, axis=0))
-                    threshold = jnp.percentile(neuron_l2_norms, sparsity * 100)
-                    mask = neuron_l2_norms >= threshold
-                    return x * mask[jnp.newaxis, :]
+                    # Compute importance scores based on both L1 and L2 norms
+                    l1_norms = jnp.sum(jnp.abs(x), axis=0)
+                    l2_norms = jnp.sqrt(jnp.sum(x**2, axis=0))
+                    importance_scores = l1_norms * l2_norms
+
+                    # Dynamic threshold based on the distribution of importance scores
+                    threshold = jnp.percentile(importance_scores, sparsity * 100)
+                    mask = importance_scores >= threshold
+
+                    # Apply gradual pruning
+                    pruning_factor = jnp.clip((importance_scores - threshold) / threshold, 0, 1)
+                    return x * pruning_factor[jnp.newaxis, :]
             return x
 
-        return jax.tree_map(structured_prune, params, jax.tree_map(lambda _: jax.tree_util.keystr(_), params))
+        return jax.tree_map(dynamic_structured_prune, params, jax.tree_map(lambda _: jax.tree_util.keystr(_), params))
 
     @jax.jit
     def train_step(self, params: Dict[str, Any], batch: Tuple[jnp.ndarray, jnp.ndarray]) -> Tuple[Dict[str, Any], float]:
