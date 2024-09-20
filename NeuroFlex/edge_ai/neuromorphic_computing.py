@@ -1,6 +1,7 @@
 import numpy as np
-import torch
-import torch.nn as nn
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
 from typing import List, Dict, Any, Union
 import time
 import logging
@@ -40,27 +41,45 @@ class NeuromorphicComputing:
     def leaky_integrate_and_fire(self, num_neurons: int, threshold: float = 1.0,
                                  reset_potential: float = 0.0, time_constant: float = 10.0) -> nn.Module:
         """Create a Leaky Integrate-and-Fire (LIF) spiking neural network."""
-        # Placeholder for LIF implementation
+        class LIFNeuron(nn.Module):
+            @nn.compact
+            def __call__(self, inputs, state):
+                voltage = state
+                voltage += (inputs - voltage) / time_constant
+                spikes = jnp.where(voltage >= threshold, 1.0, 0.0)
+                voltage = jnp.where(spikes == 1.0, reset_potential, voltage)
+                return spikes, voltage
+
         logger.info(f"Creating LIF network with {num_neurons} neurons")
-        return nn.Linear(num_neurons, num_neurons)  # Placeholder, replace with actual LIF implementation
+        return LIFNeuron()
 
     def izhikevich_model(self, num_neurons: int, a: float = 0.02, b: float = 0.2,
                          c: float = -65.0, d: float = 8.0) -> nn.Module:
         """Create an Izhikevich model spiking neural network."""
-        # Placeholder for Izhikevich model implementation
-        logger.info(f"Creating Izhikevich network with {num_neurons} neurons")
-        return nn.Linear(num_neurons, num_neurons)  # Placeholder, replace with actual Izhikevich implementation
+        class IzhikevichNeuron(nn.Module):
+            @nn.compact
+            def __call__(self, inputs, state):
+                v, u = state
+                v_next = v + 0.04 * v**2 + 5 * v + 140 - u + inputs
+                u_next = u + a * (b * v - u)
+                spikes = jnp.where(v_next >= 30, 1.0, 0.0)
+                v = jnp.where(spikes == 1.0, c, v_next)
+                u = jnp.where(spikes == 1.0, u + d, u_next)
+                return spikes, (v, u)
 
-    def simulate_network(self, network: nn.Module, input_data: torch.Tensor, simulation_time: int) -> torch.Tensor:
+        logger.info(f"Creating Izhikevich network with {num_neurons} neurons")
+        return IzhikevichNeuron()
+
+    def simulate_network(self, network: nn.Module, input_data: jnp.ndarray, simulation_time: int) -> jnp.ndarray:
         """Simulate the spiking neural network for the given simulation time."""
         # Placeholder for network simulation logic
         output = network(input_data)
         self._update_performance(output)
         return output
 
-    def _update_performance(self, output: torch.Tensor):
+    def _update_performance(self, output: jnp.ndarray):
         """Update the performance history and trigger self-healing if necessary."""
-        new_performance = output.mean().item()  # Placeholder performance metric
+        new_performance = jnp.mean(output).item()  # Placeholder performance metric
         self.performance = new_performance
         self.performance_history.append(new_performance)
         if len(self.performance_history) > 100:
