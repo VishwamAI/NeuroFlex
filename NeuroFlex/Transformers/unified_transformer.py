@@ -11,10 +11,36 @@ from jax import random
 from typing import Any, Callable
 
 class FrameworkWrapper:
+    """
+    A wrapper class to handle different deep learning frameworks.
+
+    This class provides a unified interface for working with multiple backends
+    such as PyTorch, JAX, Flax, and Sonnet. It allows for easy switching between
+    frameworks and provides a consistent API for module creation.
+
+    Attributes:
+        backend (str): The name of the backend framework being used.
+
+    Methods:
+        get_module(module_class): Returns the appropriate module class for the
+                                  specified backend.
+    """
+
     def __init__(self, backend='pytorch'):
         self.backend = backend
-
     def get_module(self, module_class):
+        """
+        Returns the appropriate module class for the specified backend.
+
+        Args:
+            module_class: The base module class to be wrapped.
+
+        Returns:
+            The wrapped module class compatible with the current backend.
+
+        Raises:
+            ValueError: If an unsupported backend is specified.
+        """
         if self.backend == 'pytorch':
             return module_class
         elif self.backend == 'jax':
@@ -29,7 +55,29 @@ class FrameworkWrapper:
 framework = FrameworkWrapper()
 
 class MultiHeadAttention(framework.get_module(torch_nn.Module)):
+    """
+    Multi-Head Attention mechanism implementation.
+
+    This class implements the multi-head attention mechanism as described in
+    "Attention Is All You Need" (Vaswani et al., 2017). It supports multiple
+    deep learning frameworks through the FrameworkWrapper.
+
+    Attributes:
+        num_heads (int): Number of attention heads.
+        d_model (int): Dimension of the model.
+        depth (int): Depth of each attention head.
+        wq, wk, wv (Linear): Linear transformations for query, key, and value.
+        dense (Linear): Final linear transformation after attention.
+    """
+
     def __init__(self, d_model, num_heads):
+        """
+        Initialize the MultiHeadAttention layer.
+
+        Args:
+            d_model (int): Dimension of the model.
+            num_heads (int): Number of attention heads.
+        """
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
         self.d_model = d_model
@@ -58,6 +106,17 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
             self.dense = snt.Linear(d_model)
 
     def split_heads(self, x, batch_size):
+        """
+        Split the last dimension into (num_heads, depth).
+        Transpose the result such that the shape is (batch_size, num_heads, seq_len, depth).
+
+        Args:
+            x (Tensor): Input tensor.
+            batch_size (int): Batch size.
+
+        Returns:
+            Tensor: Reshaped and transposed tensor.
+        """
         if framework.backend == 'pytorch':
             return x.view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
         elif framework.backend in ['jax', 'flax']:
@@ -66,6 +125,18 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
             return tf.transpose(tf.reshape(x, (batch_size, -1, self.num_heads, self.depth)), perm=[0, 2, 1, 3])
 
     def linear_attention(self, q, k, v, mask=None):
+        """
+        Compute linear attention.
+
+        Args:
+            q (Tensor): Query tensor.
+            k (Tensor): Key tensor.
+            v (Tensor): Value tensor.
+            mask (Tensor, optional): Attention mask.
+
+        Returns:
+            Tensor: Output of the attention mechanism.
+        """
         q = q.softmax(dim=-1)
         k = k.softmax(dim=-2)
 
@@ -85,6 +156,18 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
         return out
 
     def forward(self, q, k, v, mask=None):
+        """
+        Forward pass of the multi-head attention layer.
+
+        Args:
+            q (Tensor): Query tensor.
+            k (Tensor): Key tensor.
+            v (Tensor): Value tensor.
+            mask (Tensor, optional): Attention mask.
+
+        Returns:
+            Tensor: Output of the multi-head attention layer.
+        """
         batch_size = q.shape[0]
 
         q = self.wq(q)
@@ -114,12 +197,40 @@ class MultiHeadAttention(framework.get_module(torch_nn.Module)):
         return output, None  # Return None instead of attention weights for consistency
 
 class PositionalEncoding(framework.get_module(torch_nn.Module)):
+    """
+    Positional Encoding layer for transformer models.
+
+    This class implements positional encoding as described in "Attention Is All You Need"
+    (Vaswani et al., 2017). It adds positional information to the input embeddings.
+
+    Attributes:
+        d_model (int): The dimension of the model.
+        max_len (int): The maximum sequence length.
+    """
+
     def __init__(self, d_model, max_len=5000):
+        """
+        Initialize the PositionalEncoding layer.
+
+        Args:
+            d_model (int): The dimension of the model.
+            max_len (int, optional): The maximum sequence length. Defaults to 5000.
+        """
         super(PositionalEncoding, self).__init__()
         self.d_model = d_model
         self.max_len = max_len
 
     def _get_angles(self, pos, i):
+        """
+        Calculate the angles for the positional encoding.
+
+        Args:
+            pos (Tensor): Position tensor.
+            i (Tensor): Dimension tensor.
+
+        Returns:
+            Tensor: Calculated angles for the positional encoding.
+        """
         if framework.backend == 'pytorch':
             angle_rates = 1 / torch.pow(10000, (2 * (i // 2)) / self.d_model)
             return pos * angle_rates
@@ -131,6 +242,15 @@ class PositionalEncoding(framework.get_module(torch_nn.Module)):
             return pos * angle_rates
 
     def forward(self, x):
+        """
+        Add positional encoding to the input tensor.
+
+        Args:
+            x (Tensor): Input tensor to be positionally encoded.
+
+        Returns:
+            Tensor: Input tensor with added positional encoding.
+        """
         if framework.backend == 'pytorch':
             position = torch.arange(0, x.size(1), dtype=torch.float32).unsqueeze(1)
             div_term = torch.arange(0, self.d_model, 2, dtype=torch.float32)
@@ -157,7 +277,25 @@ class PositionalEncoding(framework.get_module(torch_nn.Module)):
             return x + tf.expand_dims(emb, 0)
 
 class FeedForward(framework.get_module(torch_nn.Module)):
+    """
+    Feed Forward layer for transformer models.
+
+    This class implements a feed-forward neural network as described in "Attention Is All You Need"
+    (Vaswani et al., 2017). It consists of two linear transformations with a ReLU activation in between.
+
+    Attributes:
+        linear1: First linear transformation.
+        linear2: Second linear transformation.
+    """
+
     def __init__(self, d_model, d_ff):
+        """
+        Initialize the FeedForward layer.
+
+        Args:
+            d_model (int): The dimension of the model.
+            d_ff (int): The dimension of the feed-forward network.
+        """
         super(FeedForward, self).__init__()
         if framework.backend == 'pytorch':
             self.linear1 = torch_nn.Linear(d_model, d_ff)
@@ -173,6 +311,15 @@ class FeedForward(framework.get_module(torch_nn.Module)):
             self.linear2 = snt.Linear(d_model)
 
     def forward(self, x):
+        """
+        Perform the feed-forward computation.
+
+        Args:
+            x (Tensor): Input tensor.
+
+        Returns:
+            Tensor: Output after applying the feed-forward network.
+        """
         if framework.backend == 'pytorch':
             return self.linear2(torch.relu(self.linear1(x)))
         elif framework.backend in ['jax', 'flax']:
@@ -181,7 +328,30 @@ class FeedForward(framework.get_module(torch_nn.Module)):
             return self.linear2(tf.nn.relu(self.linear1(x)))
 
 class EncoderLayer(framework.get_module(torch_nn.Module)):
+    """
+    Encoder Layer for transformer models.
+
+    This class implements a single encoder layer as described in "Attention Is All You Need"
+    (Vaswani et al., 2017). It consists of a multi-head attention mechanism followed by a
+    feed-forward neural network, with layer normalization and dropout applied.
+
+    Attributes:
+        mha (MultiHeadAttention): Multi-head attention layer.
+        ffn (FeedForward): Feed-forward neural network layer.
+        layernorm1, layernorm2 (LayerNorm): Layer normalization layers.
+        dropout (Dropout): Dropout layer.
+    """
+
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        """
+        Initialize the EncoderLayer.
+
+        Args:
+            d_model (int): The dimension of the model.
+            num_heads (int): Number of attention heads.
+            d_ff (int): The dimension of the feed-forward network.
+            dropout (float, optional): Dropout rate. Defaults to 0.1.
+        """
         super(EncoderLayer, self).__init__()
         self.mha = MultiHeadAttention(d_model, num_heads)
         self.ffn = FeedForward(d_model, d_ff)
@@ -199,6 +369,16 @@ class EncoderLayer(framework.get_module(torch_nn.Module)):
             self.dropout = lambda x: tf.nn.dropout(x, rate=dropout)
 
     def forward(self, x, mask=None):
+        """
+        Perform the forward pass through the encoder layer.
+
+        Args:
+            x (Tensor): Input tensor.
+            mask (Tensor, optional): Mask tensor for attention. Defaults to None.
+
+        Returns:
+            Tensor: Output after applying the encoder layer.
+        """
         attn_output, _ = self.mha(x, x, x, mask)
         out1 = self.layernorm1(x + self.dropout(attn_output))
         ffn_output = self.ffn(out1)
@@ -221,6 +401,17 @@ class UnifiedTransformer(framework.get_module(torch_nn.Module)):
 
     The architecture aims to leverage the strengths of each model type while providing a flexible
     framework for various NLP tasks.
+
+    Attributes:
+        vocab_size (int): Size of the vocabulary.
+        d_model (int): Dimension of the model.
+        embedding (Embedding): Token embedding layer.
+        pos_encoding (PositionalEncoding): Positional encoding layer.
+        encoder_layers (ModuleList): List of encoder layers for bidirectional context understanding.
+        decoder_layers (ModuleList): List of decoder layers for autoregressive generation.
+        dropout (Dropout): Dropout layer.
+        final_layer_norm (LayerNorm): Final layer normalization.
+        lm_head (Linear): Language model head for text generation and task-specific outputs.
     """
 
     def __init__(self, vocab_size, d_model=512, num_heads=8, num_layers=6, d_ff=2048, max_seq_length=512, dropout=0.1):
@@ -251,6 +442,17 @@ class UnifiedTransformer(framework.get_module(torch_nn.Module)):
         self.lm_head = torch_nn.Linear(d_model, vocab_size, bias=False)
 
     def forward(self, x, mask=None, decoder_input_ids=None):
+        """
+        Perform the forward pass through the UnifiedTransformer.
+
+        Args:
+            x (Tensor): Input tensor.
+            mask (Tensor, optional): Mask tensor for attention. Defaults to None.
+            decoder_input_ids (Tensor, optional): Decoder input ids for text generation. Defaults to None.
+
+        Returns:
+            Tensor: Output tensor after applying the transformer layers.
+        """
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, dtype=torch.long)
         else:
@@ -350,6 +552,16 @@ class UnifiedTransformer(framework.get_module(torch_nn.Module)):
             raise ValueError(f"Unsupported backend: {framework.backend}")
 
     def _text_to_text_pytorch(self, input_ids, target_ids):
+        """
+        PyTorch implementation of the text-to-text framework.
+
+        Args:
+            input_ids (torch.Tensor): Input token ids.
+            target_ids (torch.Tensor): Target token ids.
+
+        Returns:
+            torch.Tensor: Logits for the target sequence.
+        """
         torch.manual_seed(42)  # Set a fixed seed for deterministic behavior
         input_ids = torch.clamp(input_ids, 0, self.vocab_size - 1)
         target_ids = torch.clamp(target_ids, 0, self.vocab_size - 1)
@@ -377,6 +589,16 @@ class UnifiedTransformer(framework.get_module(torch_nn.Module)):
         return lm_logits
 
     def _text_to_text_jax(self, input_ids, target_ids):
+        """
+        JAX implementation of the text-to-text framework.
+
+        Args:
+            input_ids (jnp.ndarray): Input token ids.
+            target_ids (jnp.ndarray): Target token ids.
+
+        Returns:
+            jnp.ndarray: Logits for the target sequence.
+        """
         key = jax.random.PRNGKey(42)  # Set a fixed seed for deterministic behavior
         input_ids = jnp.clip(input_ids, 0, self.vocab_size - 1)
         target_ids = jnp.clip(target_ids, 0, self.vocab_size - 1)
@@ -475,6 +697,25 @@ class UnifiedTransformer(framework.get_module(torch_nn.Module)):
             raise ValueError(f"Unsupported task: {task}")
 
 def get_unified_transformer(backend='pytorch', vocab_size=30000):
+    """
+    Factory function to create a UnifiedTransformer instance based on the specified backend.
+
+    This function allows for easy instantiation of UnifiedTransformer models
+    with different deep learning frameworks.
+
+    Args:
+        backend (str): The deep learning framework to use. Options are 'pytorch',
+                       'jax', 'flax', 'sonnet', or 'tensorflow'. Default is 'pytorch'.
+        vocab_size (int): The size of the vocabulary for the model. Default is 30000.
+
+    Returns:
+        UnifiedTransformer: An instance of the appropriate UnifiedTransformer subclass
+                            for the specified backend.
+
+    Raises:
+        ValueError: If an unsupported backend is specified.
+        NotImplementedError: If the TensorFlow backend is requested (not yet implemented).
+    """
     if backend == 'pytorch':
         return UnifiedTransformer(vocab_size)
     elif backend == 'jax':
@@ -489,11 +730,39 @@ def get_unified_transformer(backend='pytorch', vocab_size=30000):
         raise ValueError(f"Unsupported backend: {backend}")
 
 class JAXUnifiedTransformer(UnifiedTransformer):
+    """
+    JAX implementation of the UnifiedTransformer.
+
+    This class extends the base UnifiedTransformer to provide JAX-specific functionality.
+    """
+
     def __init__(self, vocab_size):
+        """
+        Initialize the JAXUnifiedTransformer.
+
+        Args:
+            vocab_size (int): The size of the vocabulary for the model.
+        """
         super().__init__(vocab_size)
         # JAX-specific initialization
 
 class FlaxUnifiedTransformer(flax_nn.Module):
+    """
+    Flax implementation of the UnifiedTransformer.
+
+    This class implements the UnifiedTransformer using the Flax neural network library,
+    which is built on top of JAX.
+
+    Attributes:
+        vocab_size (int): Size of the vocabulary.
+        d_model (int): Dimension of the model.
+        num_heads (int): Number of attention heads.
+        num_layers (int): Number of encoder and decoder layers.
+        d_ff (int): Dimension of the feed-forward network.
+        max_seq_length (int): Maximum sequence length.
+        dropout (float): Dropout rate.
+    """
+
     vocab_size: int
     d_model: int = 512
     num_heads: int = 8
@@ -503,6 +772,13 @@ class FlaxUnifiedTransformer(flax_nn.Module):
     dropout: float = 0.1
 
     def setup(self):
+        """
+        Set up the FlaxUnifiedTransformer model.
+
+        This method initializes all the components of the transformer model,
+        including embeddings, positional encoding, encoder and decoder layers,
+        and the final output layer.
+        """
         self.embedding = flax_nn.Embed(num_embeddings=self.vocab_size, features=self.d_model)
         self.pos_encoding = PositionalEncoding(self.d_model, self.max_seq_length)
         self.encoder_layers = [EncoderLayer(self.d_model, self.num_heads, self.d_ff, self.dropout) for _ in range(self.num_layers)]
@@ -511,6 +787,17 @@ class FlaxUnifiedTransformer(flax_nn.Module):
         self.lm_head = flax_nn.Dense(self.vocab_size)
 
     def __call__(self, x, mask=None, decoder_input_ids=None):
+        """
+        Perform a forward pass through the FlaxUnifiedTransformer.
+
+        Args:
+            x (jnp.ndarray): Input tensor.
+            mask (jnp.ndarray, optional): Attention mask. Defaults to None.
+            decoder_input_ids (jnp.ndarray, optional): Decoder input IDs for text generation tasks. Defaults to None.
+
+        Returns:
+            jnp.ndarray: Output tensor after passing through the transformer.
+        """
         x = self.embedding(x) * jnp.sqrt(self.d_model)
         x = self.pos_encoding(x)
         x = flax_nn.Dropout(rate=self.dropout)(x, deterministic=False)
@@ -529,7 +816,35 @@ class FlaxUnifiedTransformer(flax_nn.Module):
         return x
 
 class SonnetUnifiedTransformer(snt.Module):
+    """
+    Sonnet implementation of the UnifiedTransformer.
+
+    This class implements the UnifiedTransformer using the Sonnet neural network library,
+    which is built on top of TensorFlow.
+
+    Attributes:
+        vocab_size (int): Size of the vocabulary.
+        d_model (int): Dimension of the model.
+        num_heads (int): Number of attention heads.
+        num_layers (int): Number of encoder and decoder layers.
+        d_ff (int): Dimension of the feed-forward network.
+        max_seq_length (int): Maximum sequence length.
+        dropout (float): Dropout rate.
+    """
+
     def __init__(self, vocab_size, d_model=512, num_heads=8, num_layers=6, d_ff=2048, max_seq_length=512, dropout=0.1):
+        """
+        Initialize the SonnetUnifiedTransformer.
+
+        Args:
+            vocab_size (int): Size of the vocabulary.
+            d_model (int, optional): Dimension of the model. Defaults to 512.
+            num_heads (int, optional): Number of attention heads. Defaults to 8.
+            num_layers (int, optional): Number of encoder and decoder layers. Defaults to 6.
+            d_ff (int, optional): Dimension of the feed-forward network. Defaults to 2048.
+            max_seq_length (int, optional): Maximum sequence length. Defaults to 512.
+            dropout (float, optional): Dropout rate. Defaults to 0.1.
+        """
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -547,6 +862,17 @@ class SonnetUnifiedTransformer(snt.Module):
         self.lm_head = snt.Linear(vocab_size)
 
     def __call__(self, x, mask=None, decoder_input_ids=None):
+        """
+        Perform a forward pass through the SonnetUnifiedTransformer.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+            mask (tf.Tensor, optional): Attention mask. Defaults to None.
+            decoder_input_ids (tf.Tensor, optional): Decoder input IDs for text generation tasks. Defaults to None.
+
+        Returns:
+            tf.Tensor: Output tensor after passing through the transformer.
+        """
         x = self.embedding(x) * tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x = self.pos_encoding(x)
         x = tf.nn.dropout(x, rate=self.dropout)
