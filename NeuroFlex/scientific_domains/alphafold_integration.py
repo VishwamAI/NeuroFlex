@@ -327,10 +327,17 @@ class AlphaFoldIntegration:
                 logging.warning(f"HHBLITS_DATABASE_PATH not set. Using default path: {hhblits_database_path}")
 
             logging.info("Initializing MSA runner and template searcher")
-            self.msa_runner = self.jackhmmer_module.Jackhmmer(binary_path=jackhmmer_binary_path, database_path=jackhmmer_database_path)
+            logging.debug(f"Attempting to initialize Jackhmmer with binary_path={jackhmmer_binary_path} and database_path={jackhmmer_database_path}")
+            logging.info("Starting Jackhmmer initialization")
+            try:
+                self.msa_runner = self.jackhmmer_module.Jackhmmer(binary_path=jackhmmer_binary_path, database_path=jackhmmer_database_path)
+                logging.debug("Jackhmmer initialization successful")
+            except Exception as e:
+                logging.error(f"Jackhmmer initialization failed: {str(e)}")
+                raise
+            logging.info("Initializing HHBlits")
             self.template_searcher = self.hhblits_module.HHBlits(binary_path=hhblits_binary_path, databases=[hhblits_database_path])
             logging.info("MSA runner and template searcher initialized")
-
             # Initialize feature_dict with an empty dictionary
             self.feature_dict = {}
             logging.info("Initialized feature_dict with an empty dictionary")

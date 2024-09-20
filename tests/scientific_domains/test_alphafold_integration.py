@@ -27,6 +27,7 @@ mock_alphafold.model.modules = MagicMock()
 mock_alphafold.model.config = MagicMock()
 mock_alphafold.data.pipeline = MagicMock()
 mock_alphafold.data.tools = MagicMock()
+mock_alphafold.data.tools.jackhmmer = MagicMock()
 
 # Patch the entire alphafold module and its submodules
 patch.dict('sys.modules', {
@@ -39,6 +40,7 @@ patch.dict('sys.modules', {
     'alphafold.model.config': mock_alphafold.model.config,
     'alphafold.data.pipeline': mock_alphafold.data.pipeline,
     'alphafold.data.tools': mock_alphafold.data.tools,
+    'alphafold.data.tools.jackhmmer': mock_alphafold.data.tools.jackhmmer,
 }).start()
 
 class TestAlphaFoldIntegration(unittest.TestCase):
@@ -49,7 +51,8 @@ class TestAlphaFoldIntegration(unittest.TestCase):
             'alphafold.model': mock_alphafold.model,
             'alphafold.data': mock_alphafold.data,
             'alphafold.common': mock_alphafold.common,
-            'alphafold.relax': mock_alphafold.relax
+            'alphafold.relax': mock_alphafold.relax,
+            'alphafold.data.tools.jackhmmer': mock_alphafold.data.tools.jackhmmer
         })
         cls.patcher.start()
 
@@ -64,7 +67,7 @@ class TestAlphaFoldIntegration(unittest.TestCase):
 
 import os
 
-@pytest.mark.skip(reason="Skipping due to known issue with Jackhmmer initialization")
+# @pytest.mark.skip(reason="Skipping due to known issue with Jackhmmer initialization")
 @patch('alphafold.data.pipeline.make_msa_features')
 @patch('alphafold.data.pipeline.make_sequence_features')
 @patch('alphafold.common.protein.from_prediction')
@@ -82,8 +85,8 @@ import os
 @patch.dict(os.environ, {
     'JACKHMMER_BINARY_PATH': '/usr/bin/jackhmmer',
     'HHBLITS_BINARY_PATH': '/usr/bin/hhblits',
-    'JACKHMMER_DATABASE_PATH': '/mock/path/to/jackhmmer_db.fasta',
-    'HHBLITS_DATABASE_PATH': '/mock/path/to/hhblits_db'
+    'JACKHMMER_DATABASE_PATH': '/path/to/jackhmmer_db.fasta',
+    'HHBLITS_DATABASE_PATH': '/path/to/hhblits_db'
 })
 def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, mock_transform,
                      mock_prng_key, mock_config, mock_config_multimer, mock_config_diffs,
@@ -93,10 +96,12 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
     mock_model = MagicMock()
     mock_transform.return_value.init.return_value = {'params': MagicMock()}
     mock_transform.return_value.apply.return_value = mock_model
+    mock_jackhmmer.return_value = MagicMock()
+    mock_jackhmmer.return_value = MagicMock()
     mock_prng_key.return_value = jax.random.PRNGKey(0)
 
     # Mock glob.glob to return a non-empty list for database paths
-    mock_glob.return_value = ['/mock/path/to/hhblits_db']
+    mock_glob.return_value = ['/path/to/hhblits_db']
 
     # Mock os.path.exists to always return True for database paths
     mock_path_exists.return_value = True
@@ -187,15 +192,18 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
     assert isinstance(alphafold_integration.config, ml_collections.ConfigDict)
 
     # Assert that Jackhmmer is initialized with the correct arguments
-    mock_jackhmmer.assert_called_once_with(
-        binary_path='/usr/bin/jackhmmer',
-        database_path='/mock/path/to/jackhmmer_db.fasta'
-    )
+    mock_jackhmmer.assert_called_once()
+    args, kwargs = mock_jackhmmer.call_args
+    assert args == ()  # Ensure no positional arguments were passed
+    assert kwargs == {
+        'binary_path': '/usr/bin/jackhmmer',
+        'database_path': '/path/to/jackhmmer_db.fasta'
+    }
 
     # Assert that HHBlits is initialized with the correct arguments
     mock_hhblits.assert_called_once_with(
         binary_path='/usr/bin/hhblits',
-        databases=['/mock/path/to/hhblits_db']
+        databases=['/path/to/hhblits_db']
     )
 
     # Assert that the AlphaFold model is created with the correct config
