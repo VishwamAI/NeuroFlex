@@ -3,15 +3,15 @@
 import numpy as np
 from typing import List, Dict, Tuple
 from Bio.Seq import Seq
-from Bio.SeqUtils import gc_fraction
+from Bio.SeqUtils import GC
 from Bio import SeqIO
 from Bio import SCOP
 import networkx as nx
 from scipy.optimize import linprog
-# TODO: Resolve AlphaFold import issues and reintegrate functionality
-# import alphafold.model.model as af_model
-# import alphafold.data.pipeline as af_pipeline
+from alphafold.model import modules
+import alphafold.data.pipeline as af_pipeline
 import logging
+import haiku as hk
 
 # GC content calculation is now directly imported from Bio.SeqUtils
 # No fallback mechanism needed
@@ -30,9 +30,11 @@ class SyntheticBiologyInsights:
             "cds": ["GFP", "RFP", "LacZ"],
             "terminator": ["T1", "T7", "rrnB"]
         }
-        # TODO: Reinitialize AlphaFold models once import issues are resolved
-        # self.alphafold_model = af_model.AlphaFold()
-        # self.alphafold_pipeline = af_pipeline.DataPipeline()
+        # Initialize AlphaFold models
+        def init_alphafold():
+            return modules.AlphaFold()
+        self.alphafold_model = hk.transform(init_alphafold)
+        self.alphafold_pipeline = af_pipeline.DataPipeline()
         logger.info("SyntheticBiologyInsights initialized")
 
     def design_genetic_circuit(self, circuit_name: str, components: List[str]) -> Dict:
@@ -53,7 +55,7 @@ class SyntheticBiologyInsights:
                 "circuit_name": circuit_name,
                 "components": validated_components,
                 "sequence": str(circuit),
-                "gc_content": gc_fraction(circuit) * 100  # gc_fraction returns a fraction, multiply by 100 for percentage
+                "gc_content": GC(circuit)  # GC function directly returns the percentage
             }
             logger.info(f"Successfully designed genetic circuit: {circuit_name}")
             return result
@@ -104,7 +106,8 @@ class SyntheticBiologyInsights:
             "num_metabolites": num_metabolites,
             "num_reactions": num_reactions,
             "key_metabolites": self._identify_key_metabolites(graph),
-            "flux_distribution": flux_analysis["flux_distribution"]
+            "flux_distribution": flux_analysis["flux_distribution"],
+            "optimal_biomass_flux": flux_analysis["optimal_biomass_flux"]
         }
 
     def _create_pathway_graph(self, reactions: List[str]) -> nx.DiGraph:
