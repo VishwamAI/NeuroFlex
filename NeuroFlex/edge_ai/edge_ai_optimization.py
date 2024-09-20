@@ -8,10 +8,18 @@ import logging
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import time
+import traceback
+import sys
 from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging to capture debug-level logs and output to console
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 from torch import optim
 
@@ -73,35 +81,336 @@ class EdgeAIOptimization:
     def quantize_model(self, model: nn.Module, bits: int = 8, backend: str = 'fbgemm') -> nn.Module:
         """Quantize the model to reduce its size and increase inference speed."""
         try:
-            model.eval()
+            logger.info(f"Starting quantization process with {bits} bits and {backend} backend")
+            logger.debug(f"Initial model structure:\n{model}")
+            model.eval()  # Set to eval mode before quantization
+            logger.info("Model set to eval mode")
 
             # Configure quantization
-            if backend == 'fbgemm':
-                qconfig = torch.quantization.get_default_qconfig('fbgemm')
-            elif backend == 'qnnpack':
-                qconfig = torch.quantization.get_default_qconfig('qnnpack')
-            else:
-                raise ValueError(f"Unsupported backend: {backend}")
+            try:
+                if backend == 'fbgemm':
+                    qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                elif backend == 'qnnpack':
+                    qconfig = torch.quantization.get_default_qconfig('qnnpack')
+                else:
+                    raise ValueError(f"Unsupported backend: {backend}")
+                logger.info(f"Quantization config set: {qconfig}")
+            except Exception as e:
+                logger.error(f"Error setting quantization config: {str(e)}")
+                raise
 
+            # Check if model is quantization-ready
+            if not self._is_quantization_ready(model):
+                logger.warning("Model is not quantization-ready. Attempting to make it quantization-ready.")
+                model = self._make_quantization_ready(model)
+
+            if not self._is_quantization_ready(model):
+                logger.error("Failed to make model quantization-ready. Falling back to original model.")
+                return model
+
+            logger.info("Model is quantization-ready")
+            logger.debug(f"Quantization-ready model structure:\n{model}")
+
+            # Specify quantization configuration and propagate to all submodules
             model.qconfig = qconfig
             torch.quantization.propagate_qconfig_(model)
+            logger.info("Quantization config set and propagated to all submodules")
+            self._log_qconfig_propagation(model)
 
-            # Prepare model for quantization
-            model_prepared = torch.quantization.prepare(model)
+            # Fuse modules
+            logger.info("Attempting to fuse modules...")
+            model = self._fuse_modules(model)
+            logger.debug(f"Model structure after fusion attempt:\n{model}")
 
-            # Calibration (using random data for demonstration)
-            input_shape = next(model.parameters()).shape[1]
-            calibration_data = torch.randn(100, input_shape)
-            model_prepared(calibration_data)
+            # Prepare model for static quantization
+            logger.info("Preparing model for static quantization...")
+            try:
+                model_prepared = torch.quantization.prepare(model)
+                logger.info("Model prepared for static quantization")
+                logger.debug(f"Prepared model structure:\n{model_prepared}")
+                self._log_qconfig_propagation(model_prepared)
+            except Exception as e:
+                logger.error(f"Error preparing model for quantization: {str(e)}")
+                logger.warning("Falling back to dynamic quantization...")
+                return self._dynamic_quantize_model(model, bits, backend)
+
+            # Calibration
+            logger.info("Starting calibration process...")
+            model_prepared = self._calibrate_model(model_prepared)
+            logger.info("Calibration completed")
+            self._log_qconfig_propagation(model_prepared)
 
             # Convert to quantized model
-            quantized_model = torch.quantization.convert(model_prepared)
+            logger.info("Converting to quantized model...")
+            try:
+                quantized_model = torch.quantization.convert(model_prepared)
+                logger.info("Model converted to quantized version")
+                logger.debug(f"Quantized model structure:\n{quantized_model}")
+            except Exception as e:
+                logger.error(f"Error converting to quantized model: {str(e)}")
+                logger.warning("Falling back to dynamic quantization...")
+                return self._dynamic_quantize_model(model, bits, backend)
 
-            logger.info(f"Model quantized to {bits} bits using {backend} backend")
+            # Verify quantization and qconfig after conversion
+            logger.info("Verifying quantization and qconfig...")
+            try:
+                self._verify_quantization(quantized_model)
+                self._verify_qconfig(quantized_model)
+            except Exception as e:
+                logger.error(f"Quantization verification failed: {str(e)}")
+                logger.warning("Falling back to dynamic quantization...")
+                return self._dynamic_quantize_model(model, bits, backend)
+
+            # Perform a test forward pass
+            logger.info("Performing test forward pass...")
+            try:
+                self._test_forward_pass(quantized_model)
+            except Exception as e:
+                logger.error(f"Test forward pass failed: {str(e)}")
+                logger.warning("Falling back to dynamic quantization...")
+                return self._dynamic_quantize_model(model, bits, backend)
+
+            # Final verification of quantization
+            logger.info("Performing final verification of quantization...")
+            try:
+                self._final_quantization_check(quantized_model, bits)
+            except Exception as e:
+                logger.error(f"Final quantization check failed: {str(e)}")
+                logger.warning("Falling back to dynamic quantization...")
+                return self._dynamic_quantize_model(model, bits, backend)
+
+            logger.info(f"Model successfully quantized to {bits} bits using {backend} backend")
             return quantized_model
         except Exception as e:
             logger.error(f"Error during model quantization: {str(e)}")
-            raise
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.warning("Falling back to original model due to quantization failure.")
+            return model
+
+    def _dynamic_quantize_model(self, model: nn.Module, bits: int, backend: str) -> nn.Module:
+        """Fallback method for dynamic quantization when static quantization fails."""
+        logger.info(f"Attempting dynamic quantization with {bits} bits and {backend} backend")
+        try:
+            quantized_model = torch.quantization.quantize_dynamic(
+                model, {nn.Linear, nn.Conv2d}, dtype=torch.qint8
+            )
+            logger.info("Dynamic quantization successful")
+            return quantized_model
+        except Exception as e:
+            logger.error(f"Dynamic quantization failed: {str(e)}")
+            logger.warning("Returning original model due to quantization failure.")
+            return model
+
+    def _final_quantization_check(self, model: nn.Module, bits: int):
+        """Perform a final check to ensure the model is properly quantized."""
+        for name, module in model.named_modules():
+            if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear)):
+                if not hasattr(module, 'scale') or not hasattr(module, 'zero_point'):
+                    raise ValueError(f"Quantized module {name} is missing scale or zero_point attributes")
+                if module.weight().dtype != torch.qint8:
+                    raise ValueError(f"Weight of quantized module {name} is not quantized to {bits} bits")
+        logger.info("Final quantization check passed successfully")
+
+    def _set_qconfig_recursive(self, module: nn.Module, qconfig: Any):
+        """Recursively set qconfig for all submodules."""
+        if not hasattr(module, 'qconfig'):
+            module.qconfig = qconfig
+        for child in module.children():
+            self._set_qconfig_recursive(child, qconfig)
+        # Handle custom modules that might not be caught by children()
+        for name, submodule in module.named_modules():
+            if not hasattr(submodule, 'qconfig'):
+                submodule.qconfig = qconfig
+
+    def _verify_qconfig(self, model: nn.Module):
+        """Verify that the model and all its submodules have the correct qconfig."""
+        if not hasattr(model, 'qconfig'):
+            logger.error("Model does not have qconfig attribute")
+            raise ValueError("Quantization verification failed: qconfig attribute missing in model")
+
+        for name, module in model.named_modules():
+            if not hasattr(module, 'qconfig'):
+                logger.error(f"Module {name} does not have qconfig attribute")
+                raise ValueError(f"Quantization verification failed: qconfig attribute missing in module {name}")
+
+            if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear)):
+                if not (hasattr(module, 'scale') and hasattr(module, 'zero_point')):
+                    logger.error(f"Quantized module {name} missing scale or zero_point")
+                    raise ValueError(f"Incomplete quantization: Module {name} missing scale or zero_point")
+
+            logger.debug(f"Module {name} qconfig: {module.qconfig}")
+
+        logger.info("All modules have qconfig attribute and are properly quantized")
+
+    def _is_quantization_ready(self, model: nn.Module) -> bool:
+        """Check if the model is ready for quantization."""
+        for module in model.modules():
+            if isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d, nn.BatchNorm3d)):
+                logger.warning(f"Found BatchNorm layer: {module}. This may cause issues with quantization.")
+                return False
+            if isinstance(module, nn.ReLU) and module.inplace:
+                logger.warning(f"Found inplace ReLU: {module}. This may cause issues with quantization.")
+                return False
+
+        # Check if the model has any parameters
+        if not any(p.requires_grad for p in model.parameters()):
+            logger.warning("Model has no trainable parameters. This may cause issues with quantization.")
+            return False
+
+        return True
+
+    def _log_qconfig_propagation(self, model: nn.Module):
+        """Log the qconfig propagation status for each module."""
+        for name, module in model.named_modules():
+            if hasattr(module, 'qconfig'):
+                logger.info(f"Module {name} has qconfig after propagation: {module.qconfig}")
+                if module.qconfig is None:
+                    logger.warning(f"Module {name} has qconfig set to None. This may prevent quantization.")
+            else:
+                logger.warning(f"Module {name} does not have qconfig after propagation")
+
+        # Check if the top-level model has qconfig
+        if not hasattr(model, 'qconfig'):
+            logger.error("Top-level model does not have qconfig attribute. Quantization may fail.")
+
+    def _fuse_modules(self, model: nn.Module) -> nn.Module:
+        """Attempt to fuse modules in the model."""
+        try:
+            model = torch.quantization.fuse_modules(model, [['conv', 'bn', 'relu'], ['conv', 'bn'], ['conv', 'relu']])
+            logger.info("Modules fused successfully")
+        except Exception as e:
+            logger.warning(f"Failed to fuse modules: {str(e)}")
+            logger.warning("Continuing without module fusion")
+        return model
+
+    def _calibrate_model(self, model_prepared: nn.Module) -> nn.Module:
+        """Calibrate the prepared model."""
+        model_prepared.eval()
+        with torch.no_grad():
+            for i in range(10):  # Calibrate with 10 batches
+                batch_size, channels, height, width = 32, 3, 28, 28
+                calibration_data = torch.randn(batch_size, channels, height, width)
+                try:
+                    _ = model_prepared(calibration_data)
+                    logger.info(f"Calibration batch {i+1}/10 completed.")
+                except Exception as e:
+                    logger.error(f"Error during calibration batch {i+1}: {str(e)}")
+                    raise
+        return model_prepared
+
+    def _verify_quantization(self, quantized_model: nn.Module):
+        """Verify the quantization of the model."""
+        quantized_modules = [module for module in quantized_model.modules()
+                             if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear))]
+        if not quantized_modules:
+            logger.error("Model not quantized successfully. No quantized modules found.")
+            raise ValueError("Quantization failed: No quantized modules found")
+        logger.info(f"Quantization verified. Found {len(quantized_modules)} quantized modules.")
+
+        for name, module in quantized_model.named_modules():
+            if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear)):
+                if not (hasattr(module, 'scale') and hasattr(module, 'zero_point')):
+                    logger.error(f"Quantized module {name} missing scale or zero_point")
+                    raise ValueError(f"Incomplete quantization: Module {name} missing scale or zero_point")
+                logger.info(f"Quantized module {name} - scale: {module.scale}, zero_point: {module.zero_point}")
+            elif isinstance(module, (nn.Conv2d, nn.Linear)):
+                logger.warning(f"Module {name} of type {type(module)} was not quantized")
+            else:
+                logger.info(f"Non-quantized module {name} - type: {type(module)}")
+
+        if not hasattr(quantized_model, 'qconfig'):
+            logger.error("Quantized model does not have qconfig attribute")
+            raise ValueError("Quantization failed: qconfig attribute missing")
+        logger.info(f"Quantized model qconfig: {quantized_model.qconfig}")
+
+    def _test_forward_pass(self, quantized_model: nn.Module):
+        """Perform a test forward pass on the quantized model."""
+        try:
+            test_input = torch.randn(1, 3, 28, 28)  # Adjust input shape as needed
+            _ = quantized_model(test_input)
+            logger.info("Test forward pass successful")
+        except Exception as e:
+            logger.error(f"Test forward pass failed: {str(e)}")
+            raise ValueError("Quantization failed: Model cannot perform forward pass")
+
+    def _make_quantization_ready(self, model: nn.Module) -> nn.Module:
+        """Replace operations that are not quantization-friendly with their quantizable counterparts."""
+        def _recursive_quantization_setup(module: nn.Module, parent_name=''):
+            for name, child in module.named_children():
+                full_name = f"{parent_name}.{name}" if parent_name else name
+                if isinstance(child, nn.BatchNorm2d):
+                    new_module = nn.GroupNorm(num_groups=min(32, child.num_features), num_channels=child.num_features)
+                    setattr(module, name, new_module)
+                    logger.info(f"Replaced BatchNorm2d with GroupNorm in {full_name}")
+                elif isinstance(child, nn.ReLU):
+                    new_module = nn.ReLU(inplace=False)
+                    setattr(module, name, new_module)
+                    logger.info(f"Set ReLU to non-inplace in {full_name}")
+
+                if isinstance(child, (nn.Conv2d, nn.Linear, nn.ReLU, nn.GroupNorm)):
+                    child.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                    logger.info(f"Set qconfig for {full_name}")
+                else:
+                    # Handle custom modules
+                    try:
+                        child.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                        logger.info(f"Set qconfig for custom module {full_name}")
+                    except AttributeError:
+                        logger.warning(f"Could not set qconfig for custom module {full_name}")
+
+                _recursive_quantization_setup(child, full_name)
+
+            # Set qconfig for the current module
+            try:
+                if not hasattr(module, 'qconfig'):
+                    module.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                    logger.info(f"Set qconfig for module: {parent_name}")
+            except AttributeError:
+                logger.warning(f"Could not set qconfig for module: {parent_name}")
+
+        _recursive_quantization_setup(model)
+
+        # Ensure all modules have qconfig set and log their status
+        for name, module in model.named_modules():
+            try:
+                if hasattr(module, 'qconfig'):
+                    logger.info(f"Module {name} has qconfig: {module.qconfig}")
+                else:
+                    logger.warning(f"Module {name} does not have qconfig set after preparation")
+                    module.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                    logger.info(f"Forcibly set qconfig for module {name}")
+            except AttributeError:
+                logger.error(f"Could not set or verify qconfig for module {name}")
+
+        # Verify qconfig propagation for the top-level model
+        if not hasattr(model, 'qconfig'):
+            logger.error("Top-level model does not have qconfig attribute")
+            model.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+            logger.info("Forcibly set qconfig for top-level model")
+
+        # Add observer for activation post-process
+        try:
+            for name, module in model.named_modules():
+                if isinstance(module, (nn.Conv2d, nn.Linear, nn.ReLU)):
+                    module.add_module('activation_post_process', torch.quantization.MinMaxObserver.with_args(qconfig=module.qconfig))
+            logger.info("Added activation post-process observers to the model")
+        except Exception as e:
+            logger.error(f"Failed to add activation post-process observers: {str(e)}")
+
+        # Fuse modules if possible
+        try:
+            model = torch.quantization.fuse_modules(model, [['conv', 'bn', 'relu'], ['conv', 'bn'], ['conv', 'relu']])
+            logger.info("Fused compatible modules")
+        except Exception as e:
+            logger.warning(f"Failed to fuse modules: {str(e)}")
+
+        # Final check for quantization readiness
+        if not self._is_quantization_ready(model):
+            logger.warning("Model may not be fully prepared for quantization")
+        else:
+            logger.info("Model is ready for quantization")
+
+        return model
 
     def prune_model(self, model: nn.Module, sparsity: float = 0.5, method: str = 'l1_unstructured') -> nn.Module:
         """Prune the model to remove unnecessary weights."""

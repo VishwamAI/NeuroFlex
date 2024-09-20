@@ -8,18 +8,29 @@ from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
 from NeuroFlex.constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
 class DummyModel(nn.Module):
-    def __init__(self, input_size=10, hidden_size=20, output_size=5):
+    def __init__(self, input_channels=3, hidden_size=20, num_classes=5):
         super(DummyModel, self).__init__()
-        self.input_size = input_size
-        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.input_channels = input_channels
+        self.num_classes = num_classes
+        self.conv = nn.Conv2d(input_channels, 16, kernel_size=3, padding=1)
+        self.gn = nn.GroupNorm(4, 16)  # Replace BatchNorm2d with GroupNorm
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc1 = nn.Linear(16 * 28 * 28, hidden_size)  # Assuming 28x28 input size
+        self.fc2 = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
+        x = self.conv(x)
+        x = self.gn(x)  # Use GroupNorm instead of BatchNorm
+        x = self.relu(x)
+        x = x.view(x.size(0), -1)  # Flatten the tensor
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
         return x
+
+    @property
+    def input_size(self):
+        return (self.input_channels, 28, 28)  # Assuming 28x28 input size
 
 @pytest.fixture
 def sample_model():
@@ -31,20 +42,106 @@ def edge_ai_optimizer():
 
 class TestEdgeAIOptimization(unittest.TestCase):
     def setUp(self):
-        self.model = DummyModel()
+        self.model = DummyModel(input_channels=3)
         self.edge_ai_optimizer = EdgeAIOptimization()
         self.edge_ai_optimizer.initialize_optimizer(self.model)
-        self.test_data = torch.randn(100, 10)
+        self.test_data = torch.randn(100, 3, 28, 28)  # Batch size of 100, 3 channels, 28x28 image
 
-    @pytest.mark.skip(reason="Test is failing and needs to be fixed")
     def test_quantize_model(self):
-        optimized_model = self.edge_ai_optimizer.optimize(self.model, 'quantization', bits=8)
-        self.assertIsInstance(optimized_model, nn.Module)
-        self.assertTrue(hasattr(optimized_model, 'qconfig') or
-                        any(hasattr(module, 'qconfig') for module in optimized_model.modules()))
-        # Check if the model or any of its submodules have been quantized
-        self.assertTrue(any(isinstance(module, torch.quantization.QuantizedModule)
-                            for module in optimized_model.modules()))
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+        logger = logging.getLogger(__name__)
+
+        logger.info("Starting quantization test")
+
+        def run_quantization_test(bits=8, backend='fbgemm'):
+            logger.debug(f"Testing with {bits} bits and {backend} backend")
+            try:
+                logger.debug(f"Initial model structure: {self.model}")
+                logger.debug(f"Initial model qconfig: {getattr(self.model, 'qconfig', None)}")
+
+                for name, module in self.model.named_modules():
+                    logger.debug(f"Module {name} initial qconfig: {getattr(module, 'qconfig', None)}")
+
+                optimized_model = self.edge_ai_optimizer.optimize(self.model, 'quantization', bits=bits, backend=backend)
+
+                logger.debug(f"Optimized model structure: {optimized_model}")
+                logger.debug(f"Optimized model qconfig: {getattr(optimized_model, 'qconfig', None)}")
+
+                for name, module in optimized_model.named_modules():
+                    logger.debug(f"Module {name} optimized qconfig: {getattr(module, 'qconfig', None)}")
+                    if isinstance(module, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear)):
+                        logger.debug(f"Quantized module {name} - scale: {getattr(module, 'scale', None)}, zero_point: {getattr(module, 'zero_point', None)}")
+
+                self._assert_quantized(optimized_model, bits, backend)
+                return optimized_model
+            except Exception as e:
+                logger.error(f"Quantization failed for {bits} bits and {backend} backend: {str(e)}")
+                logger.exception("Traceback:")
+                return None
+
+        # Test with default settings
+        default_model = run_quantization_test()
+        self.assertIsNotNone(default_model, "Default quantization failed")
+
+        # Test with different bit depths
+        for bits in [8, 16]:
+            bit_model = run_quantization_test(bits=bits)
+            self.assertIsNotNone(bit_model, f"{bits}-bit quantization failed")
+
+        # Test with different backends
+        for backend in ['fbgemm', 'qnnpack']:
+            backend_model = run_quantization_test(backend=backend)
+            self.assertIsNotNone(backend_model, f"{backend} backend quantization failed")
+
+        # Test with different model configurations
+        small_model = DummyModel(input_channels=1, hidden_size=10, num_classes=2)
+        small_model_quantized = run_quantization_test()
+        self.assertIsNotNone(small_model_quantized, "Quantization failed for small model")
+
+        large_model = DummyModel(input_channels=3, hidden_size=100, num_classes=10)
+        large_model_quantized = run_quantization_test()
+        self.assertIsNotNone(large_model_quantized, "Quantization failed for large model")
+
+        logger.info("Quantization test completed")
+
+    def _assert_quantized(self, model, bits, backend):
+        self.assertIsInstance(model, nn.Module)
+
+        quantized_modules = [m for m in model.modules() if isinstance(m, (torch.nn.quantized.Conv2d, torch.nn.quantized.Linear))]
+        self.assertTrue(len(quantized_modules) > 0, "Model does not contain quantized Conv2d or Linear modules")
+
+        for module in quantized_modules:
+            self.assertTrue(hasattr(module, 'qconfig'), f"Quantized module {module} does not have qconfig attribute")
+            self.assertEqual(module.qconfig.activation().bits, bits, f"Activation quantization bits mismatch for {module}")
+            self.assertEqual(module.qconfig.weight().bits, bits, f"Weight quantization bits mismatch for {module}")
+
+        self.assertTrue(hasattr(model, 'qconfig'), "Model does not have qconfig attribute")
+        self.assertEqual(model.qconfig.activation().bits, bits, "Model activation quantization bits mismatch")
+        self.assertEqual(model.qconfig.weight().bits, bits, "Model weight quantization bits mismatch")
+
+        # Check if the backend is correctly set
+        if backend == 'fbgemm':
+            self.assertIsInstance(model.qconfig, torch.quantization.QConfig)
+        elif backend == 'qnnpack':
+            self.assertIsInstance(model.qconfig, torch.quantization.QConfigDynamic)
+
+        # Perform a test forward pass
+        try:
+            test_input = torch.randn(1, *self.model.input_size)
+            output = model(test_input)
+            self.assertIsNotNone(output, "Forward pass failed")
+            self.assertEqual(output.shape[1], self.model.num_classes, "Output shape mismatch")
+        except Exception as e:
+            self.fail(f"Forward pass failed: {str(e)}")
+
+        # Check for quantization effects
+        self.assertLess(model.state_dict()[list(model.state_dict().keys())[0]].dtype, torch.float32, "Model parameters not quantized")
+
+        # Test model size reduction
+        original_size = sum(p.numel() for p in self.model.parameters())
+        quantized_size = sum(p.numel() for p in model.parameters())
+        self.assertLess(quantized_size, original_size, "Quantization did not reduce model size")
 
     def test_prune_model(self):
         optimized_model = self.edge_ai_optimizer.optimize(self.model, 'pruning', sparsity=0.5)
@@ -152,9 +249,9 @@ class TestEdgeAIOptimization(unittest.TestCase):
 
 def test_knowledge_distillation(edge_ai_optimizer, sample_model):
     teacher_model = sample_model
-    student_model = DummyModel(input_size=10, hidden_size=10, output_size=5)
+    student_model = DummyModel(input_channels=3, hidden_size=10, num_classes=5)
     # Create a dummy DataLoader
-    dummy_data = torch.randn(100, 10)
+    dummy_data = torch.randn(100, 3, 28, 28)  # Changed to match convolutional input
     dummy_labels = torch.randint(0, 5, (100,))
     dummy_dataset = torch.utils.data.TensorDataset(dummy_data, dummy_labels)
     dummy_loader = torch.utils.data.DataLoader(dummy_dataset, batch_size=10)
