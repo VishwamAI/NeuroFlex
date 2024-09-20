@@ -9,7 +9,15 @@ from tensorflow.keras.layers import Dense, LSTM
 import joblib
 
 class ThreatDetector:
+    """
+    A class for detecting and analyzing threats in a system using various methods including
+    anomaly detection, deep learning, and pattern recognition.
+    """
+
     def __init__(self):
+        """
+        Initialize the ThreatDetector with default parameters and empty histories.
+        """
         self.logger = logging.getLogger(__name__)
         self.threat_history = []
         self.action_history = []
@@ -20,14 +28,23 @@ class ThreatDetector:
         self.scaler = StandardScaler()
 
     def setup(self):
+        """
+        Set up the ThreatDetector by initializing the anomaly detector and deep learning model.
+        """
         self.logger.info("Setting up ThreatDetector...")
         self._setup_anomaly_detector()
         self._setup_deep_learning_model()
 
     def _setup_anomaly_detector(self):
+        """
+        Initialize the anomaly detector using Isolation Forest algorithm.
+        """
         self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
 
     def _setup_deep_learning_model(self):
+        """
+        Initialize and compile the deep learning model for threat detection.
+        """
         self.deep_learning_model = Sequential([
             LSTM(64, input_shape=(None, 3), return_sequences=True),
             LSTM(32),
@@ -37,6 +54,17 @@ class ThreatDetector:
         self.deep_learning_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
     def detect_threat(self, state: Any, action: Any, next_state: Any) -> bool:
+        """
+        Detect potential threats based on the current state, action, and next state.
+
+        Args:
+            state (Any): The current state of the system.
+            action (Any): The action taken.
+            next_state (Any): The resulting state after the action.
+
+        Returns:
+            bool: True if a threat is detected, False otherwise.
+        """
         threat_detected = False
 
         # Check for sudden large changes in state
@@ -78,6 +106,17 @@ class ThreatDetector:
         return threat_detected
 
     def is_adversarial_pattern(self, state: Any, action: Any, next_state: Any) -> bool:
+        """
+        Detect adversarial patterns in the given state, action, and next state.
+
+        Args:
+            state (Any): The current state of the system.
+            action (Any): The action taken.
+            next_state (Any): The resulting state after the action.
+
+        Returns:
+            bool: True if an adversarial pattern is detected, False otherwise.
+        """
         # Implement more sophisticated adversarial pattern detection
         combined_data = np.concatenate([state, action, next_state])
         scaled_data = self.scaler.transform(combined_data.reshape(1, -1))
@@ -85,12 +124,32 @@ class ThreatDetector:
         return adversarial_score > 0.8  # Adjust this threshold as needed
 
     def get_safe_action(self, state: Any, action: Any, next_state: Any) -> Any:
+        """
+        Determine a safe action based on the current state, proposed action, and predicted next state.
+
+        Args:
+            state (Any): The current state of the system.
+            action (Any): The proposed action.
+            next_state (Any): The predicted next state.
+
+        Returns:
+            Any: A safe action to take.
+        """
         # Implement reinforcement learning for safe action determination
         # This is a placeholder implementation
         safe_action = action  # Default to the original action
         return safe_action
 
     def scan_for_vulnerabilities(self, model: Any) -> List[str]:
+        """
+        Scan the given model for potential vulnerabilities.
+
+        Args:
+            model (Any): The model to scan for vulnerabilities.
+
+        Returns:
+            List[str]: A list of detected vulnerabilities.
+        """
         vulnerabilities = []
         # Implement vulnerability scanning using the model architecture
         if isinstance(model, tf.keras.Model):
@@ -102,6 +161,12 @@ class ThreatDetector:
         return vulnerabilities
 
     def analyze(self) -> Dict[str, Any]:
+        """
+        Perform a comprehensive analysis of the threat detection system.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing analysis results.
+        """
         analysis_result = {
             "total_threats": len(self.threat_history),
             "recent_threats": self.threat_history[-5:] if self.threat_history else [],
@@ -112,22 +177,52 @@ class ThreatDetector:
         return analysis_result
 
     def _evaluate_anomaly_detector(self) -> Dict[str, float]:
+        """
+        Evaluate the performance of the anomaly detector.
+
+        Returns:
+            Dict[str, float]: A dictionary containing performance metrics.
+        """
         # Implement evaluation metrics for the anomaly detector
         return {"precision": 0.9, "recall": 0.85}  # Placeholder values
 
     def _evaluate_deep_learning_model(self) -> Dict[str, float]:
+        """
+        Evaluate the performance of the deep learning model.
+
+        Returns:
+            Dict[str, float]: A dictionary containing performance metrics.
+        """
         # Implement evaluation metrics for the deep learning model
         return {"accuracy": 0.92, "f1_score": 0.91}  # Placeholder values
 
     def get_threat_history(self) -> List[Tuple[Any, Any, Any]]:
+        """
+        Get the history of detected threats.
+
+        Returns:
+            List[Tuple[Any, Any, Any]]: A list of tuples containing (state, action, next_state) for each detected threat.
+        """
         return self.threat_history
 
     def save_models(self, path: str):
+        """
+        Save the trained models to the specified path.
+
+        Args:
+            path (str): The directory path to save the models.
+        """
         joblib.dump(self.anomaly_detector, f"{path}/anomaly_detector.joblib")
         self.deep_learning_model.save(f"{path}/deep_learning_model.h5")
         joblib.dump(self.scaler, f"{path}/scaler.joblib")
 
     def load_models(self, path: str):
+        """
+        Load the trained models from the specified path.
+
+        Args:
+            path (str): The directory path to load the models from.
+        """
         self.anomaly_detector = joblib.load(f"{path}/anomaly_detector.joblib")
         self.deep_learning_model = tf.keras.models.load_model(f"{path}/deep_learning_model.h5")
         self.scaler = joblib.load(f"{path}/scaler.joblib")
