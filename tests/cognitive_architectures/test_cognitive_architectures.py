@@ -1,25 +1,23 @@
 import unittest
 import jax
 import jax.numpy as jnp
+from jax import Array
 import pytest
+from NeuroFlex.cognitive_architectures.custom_cognitive_model import (
+    CustomCognitiveModel,
+    create_custom_cognitive_model,
+    AttentionMechanism,
+    WorkingMemory
+)
 from NeuroFlex.cognitive_architectures import (
-    CognitiveArchitecture,
-    create_consciousness,
-    create_feedback_mechanism,
-    ConsciousnessSimulation,
-    create_consciousness_simulation,
-    ExtendedCognitiveArchitecture,
-    BCIProcessor,
-    create_extended_cognitive_model,
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL
 )
-from NeuroFlex.cognitive_architectures.extended_cognitive_architectures import WorkingMemory
 
 class TestCognitiveArchitectures(unittest.TestCase):
     def setUp(self):
         self.seed = 42
-        self.input_shape = (100,)  # Updated to match expected input shape
+        self.input_shape = (100, 32)  # Updated to match expected input shape
         self.config = {
             'seed': self.seed,
             'hidden_size': 64,
@@ -28,88 +26,97 @@ class TestCognitiveArchitectures(unittest.TestCase):
             'prng_key': jax.random.PRNGKey(self.seed)  # Generate prng_key from seed
         }
 
-    def test_cognitive_architecture(self):
-        cognitive_arch = CognitiveArchitecture(self.config)
+    def test_custom_cognitive_model(self):
+        num_attention_heads = 4
+        attention_head_dim = 64
+        working_memory_size = 256
+        hidden_dim = 512
+        model = create_custom_cognitive_model(
+            num_attention_heads=num_attention_heads,
+            attention_head_dim=attention_head_dim,
+            working_memory_size=working_memory_size,
+            hidden_dim=hidden_dim
+        )
         prng_key = self.config['prng_key']
-        inputs = {
-            'vision': jax.random.normal(prng_key, self.input_shape),
-            'audition': jax.random.normal(jax.random.fold_in(prng_key, 1), self.input_shape),
-            'touch': jax.random.normal(jax.random.fold_in(prng_key, 2), self.input_shape)
-        }
-        consciousness_state, feedback = cognitive_arch.update_architecture(inputs)
+        batch_size = 1
+        seq_len = 10
+        input_dim = hidden_dim
+        inputs = jax.random.normal(prng_key, (batch_size, seq_len, input_dim))
+        prev_memory = jax.random.normal(jax.random.fold_in(prng_key, 1), (batch_size, working_memory_size))
 
-        self.assertIsInstance(consciousness_state, jnp.ndarray)
-        self.assertIsInstance(feedback, jnp.ndarray)
-
-    def test_create_consciousness(self):
-        consciousness = create_consciousness(self.config['prng_key'])
-        self.assertIsInstance(consciousness, jnp.ndarray)
-        self.assertEqual(consciousness.shape, (100,))
-
-    def test_create_feedback_mechanism(self):
-        feedback_mechanism = create_feedback_mechanism(self.config['prng_key'])
-        self.assertIsInstance(feedback_mechanism, jnp.ndarray)
-        self.assertEqual(feedback_mechanism.shape, (100,))
-
-    @pytest.mark.skip(reason="This test is currently failing and needs to be updated")
-    def test_consciousness_simulation(self):
-        features = [32, 64]
-        output_dim = 16
-        working_memory_size = 192
-        sim = create_consciousness_simulation(features, output_dim)
-        inputs = jax.random.normal(self.config['prng_key'], self.input_shape)
-        variables = sim.init(self.config['prng_key'], inputs)
+        variables = model.init(prng_key, inputs, prev_memory)
 
         # Ensure the variables dictionary has the correct structure
         self.assertIn('params', variables)
-        self.assertIn('working_memory', variables)
-        self.assertIn('model_state', variables)
 
-        rngs = {
-            'dropout': jax.random.fold_in(self.config['prng_key'], 1),
-            'perturbation': jax.random.fold_in(self.config['prng_key'], 2)
-        }
+        output, new_memory = model.apply(variables, inputs, prev_memory)
 
-        output, mutated = sim.apply(
-            variables, inputs,
-            rngs=rngs,
-            method=sim.simulate_consciousness,
-            mutable=['working_memory', 'model_state']
-        )
-
-        consciousness_state, new_working_memory = output
-        self.assertIsInstance(consciousness_state, jnp.ndarray)
-        self.assertIsInstance(new_working_memory, jnp.ndarray)
+        # Check that output and new_memory are JAX arrays
+        self.assertIsInstance(output, (jnp.ndarray, jax.Array))
+        self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
 
         # Check the shapes of the outputs
-        expected_consciousness_shape = (inputs.shape[0], sim.output_dim + 2*working_memory_size + 4 + working_memory_size)
-        self.assertEqual(consciousness_state.shape, expected_consciousness_shape)
-        self.assertEqual(new_working_memory.shape, (inputs.shape[0], working_memory_size))
+        expected_output_shape = (batch_size, hidden_dim)
+        expected_memory_shape = (batch_size, working_memory_size)
+        self.assertEqual(output.shape, expected_output_shape)
+        self.assertEqual(new_memory.shape, expected_memory_shape)
 
-        # Check that the mutated variables have the expected structure
-        self.assertIn('working_memory', mutated)
-        self.assertIn('model_state', mutated)
+    def test_attention_mechanism(self):
+        num_heads = 4
+        head_dim = 64
+        attention = AttentionMechanism(num_heads=num_heads, head_dim=head_dim)
 
-    @pytest.mark.skip(reason="Test is currently failing and needs to be updated")
-    def test_extended_cognitive_architecture(self):
-        input_dim = 100
-        model = create_extended_cognitive_model(
-            num_layers=3,
-            hidden_size=64,
-            working_memory_capacity=10,
-            bci_input_channels=32,
-            bci_output_size=5,
-            input_dim=input_dim
+        batch_size = 1
+        seq_len = 10
+        input_dim = num_heads * head_dim
+        inputs = jax.random.normal(self.config['prng_key'], (batch_size, seq_len, input_dim))
+
+        variables = attention.init(self.config['prng_key'], inputs)
+        output = attention.apply(variables, inputs)
+
+        self.assertIsInstance(output, (jnp.ndarray, jax.Array))
+        self.assertEqual(output.shape, inputs.shape)
+
+    def test_working_memory(self):
+        memory_size = 256
+        hidden_dim = 512
+        working_memory = WorkingMemory(memory_size=memory_size, hidden_dim=hidden_dim)
+
+        batch_size = 1
+        inputs = jax.random.normal(self.config['prng_key'], (batch_size, hidden_dim))
+        prev_memory = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 1), (batch_size, memory_size))
+
+        variables = working_memory.init(self.config['prng_key'], inputs, prev_memory)
+        new_memory = working_memory.apply(variables, inputs, prev_memory)
+
+        self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
+        self.assertEqual(new_memory.shape, (batch_size, memory_size))
+
+    def test_custom_cognitive_model_integration(self):
+        num_attention_heads = 4
+        attention_head_dim = 64
+        working_memory_size = 256
+        hidden_dim = 512
+        model = create_custom_cognitive_model(
+            num_attention_heads=num_attention_heads,
+            attention_head_dim=attention_head_dim,
+            working_memory_size=working_memory_size,
+            hidden_dim=hidden_dim
         )
-        prng_key = self.config['prng_key']
-        cognitive_input = jax.random.normal(prng_key, (1, input_dim))
-        bci_input = jax.random.normal(jax.random.fold_in(prng_key, 1), (1, 32, 32, 1))
-        task_context = jax.random.normal(jax.random.fold_in(prng_key, 2), (1, 64))
 
-        params = model.init(prng_key, cognitive_input, bci_input, task_context)
-        output = model.apply(params, cognitive_input, bci_input, task_context)
+        batch_size = 1
+        seq_len = 10
+        input_dim = hidden_dim
+        inputs = jax.random.normal(self.config['prng_key'], (batch_size, seq_len, input_dim))
+        prev_memory = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 1), (batch_size, working_memory_size))
 
-        self.assertIsInstance(output, jnp.ndarray)
+        variables = model.init(self.config['prng_key'], inputs, prev_memory)
+        output, new_memory = model.apply(variables, inputs, prev_memory)
+
+        self.assertIsInstance(output, (jnp.ndarray, jax.Array))
+        self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
+        self.assertEqual(output.shape, (batch_size, hidden_dim))
+        self.assertEqual(new_memory.shape, (batch_size, working_memory_size))
 
     def test_performance_threshold(self):
         self.assertIsInstance(PERFORMANCE_THRESHOLD, float)
@@ -119,31 +126,39 @@ class TestCognitiveArchitectures(unittest.TestCase):
         self.assertIsInstance(UPDATE_INTERVAL, int)
         self.assertTrue(UPDATE_INTERVAL > 0)
 
-    @pytest.mark.skip(reason="Test is currently failing and needs to be updated")
+    def test_performance_threshold(self):
+        self.assertIsInstance(PERFORMANCE_THRESHOLD, float)
+        self.assertTrue(0 < PERFORMANCE_THRESHOLD < 1)
+
+    def test_update_interval(self):
+        self.assertIsInstance(UPDATE_INTERVAL, int)
+        self.assertTrue(UPDATE_INTERVAL > 0)
+
     def test_working_memory(self):
-        capacity = 10
-        hidden_size = 64
-        wm = WorkingMemory(capacity, hidden_size)
+        memory_size = 10
+        hidden_dim = 64
+        wm = WorkingMemory(memory_size=memory_size, hidden_dim=hidden_dim)
 
         key = jax.random.PRNGKey(0)
-        inputs = jax.random.normal(key, (1, hidden_size))
-        query = jax.random.normal(key, (1, hidden_size))
+        batch_size = 1
+        inputs = jax.random.normal(key, (batch_size, hidden_dim))
+        prev_memory = jax.random.normal(jax.random.fold_in(key, 1), (batch_size, memory_size))
 
         # Initialize the WorkingMemory
-        params = wm.init(key, inputs, query)
+        variables = wm.init(key, inputs, prev_memory)
 
         # First call to WorkingMemory
-        output1, mutated1 = wm.apply(params, inputs, query, mutable=['memory'])
-        self.assertIsInstance(output1, jnp.ndarray)
-        self.assertIn('memory', mutated1)
+        new_memory1 = wm.apply(variables, inputs, prev_memory)
+        self.assertIsInstance(new_memory1, (jnp.ndarray, jax.Array))
+        self.assertEqual(new_memory1.shape, (batch_size, memory_size))
 
         # Second call to WorkingMemory (should update without error)
-        output2, mutated2 = wm.apply(mutated1, inputs, query, mutable=['memory'])
-        self.assertIsInstance(output2, jnp.ndarray)
-        self.assertIn('memory', mutated2)
+        new_memory2 = wm.apply(variables, inputs, new_memory1)
+        self.assertIsInstance(new_memory2, (jnp.ndarray, jax.Array))
+        self.assertEqual(new_memory2.shape, (batch_size, memory_size))
 
         # Check that memory has been updated
-        self.assertFalse(jnp.array_equal(mutated1['memory']['buffer'], mutated2['memory']['buffer']))
+        self.assertFalse(jnp.array_equal(new_memory1, new_memory2))
 
 if __name__ == '__main__':
     unittest.main()
