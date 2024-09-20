@@ -1,40 +1,40 @@
-# NeuroFlex: Advanced Neural Network Framework (v0.1.2)
+# NeuroFlex: Advanced Neural Network Framework (v0.1.3)
 
-NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and TensorFlow, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project showcases state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
+NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and TensorFlow, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project integrates state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
 ![NeuroFlex Architecture](neuroflex-architecture-svg.svg)
 
 ## Key Features
 
-- **Advanced Neural Architectures**: Support for CNN, RNN, LSTM, GAN, and Spiking Neural Networks
-- **Multi-Backend Integration**: Seamless integration with JAX, Flax, and TensorFlow
-- **2D and 3D Convolutions**: Efficient implementation of both 2D and 3D convolutional layers
-- **Quantum Computing**: Quantum Neural Network module for next-generation AI
-- **Reinforcement Learning**: Advanced capabilities with enhanced self-curing algorithms
-- **Brain-Computer Interface (BCI)**: Cutting-edge integration for neurotechnology applications
-- **Ethical AI**: Fairness constraints and bias mitigation techniques
-- **Robustness**: Improved adversarial training, interpretability tools (SHAP), and adaptive learning rate adjustment
-- **Bioinformatics**: AlphaFold integration for protein structure prediction and drug discovery
-- **Generative AI**: Creative problem-solving and content generation
-- **Natural Language Processing**: Sentence piece integration and advanced NLP tasks
-- **Neuromorphic Computing**: Energy-efficient spiking neural networks
-- **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability
+- **Advanced Neural Architectures**: Support for CNN, RNN, LSTM, GAN, and Spiking Neural Networks.
+- **Multi-Backend Integration**: Seamless integration with JAX, Flax, and TensorFlow.
+- **2D and 3D Convolutions**: Efficient implementation of both 2D and 3D convolutional layers.
+- **Quantum Computing**: Quantum Neural Network module for next-generation AI.
+- **Reinforcement Learning**: Advanced capabilities with enhanced self-curing algorithms.
+- **Brain-Computer Interface (BCI)**: Cutting-edge integration for neurotechnology applications.
+- **Ethical AI**: Fairness constraints and bias mitigation techniques.
+- **Robustness**: Improved adversarial training, interpretability tools (SHAP), and adaptive learning rate adjustment.
+- **Bioinformatics**: AlphaFold integration for protein structure prediction and drug discovery.
+- **Generative AI**: Creative problem-solving and content generation.
+- **Natural Language Processing**: Sentence piece integration and advanced NLP tasks.
+- **Neuromorphic Computing**: Energy-efficient spiking neural networks.
+- **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability.
+- **Consciousness Simulation**: Integration of **Integrated Information Theory (IIT)** and **Global Workspace Theory (GWT)** for advanced consciousness modeling.
+  
+## Latest Updates (v0.1.3)
 
-## Latest Updates (v0.1.2)
-
-- TensorFlow Integration: Added support for TensorFlow backend alongside JAX/Flax
-- 2D and 3D Convolutions: Implemented efficient convolutional layers for both 2D and 3D inputs
-- Enhanced Compatibility: Improved interoperability between JAX/Flax and TensorFlow
-- Comprehensive Testing: Developed and passed pytest tests for all components, including TensorFlow integration
-- Enhanced self-curing mechanism with adaptive learning rate adjustment
-- Improved model robustness against gradient explosions and local minima
-- Advanced diagnostic checks for model performance and training issues
-- Whisper API integration for advanced speech recognition
-- Enhanced AlphaFold integration for protein structure prediction
-- Advanced consciousness simulation for cognitive modeling
-- Improved Brain-Computer Interface (BCI) functionality
-- Support for Python 3.9, 3.10, 3.11, 3.12
-- Resolved dependency issues and improved stability
+- **Consciousness Simulation**: Achieved integration of **Integrated Information Theory (IIT)** and **Global Workspace Theory (GWT)** for cognitive and consciousness modeling.
+- TensorFlow Integration: Added support for TensorFlow backend alongside JAX/Flax.
+- 2D and 3D Convolutions: Implemented efficient convolutional layers for both 2D and 3D inputs.
+- Enhanced Compatibility: Improved interoperability between JAX/Flax and TensorFlow.
+- Comprehensive Testing: Developed and passed pytest tests for all components, including TensorFlow integration.
+- Enhanced self-curing mechanism with adaptive learning rate adjustment.
+- Improved model robustness against gradient explosions and local minima.
+- Advanced diagnostic checks for model performance and training issues.
+- Whisper API integration for advanced speech recognition.
+- Enhanced AlphaFold integration for protein structure prediction.
+- Support for Python 3.9, 3.10, 3.11, 3.12.
+- Resolved dependency issues and improved stability.
 
 ## Installation
 
@@ -119,8 +119,8 @@ pytest tests/
 ```
 
 Key test files:
-- `test_neuroflex_nn.py`: Tests for the core NeuroFlexNN functionality
-- `test_tensorflow_convolutions.py`: Tests for TensorFlow convolution implementations
+- `test_neuroflex_nn.py`: Tests for the core NeuroFlexNN functionality.
+- `test_tensorflow_convolutions.py`: Tests for TensorFlow convolution implementations.
 
 ## Environment Setup
 
@@ -193,4 +193,11 @@ If you use NeuroFlex in your research, please cite:
 
 ## Contact
 
-For questions, feedback, or support, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at [REDACTED SECRET].
+For questions, feedback, or support, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at [REDACTED].
+
+---
+
+### **Changes**:
+- Added **Consciousness Simulation** section under Key Features and Latest Updates to reflect the integration of **IIT** and **GWT** theories.
+- Updated the version to **v0.1.3**.
+- General improvements and formatting to ensure clarity and consistency with the latest features.
