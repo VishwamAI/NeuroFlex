@@ -1,6 +1,6 @@
 # NeuroFlex Environment Setup Guide
 
-This guide provides step-by-step instructions for setting up the NeuroFlex environment.
+This guide provides step-by-step instructions for setting up the NeuroFlex environment, ensuring compatibility and optimal performance.
 
 ## Prerequisites
 
@@ -54,3 +54,9 @@ For further assistance, please open an issue on the GitHub repository.
 ## Contributing
 
 If you'd like to contribute to NeuroFlex, please read our contributing guidelines in the repository's README.md file.
+
+## Additional Notes
+
+- Consider using a `.env` file to manage environment variables and secrets.
+- Regularly update your dependencies to ensure security and compatibility.
+- Follow best practices for Python development, including code style and testing.
