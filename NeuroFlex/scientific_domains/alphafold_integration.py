@@ -35,8 +35,7 @@ alphafold_path = os.environ.get('ALPHAFOLD_PATH')
 if not alphafold_path:
     print("Error: ALPHAFOLD_PATH environment variable is not set.")
     print("Please set the ALPHAFOLD_PATH environment variable to the AlphaFold directory.")
-    sys.exit(1)
-
+    # Continue execution without exiting
 sys.path.append(alphafold_path)
 
 # Define the path to the AlphaFold parameters

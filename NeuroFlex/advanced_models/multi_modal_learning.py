@@ -169,7 +169,7 @@ class MultiModalLearning(nn.Module):
                 logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
                 embedded = modality['encoder'][0](text_input)
                 lstm_out, (hidden, _) = modality['encoder'][1](embedded.float())
-                encoded_modalities[name] = modality['encoder'][2](hidden[-1].unsqueeze(0))
+                encoded_modalities[name] = modality['encoder'][2](hidden[-1].squeeze(0))  # Ensure hidden state is a 2D tensor
             elif name == 'time_series':
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
@@ -212,6 +212,13 @@ class MultiModalLearning(nn.Module):
         """Train the multi-modal learning model."""
         if len(data) == 0 or len(labels) == 0:
             raise ValueError("Input data or labels are empty")
+
+        # Ensure all inputs are Tensors
+        data = {k: torch.as_tensor(v) for k, v in data.items()}
+        labels = torch.as_tensor(labels)
+        if val_data is not None and val_labels is not None:
+            val_data = {k: torch.as_tensor(v) for k, v in val_data.items()}
+            val_labels = torch.as_tensor(val_labels)
 
         if val_data is None or val_labels is None:
             train_data, val_data, train_labels, val_labels = self._split_data(data, labels)

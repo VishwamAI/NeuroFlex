@@ -51,12 +51,12 @@ class GoogleIntegration:
         class TFWrapper(nn.Module):
             @nn.compact
             def __call__(self, x):
-                # Convert JAX array to TensorFlow tensor
+                # Convert JAX array to TensorFlow tensor without using NumPy
                 x_tf = tf.convert_to_tensor(x)
                 # Run TensorFlow model
                 y_tf = tf_model(x_tf)
-                # Convert back to JAX array
-                return jnp.array(y_tf)
+                # Convert TensorFlow tensor to JAX array using jax.numpy.asarray
+                return jax.numpy.asarray(y_tf)
 
         return TFWrapper()
 
