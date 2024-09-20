@@ -9,7 +9,6 @@ class TestBioinformaticsIntegration(unittest.TestCase):
     def setUp(self):
         self.bioinformatics = BioinformaticsIntegration()
 
-    @pytest.mark.skip(reason="FileNotFoundError not raised as expected. To be fixed in next version.")
     @patch('Bio.SeqIO.parse')
     def test_read_sequence_file(self, mock_parse):
         # Test with valid file path and format
@@ -20,10 +19,12 @@ class TestBioinformaticsIntegration(unittest.TestCase):
         self.assertEqual(str(result[0].seq), "ATCG")
 
         # Test with invalid file path
+        mock_parse.side_effect = FileNotFoundError
         with self.assertRaises(FileNotFoundError):
             self.bioinformatics.read_sequence_file("nonexistent.fasta")
 
         # Test with invalid file format
+        mock_parse.side_effect = ValueError
         with self.assertRaises(ValueError):
             self.bioinformatics.read_sequence_file("test.fasta", "invalid_format")
 
