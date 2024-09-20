@@ -130,10 +130,12 @@ class AlphaFoldIntegration:
             database_path = os.environ.get('JACKHMMER_DATABASE_PATH', '/path/to/jackhmmer/database')
             binary_path = os.environ.get('JACKHMMER_BINARY_PATH', '/usr/bin/jackhmmer')
             try:
+                logging.info(f"Initializing Jackhmmer with binary_path={binary_path} and database_path={database_path}")
                 self.msa_runner = self.jackhmmer_module.Jackhmmer(
                     binary_path=binary_path,
                     database_path=database_path
                 )
+                logging.info("Jackhmmer initialization successful")
             except Exception as e:
                 logging.error(f"Failed to initialize Jackhmmer: {str(e)}")
                 return [("query", sequence)]
@@ -224,7 +226,9 @@ class AlphaFoldIntegration:
 
             # Initialize the model using hk.transform
             def _init_alphafold(batch, config):
+                logging.info("Initializing AlphaFold model")
                 model = self.modules_module.AlphaFold(config)
+                logging.info("AlphaFold model initialized")
                 return model(batch)
 
             model_creator = hk.transform(_init_alphafold)
@@ -316,6 +320,7 @@ class AlphaFoldIntegration:
             logging.info("Model initialization completed")
 
             # Initialize MSA runner and template searcher
+            logging.info("Starting MSA runner and template searcher initialization")
             jackhmmer_binary_path = os.environ.get('JACKHMMER_BINARY_PATH', '/usr/bin/jackhmmer')
             hhblits_binary_path = os.environ.get('HHBLITS_BINARY_PATH', '/usr/bin/hhblits')
             jackhmmer_database_path = os.environ.get('JACKHMMER_DATABASE_PATH', '/path/to/jackhmmer/database')
@@ -328,9 +333,12 @@ class AlphaFoldIntegration:
 
             logging.info("Initializing MSA runner and template searcher")
             logging.debug(f"Attempting to initialize Jackhmmer with binary_path={jackhmmer_binary_path} and database_path={jackhmmer_database_path}")
+            print(f"DEBUG: About to initialize Jackhmmer with binary_path={jackhmmer_binary_path} and database_path={jackhmmer_database_path}")
             logging.info("Starting Jackhmmer initialization")
             try:
+                logging.info("Before Jackhmmer initialization")
                 self.msa_runner = self.jackhmmer_module.Jackhmmer(binary_path=jackhmmer_binary_path, database_path=jackhmmer_database_path)
+                logging.info("After Jackhmmer initialization")
                 logging.debug("Jackhmmer initialization successful")
             except Exception as e:
                 logging.error(f"Jackhmmer initialization failed: {str(e)}")

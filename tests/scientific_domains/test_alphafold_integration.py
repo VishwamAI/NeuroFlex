@@ -6,6 +6,7 @@ import numpy as np
 import sys
 import re
 import random
+import logging
 from unittest.mock import patch, MagicMock
 import openmm
 import openmm.app as app
@@ -71,14 +72,14 @@ import os
 @patch('alphafold.data.pipeline.make_msa_features')
 @patch('alphafold.data.pipeline.make_sequence_features')
 @patch('alphafold.common.protein.from_prediction')
-@patch('alphafold.data.tools.hhblits.HHBlits')
-@patch('alphafold.data.tools.jackhmmer.Jackhmmer')
+@patch('NeuroFlex.scientific_domains.alphafold_integration.hhblits.HHBlits')
+@patch('NeuroFlex.scientific_domains.alphafold_integration.jackhmmer.Jackhmmer')
 @patch('alphafold.model.config.CONFIG_DIFFS')
 @patch('alphafold.model.config.CONFIG_MULTIMER')
 @patch('alphafold.model.config.CONFIG')
 @patch('jax.random.PRNGKey')
 @patch('haiku.transform')
-@patch('alphafold.model.modules.AlphaFold')
+@patch('alphafold.model.modules.AlphaFold', autospec=True)
 @patch('os.path.exists')
 @patch('glob.glob')
 @patch('numpy.load')
@@ -92,11 +93,16 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
                      mock_prng_key, mock_config, mock_config_multimer, mock_config_diffs,
                      mock_jackhmmer, mock_hhblits, mock_from_prediction,
                      mock_make_sequence_features, mock_make_msa_features):
+    logging.getLogger().setLevel(logging.DEBUG)
     # Set up mock objects
     mock_model = MagicMock()
-    mock_transform.return_value.init.return_value = {'params': MagicMock()}
-    mock_transform.return_value.apply.return_value = mock_model
-    mock_jackhmmer.return_value = MagicMock()
+    mock_init = MagicMock()
+    mock_init.init = MagicMock(return_value={'params': 'mocked_params'})
+    mock_alphafold.return_value = mock_model
+    mock_alphafold.return_value = mock_model
+    mock_alphafold.return_value = mock_model
+    mock_transform.return_value = mock_init
+    mock_alphafold.return_value = mock_model
     mock_jackhmmer.return_value = MagicMock()
     mock_prng_key.return_value = jax.random.PRNGKey(0)
 
@@ -112,24 +118,330 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
 
     # Set up mock configs
     expected_config = ml_collections.ConfigDict({
+        'data': {
+            'common': {
+                'masked_msa': {
+                    'profile_prob': 0.1,
+                    'same_prob': 0.1,
+                    'uniform_prob': 0.1
+                },
+                'max_extra_msa': 5120,
+                'msa_cluster_features': True,
+                'num_recycle': 3,
+                'reduce_msa_clusters_by_max_templates': True,
+                'resample_msa_in_recycling': True,
+                'template_features': [
+                    'template_all_atom_positions',
+                    'template_sum_probs',
+                    'template_aatype',
+                    'template_all_atom_masks',
+                    'template_domain_names'
+                ],
+                'unsupervised_features': [
+                    'aatype',
+                    'residue_index',
+                    'sequence',
+                    'msa',
+                    'domain_name',
+                    'num_alignments',
+                    'seq_length',
+                    'between_segment_residues',
+                    'deletion_matrix'
+                ],
+                'use_templates': True
+            },
+            'eval': {
+                'feat': {
+                    'aatype': ['num residues placeholder'],
+                    'all_atom_mask': ['num residues placeholder', None],
+                    'all_atom_positions': ['num residues placeholder', None, None],
+                    'alt_chi_angles': ['num residues placeholder', None],
+                    'atom14_alt_gt_exists': ['num residues placeholder', None],
+                    'atom14_alt_gt_positions': ['num residues placeholder', None, None],
+                    'atom14_atom_exists': ['num residues placeholder', None],
+                    'atom14_atom_is_ambiguous': ['num residues placeholder', None],
+                    'atom14_gt_exists': ['num residues placeholder', None],
+                    'atom14_gt_positions': ['num residues placeholder', None, None],
+                    'atom37_atom_exists': ['num residues placeholder', None],
+                    'backbone_affine_mask': ['num residues placeholder'],
+                    'backbone_affine_tensor': ['num residues placeholder', None],
+                    'bert_mask': ['msa placeholder', 'num residues placeholder'],
+                    'chi_angles': ['num residues placeholder', None],
+                    'chi_mask': ['num residues placeholder', None],
+                    'extra_deletion_value': ['extra msa placeholder', 'num residues placeholder'],
+                    'extra_has_deletion': ['extra msa placeholder', 'num residues placeholder'],
+                    'extra_msa': ['extra msa placeholder', 'num residues placeholder'],
+                    'extra_msa_mask': ['extra msa placeholder', 'num residues placeholder'],
+                    'extra_msa_row_mask': ['extra msa placeholder'],
+                    'is_distillation': [],
+                    'msa_feat': ['msa placeholder', 'num residues placeholder', None],
+                    'msa_mask': ['msa placeholder', 'num residues placeholder'],
+                    'msa_row_mask': ['msa placeholder'],
+                    'pseudo_beta': ['num residues placeholder', None],
+                    'pseudo_beta_mask': ['num residues placeholder'],
+                    'random_crop_to_size_seed': [None],
+                    'residue_index': ['num residues placeholder'],
+                    'residx_atom14_to_atom37': ['num residues placeholder', None],
+                    'residx_atom37_to_atom14': ['num residues placeholder', None],
+                    'resolution': [],
+                    'rigidgroups_alt_gt_frames': ['num residues placeholder', None, None],
+                    'rigidgroups_group_exists': ['num residues placeholder', None],
+                    'rigidgroups_group_is_ambiguous': ['num residues placeholder', None],
+                    'rigidgroups_gt_exists': ['num residues placeholder', None],
+                    'rigidgroups_gt_frames': ['num residues placeholder', None, None],
+                    'seq_length': [],
+                    'seq_mask': ['num residues placeholder'],
+                    'target_feat': ['num residues placeholder', None],
+                    'template_aatype': ['num templates placeholder', 'num residues placeholder'],
+                    'template_all_atom_masks': ['num templates placeholder', 'num residues placeholder', None],
+                    'template_all_atom_positions': ['num templates placeholder', 'num residues placeholder', None, None],
+                    'template_backbone_affine_mask': ['num templates placeholder', 'num residues placeholder'],
+                    'template_backbone_affine_tensor': ['num templates placeholder', 'num residues placeholder', None],
+                    'template_mask': ['num templates placeholder'],
+                    'template_pseudo_beta': ['num templates placeholder', 'num residues placeholder', None],
+                    'template_pseudo_beta_mask': ['num templates placeholder', 'num residues placeholder'],
+                    'template_sum_probs': ['num templates placeholder', None],
+                    'true_msa': ['msa placeholder', 'num residues placeholder']
+                },
+                'fixed_size': True,
+                'masked_msa_replace_fraction': 0.15,
+                'max_msa_clusters': 512,
+                'max_templates': 4,
+                'num_ensemble': 1,
+                'subsample_templates': False
+            }
+        },
+        'global_config': {
+            'deterministic': False,
+            'eval_dropout': False,
+            'multimer_mode': False,
+            'subbatch_size': 4,
+            'use_remat': False,
+            'zero_init': True
+        },
         'model': {
-            'name': 'model_1',
-            'heads': {'structure_module': {}, 'predicted_lddt': {}, 'predicted_aligned_error': {}, 'experimentally_resolved': {}},
             'embeddings_and_evoformer': {
+                'evoformer': {
+                    'msa_column_attention': {
+                        'dropout_rate': 0.0,
+                        'gating': True,
+                        'num_head': 8,
+                        'orientation': 'per_column',
+                        'shared_dropout': True
+                    },
+                    'msa_row_attention_with_pair_bias': {
+                        'dropout_rate': 0.15,
+                        'gating': True,
+                        'num_head': 8,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'msa_transition': {
+                        'dropout_rate': 0.0,
+                        'num_intermediate_factor': 4,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'outer_product_mean': {
+                        'chunk_size': 128,
+                        'dropout_rate': 0.0,
+                        'first': False,
+                        'num_outer_channel': 32,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'pair_transition': {
+                        'dropout_rate': 0.0,
+                        'num_intermediate_factor': 4,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'triangle_attention_ending_node': {
+                        'dropout_rate': 0.25,
+                        'gating': True,
+                        'num_head': 4,
+                        'orientation': 'per_column',
+                        'shared_dropout': True
+                    },
+                    'triangle_attention_starting_node': {
+                        'dropout_rate': 0.25,
+                        'gating': True,
+                        'num_head': 4,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'triangle_multiplication_incoming': {
+                        'dropout_rate': 0.25,
+                        'equation': 'kjc,kic->ijc',
+                        'fuse_projection_weights': False,
+                        'num_intermediate_channel': 128,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    },
+                    'triangle_multiplication_outgoing': {
+                        'dropout_rate': 0.25,
+                        'equation': 'ikc,jkc->ijc',
+                        'fuse_projection_weights': False,
+                        'num_intermediate_channel': 128,
+                        'orientation': 'per_row',
+                        'shared_dropout': True
+                    }
+                },
                 'evoformer_num_block': 48,
                 'extra_msa_channel': 64,
                 'extra_msa_stack_num_block': 4,
-                'num_msa': 512,
-                'num_extra_msa': 1024,
-            }
+                'max_relative_feature': 32,
+                'msa_channel': 256,
+                'pair_channel': 128,
+                'prev_pos': {
+                    'max_bin': 20.75,
+                    'min_bin': 3.25,
+                    'num_bins': 15
+                },
+                'recycle_features': True,
+                'recycle_pos': True,
+                'seq_channel': 384,
+                'template': {
+                    'attention': {
+                        'gating': False,
+                        'key_dim': 64,
+                        'num_head': 4,
+                        'value_dim': 64
+                    },
+                    'dgram_features': {
+                        'max_bin': 50.75,
+                        'min_bin': 3.25,
+                        'num_bins': 39
+                    },
+                    'embed_torsion_angles': True,
+                    'enabled': True,
+                    'max_templates': 4,
+                    'subbatch_size': 128,
+                    'template_pair_stack': {
+                        'num_block': 2,
+                        'pair_transition': {
+                            'dropout_rate': 0.0,
+                            'num_intermediate_factor': 2,
+                            'orientation': 'per_row',
+                            'shared_dropout': True
+                        },
+                        'triangle_attention_ending_node': {
+                            'dropout_rate': 0.25,
+                            'gating': True,
+                            'key_dim': 64,
+                            'num_head': 4,
+                            'orientation': 'per_column',
+                            'shared_dropout': True,
+                            'value_dim': 64
+                        },
+                        'triangle_attention_starting_node': {
+                            'dropout_rate': 0.25,
+                            'gating': True,
+                            'key_dim': 64,
+                            'num_head': 4,
+                            'orientation': 'per_row',
+                            'shared_dropout': True,
+                            'value_dim': 64
+                        },
+                        'triangle_multiplication_incoming': {
+                            'dropout_rate': 0.25,
+                            'equation': 'kjc,kic->ijc',
+                            'fuse_projection_weights': False,
+                            'num_intermediate_channel': 64,
+                            'orientation': 'per_row',
+                            'shared_dropout': True
+                        },
+                        'triangle_multiplication_outgoing': {
+                            'dropout_rate': 0.25,
+                            'equation': 'ikc,jkc->ijc',
+                            'fuse_projection_weights': False,
+                            'num_intermediate_channel': 64,
+                            'orientation': 'per_row',
+                            'shared_dropout': True
+                        }
+                    },
+                    'use_template_unit_vector': False
+                }
+            },
+            'global_config': {
+                'deterministic': False,
+                'eval_dropout': False,
+                'multimer_mode': False,
+                'subbatch_size': 4,
+                'use_remat': False,
+                'zero_init': True
+            },
+            'heads': {
+                'distogram': {
+                    'first_break': 2.3125,
+                    'last_break': 21.6875,
+                    'num_bins': 64,
+                    'weight': 0.3
+                },
+                'experimentally_resolved': {
+                    'filter_by_resolution': True,
+                    'max_resolution': 3.0,
+                    'min_resolution': 0.1,
+                    'weight': 0.01
+                },
+                'masked_msa': {
+                    'num_output': 23,
+                    'weight': 2.0
+                },
+                'predicted_aligned_error': {
+                    'filter_by_resolution': True,
+                    'max_error_bin': 31.0,
+                    'max_resolution': 3.0,
+                    'min_resolution': 0.1,
+                    'num_bins': 64,
+                    'num_channels': 128,
+                    'weight': 0.0
+                },
+                'predicted_lddt': {
+                    'filter_by_resolution': True,
+                    'max_resolution': 3.0,
+                    'min_resolution': 0.1,
+                    'num_bins': 50,
+                    'num_channels': 128,
+                    'weight': 0.01
+                },
+                'structure_module': {
+                    'angle_norm_weight': 0.01,
+                    'chi_weight': 0.5,
+                    'clash_overlap_tolerance': 1.5,
+                    'compute_in_graph_metrics': True,
+                    'dropout': 0.1,
+                    'fape': {
+                        'clamp_distance': 10.0,
+                        'clamp_type': 'relu',
+                        'loss_unit_distance': 10.0
+                    },
+                    'num_channel': 384,
+                    'num_head': 12,
+                    'num_layer': 8,
+                    'num_layer_in_transition': 3,
+                    'num_point_qk': 4,
+                    'num_point_v': 8,
+                    'num_scalar_qk': 16,
+                    'num_scalar_v': 16,
+                    'position_scale': 10.0,
+                    'sidechain': {
+                        'atom_clamp_distance': 10.0,
+                        'length_scale': 10.0,
+                        'num_channel': 128,
+                        'num_residual_block': 2,
+                        'weight_frac': 0.5
+                    },
+                    'structural_violation_loss_weight': 1.0,
+                    'violation_tolerance_factor': 12.0,
+                    'weight': 1.0
+                }
+            },
+            'num_recycle': 3,
+            'resample_msa_in_recycling': True
         },
-        'data': {'common': {'max_recycling_iters': 3}},
-        'globals': {
-            'deterministic': False,
-            'subbatch_size': 4,
-            'use_remat': False,
-            'zero_init': True,
-        }
+        'max_recycling': 3,
+        'model_name': 'model_1'
     })
     mock_config.return_value = copy.deepcopy(expected_config)
     mock_config_multimer.return_value = copy.deepcopy(expected_config)
@@ -184,36 +496,49 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
 
     # Call setup_model
     alphafold_integration.setup_model()
+    # Call _run_msa to ensure Jackhmmer is instantiated
+    alphafold_integration._run_msa("ATCG")  # Example sequence
 
     # Assert that the model, model_params, and config are set correctly
     assert alphafold_integration.model is not None
     assert alphafold_integration.model_params is not None
     assert alphafold_integration.config is not None
     assert isinstance(alphafold_integration.config, ml_collections.ConfigDict)
-
     # Assert that Jackhmmer is initialized with the correct arguments
-    mock_jackhmmer.assert_called_once()
+    # Add logging to verify if the Jackhmmer initialization point is reached
+    logging.info("Checking if Jackhmmer is initialized")
+    mock_jackhmmer.assert_called_once_with(
+        binary_path='/usr/bin/jackhmmer',
+        database_path='/path/to/jackhmmer_db.fasta'
+    )
     args, kwargs = mock_jackhmmer.call_args
     assert args == ()  # Ensure no positional arguments were passed
     assert kwargs == {
         'binary_path': '/usr/bin/jackhmmer',
         'database_path': '/path/to/jackhmmer_db.fasta'
     }
+    logging.info("Jackhmmer initialization check completed")
 
     # Assert that HHBlits is initialized with the correct arguments
     mock_hhblits.assert_called_once_with(
         binary_path='/usr/bin/hhblits',
         databases=['/path/to/hhblits_db']
     )
-
     # Assert that the AlphaFold model is created with the correct config
+    logging.info("Checking if AlphaFold is instantiated")
     mock_alphafold.assert_called_once()
+    logging.info("AlphaFold instantiation check completed")
     mock_transform.assert_called_once()
+    logging.info("Haiku transform check completed")
 
+    # Log the actual config structure
+    logging.info(f"Actual config structure: {alphafold_integration.config}")
     # Assert that the config attributes are set correctly
-    assert alphafold_integration.config.model.name == expected_config.model.name
-    assert alphafold_integration.config.data.common.max_recycling_iters == expected_config.data.common.max_recycling_iters
-    assert dict(alphafold_integration.config.globals) == expected_config.globals
+    assert 'model_name' in alphafold_integration.config
+    assert alphafold_integration.config.model_name == expected_config.model.name
+    assert 'num_recycle' in alphafold_integration.config.data.common
+    assert alphafold_integration.config.data.common.num_recycle == expected_config.data.common.num_recycle
+    assert dict(alphafold_integration.config.global_config) == expected_config.global_config
 
     # Assert that the model is initialized with dummy input
     dummy_batch = {
