@@ -31,11 +31,16 @@ class SyntheticBiologyInsights:
             "terminator": ["T1", "T7", "rrnB"]
         }
         # Initialize AlphaFold models
-        def init_alphafold():
-            return modules.AlphaFold()
-        self.alphafold_model = hk.transform(init_alphafold)
-        self.alphafold_pipeline = af_pipeline.DataPipeline()
-        logger.info("SyntheticBiologyInsights initialized")
+        try:
+            def init_alphafold():
+                return modules.AlphaFold()
+            self.alphafold_model = hk.transform(init_alphafold)
+            self.alphafold_pipeline = af_pipeline.DataPipeline()
+            logger.info("SyntheticBiologyInsights initialized with AlphaFold")
+        except Exception as e:
+            logger.error(f"Error initializing AlphaFold: {str(e)}")
+            self.alphafold_model = None
+            self.alphafold_pipeline = None
 
     def design_genetic_circuit(self, circuit_name: str, components: List[str]) -> Dict:
         """
