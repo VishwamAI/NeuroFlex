@@ -4,6 +4,23 @@ from NeuroFlex import NeuroFlex
 from NeuroFlex.utils import Config
 
 def main():
+    """
+    Main function to demonstrate the capabilities of the NeuroFlex framework.
+
+    This function initializes the NeuroFlex system and showcases various components:
+    - Core neural network for image classification
+    - Quantum neural network
+    - Ethical evaluation
+    - Explainable AI
+    - BCI data processing
+    - Consciousness simulation
+    - Protein structure prediction
+    - Math problem solving
+    - Edge AI optimization
+    - UnifiedTransformer for text processing and classification
+
+    Each component is demonstrated with example inputs and outputs.
+    """
     # Initialize NeuroFlex
     config = Config.get_config()
     config['USE_UNIFIED_TRANSFORMER'] = True
