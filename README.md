@@ -19,9 +19,11 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 - **Natural Language Processing**: Sentence piece integration and advanced NLP tasks
 - **Neuromorphic Computing**: Energy-efficient spiking neural networks
 - **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability
+- **Novel Model Compression**: Mixed precision quantization and structured pruning for enhanced efficiency and effectiveness
 
 ## Latest Updates (v0.1.2)
 
+- Advanced Edge AI Model: Developed a new model incorporating cutting-edge techniques such as model compression, federated learning, and energy-efficient processing.
 - TensorFlow Integration: Added support for TensorFlow backend alongside JAX/Flax
 - 2D and 3D Convolutions: Implemented efficient convolutional layers for both 2D and 3D inputs
 - Enhanced Compatibility: Improved interoperability between JAX/Flax and TensorFlow
@@ -35,8 +37,6 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 - Improved Brain-Computer Interface (BCI) functionality
 - Support for Python 3.9, 3.10, 3.11, 3.12
 - Resolved dependency issues and improved stability
-
-## Installation
 
 ```bash
 pip install neuroflex
