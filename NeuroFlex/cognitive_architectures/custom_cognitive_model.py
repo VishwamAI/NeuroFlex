@@ -1,21 +1,23 @@
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
+import haiku as hk
+from .higher_order_theories import HigherOrderTheories
 
-class AttentionMechanism(nn.Module):
-    num_heads: int
-    head_dim: int
+class AttentionMechanism(hk.Module):
+    def __init__(self, num_heads: int, head_dim: int):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = head_dim
 
-    @nn.compact
     def __call__(self, inputs):
         batch_size, seq_len, _ = inputs.shape
-        qkv = nn.Dense(3 * self.num_heads * self.head_dim)(inputs)
+        qkv = hk.Linear(3 * self.num_heads * self.head_dim)(inputs)
         qkv = jnp.reshape(qkv, (batch_size, seq_len, 3, self.num_heads, self.head_dim))
         qkv = jnp.transpose(qkv, (2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         attention = jnp.matmul(q, jnp.swapaxes(k, -1, -2)) / jnp.sqrt(self.head_dim)
-        attention = nn.softmax(attention, axis=-1)
+        attention = jax.nn.softmax(attention, axis=-1)
 
         output = jnp.matmul(attention, v)
         output = jnp.transpose(output, (0, 2, 1, 3))
@@ -23,11 +25,12 @@ class AttentionMechanism(nn.Module):
 
         return output
 
-class WorkingMemory(nn.Module):
-    memory_size: int
-    hidden_dim: int
+class WorkingMemory(hk.Module):
+    def __init__(self, memory_size: int, hidden_dim: int):
+        super().__init__()
+        self.memory_size = memory_size
+        self.hidden_dim = hidden_dim
 
-    @nn.compact
     def __call__(self, inputs, prev_memory):
         # Reduce sequence dimension by taking the mean across the sequence
         inputs_mean = jnp.mean(inputs, axis=1)
@@ -41,36 +44,31 @@ class WorkingMemory(nn.Module):
         # Concatenate along the last dimension
         combined = jnp.concatenate([inputs_mean, prev_memory], axis=-1)
 
-        gate = nn.sigmoid(nn.Dense(self.memory_size)(combined))
-        update = nn.tanh(nn.Dense(self.memory_size)(combined))
+        gate = jax.nn.sigmoid(hk.Linear(self.memory_size)(combined))
+        update = jnp.tanh(hk.Linear(self.memory_size)(combined))
         new_memory = gate * update + (1 - gate) * prev_memory
         return new_memory
 
-class CustomCognitiveModel(nn.Module):
-    num_attention_heads: int
-    attention_head_dim: int
-    working_memory_size: int
-    hidden_dim: int
-    thalamic_gate_size: int = 64
-    attention_schema_size: int = 128
+class CustomCognitiveModel(hk.Module):
+    def __init__(self, num_attention_heads: int, attention_head_dim: int, working_memory_size: int, hidden_dim: int, thalamic_gate_size: int = 64, attention_schema_size: int = 128):
+        super().__init__()
+        self.num_attention_heads = num_attention_heads
+        self.attention_head_dim = attention_head_dim
+        self.working_memory_size = working_memory_size
+        self.hidden_dim = hidden_dim
+        self.thalamic_gate_size = thalamic_gate_size
+        self.attention_schema_size = attention_schema_size
 
-    def setup(self):
-        self.attention = AttentionMechanism(num_heads=self.num_attention_heads, head_dim=self.attention_head_dim)
-        self.working_memory = WorkingMemory(memory_size=self.working_memory_size, hidden_dim=self.hidden_dim)
-        self.thalamic_gate = nn.Dense(self.thalamic_gate_size)
-        self.cortical_integration = nn.Dense(self.hidden_dim)
-        self.output_layer = nn.Dense(self.hidden_dim)
-        self.attention_schema = nn.Dense(self.attention_schema_size)
-        self.social_cognition = nn.Dense(self.hidden_dim)
-
-    @nn.compact
     def __call__(self, inputs, prev_memory, prev_attention_state):
-        attended = self.attention(inputs)
-        new_memory = self.working_memory(attended, prev_memory)
+        attention = AttentionMechanism(num_heads=self.num_attention_heads, head_dim=self.attention_head_dim)
+        working_memory = WorkingMemory(memory_size=self.working_memory_size, hidden_dim=self.hidden_dim)
+
+        attended = attention(inputs)
+        new_memory = working_memory(attended, prev_memory)
 
         # Attention Schema processing
-        attention_state = self.attention_schema(attended)
-        attention_control = nn.sigmoid(nn.Dense(self.attention_head_dim)(attention_state))
+        attention_state = hk.Linear(self.attention_schema_size)(attended)
+        attention_control = jax.nn.sigmoid(hk.Linear(self.attention_head_dim)(attention_state))
         # Reshape attention_control to match attended's shape
         print("attended shape:", attended.shape)
         print("attention_control shape before reshape:", attention_control.shape)
@@ -79,25 +77,29 @@ class CustomCognitiveModel(nn.Module):
         attended = attended * jnp.repeat(attention_control, attended.shape[-1] // self.attention_head_dim, axis=-1)
 
         # Thalamocortical processing
-        thalamic_output = nn.sigmoid(self.thalamic_gate(new_memory))
+        thalamic_output = jax.nn.sigmoid(hk.Linear(self.thalamic_gate_size)(new_memory))
         # Ensure thalamic_output and new_memory have compatible shapes
-        thalamic_output = nn.Dense(features=new_memory.shape[-1])(thalamic_output)
+        thalamic_output = hk.Linear(new_memory.shape[-1])(thalamic_output)
         cortical_input = thalamic_output * new_memory
-        integrated_output = nn.relu(self.cortical_integration(cortical_input))
+        integrated_output = jax.nn.relu(hk.Linear(self.hidden_dim)(cortical_input))
 
         # Social cognition processing
         # Ensure integrated_output and attention_state have compatible shapes for concatenation
         integrated_output = jnp.reshape(integrated_output, (integrated_output.shape[0], 1, -1))
         attention_state = jnp.reshape(attention_state, (attention_state.shape[0], 1, -1))
         social_input = jnp.concatenate([integrated_output, attention_state], axis=-1)
-        social_output = nn.relu(self.social_cognition(social_input))
+        social_output = jax.nn.relu(hk.Linear(self.hidden_dim)(social_input))
 
-        # Combine integrated output and social output
-        combined_output = jnp.concatenate([integrated_output, social_output], axis=-1)
+        # Higher-Order Theories processing
+        hot = HigherOrderTheories(hidden_dim=self.hidden_dim, output_dim=self.hidden_dim)
+        hot_output = hot.apply(hot.init(jax.random.PRNGKey(0), integrated_output), None, integrated_output)
+
+        # Combine integrated output, social output, and higher-order output
+        combined_output = jnp.concatenate([integrated_output, social_output, hot_output], axis=-1)
 
         # Reduce sequence dimension by taking the mean across the sequence
         combined_output_mean = jnp.mean(combined_output, axis=1, keepdims=True)
-        output = self.output_layer(combined_output_mean)
+        output = hk.Linear(self.hidden_dim)(combined_output_mean)
         # Ensure output shape is (batch_size, hidden_dim) without using squeeze
         output = jnp.reshape(output, (-1, self.hidden_dim))
         return output, new_memory, attention_state
