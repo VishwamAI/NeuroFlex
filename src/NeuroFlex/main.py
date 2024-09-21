@@ -402,7 +402,12 @@ class NeuroFlex(NeuroFlexNN):
 
         # Consciousness simulation
         if self.consciousness_sim:
-            x = self.simulate_consciousness(x)
+            consciousness, new_working_memory, working_memory_dict = self.consciousness_module.simulate_consciousness(x)
+            x = consciousness  # Use the consciousness state as the new x
+            self.working_memory = new_working_memory  # Update working memory
+            # Store working_memory_dict for potential future use
+            self.working_memory_dict = working_memory_dict
+            logging.debug(f"Consciousness simulation output - consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}, working_memory_dict keys: {working_memory_dict.keys()}")
 
         if self.use_xla:
             x = self.xla_optimization(x)
@@ -771,6 +776,25 @@ def adversarial_training(model, params, input_data, epsilon):
 
 # Main training loop with generalization techniques, fairness considerations, and reinforcement learning support
 def train_model(model_class, model_params, train_data, val_data, num_epochs, batch_size, learning_rate, fairness_constraint, patience=5, epsilon=0.1, env=None):
+    """
+    Train a model using either supervised learning or reinforcement learning.
+
+    Key parameters:
+    - model_class: The class of the model to be trained
+    - model_params: Parameters for initializing the model
+    - train_data: Training data (for supervised learning)
+    - val_data: Validation data (for supervised learning)
+    - num_epochs: Number of training epochs
+    - batch_size: Size of each training batch
+    - learning_rate: Learning rate for the optimizer
+    - fairness_constraint: Constraint for ensuring fairness in the model
+    - patience: Number of epochs to wait before early stopping
+    - epsilon: Epsilon value for adversarial training
+    - env: Environment for reinforcement learning (if None, uses supervised learning)
+
+    The function supports both supervised and reinforcement learning, implements
+    data augmentation, adversarial training, and early stopping based on validation performance.
+    """
     rng = jax.random.PRNGKey(0)
 
     if env is None:  # Standard supervised learning
