@@ -58,7 +58,3 @@ jobs:
         run: |
           pip install build
           python -m build
-      - name: Build documentation
-        run: |
-          pip install -r docs/requirements.txt
-          sphinx-build -M html docs docs/_build
