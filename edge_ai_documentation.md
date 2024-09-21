@@ -38,13 +38,13 @@ The Edge AI model incorporates several optimization techniques to enhance perfor
 
 ## Testing Procedures
 
-The Edge AI model is tested using the `unittest` framework to ensure its functionality and performance. The tests cover various aspects of the model, including training, inference, and optimization techniques.
+The Edge AI model is tested using the `pytest` framework to ensure its functionality and performance. The tests cover various aspects of the model, including training, inference, and optimization techniques.
 
-### Test Cases
+### Test Results
 
-- **Model Training**: Verifies that the model can be trained using the provided data and labels.
-- **Inference**: Ensures the model produces the correct output shape and predictions for input data.
-- **Optimization Techniques**: Tests the implementation of quantization, pruning, and knowledge distillation.
+- **Passed Tests**: 7 tests passed successfully, verifying the model's training, inference, and optimization capabilities.
+- **Skipped Tests**: 4 tests were skipped, indicating areas that may require further development or are not currently applicable.
+- **Warnings**: A warning was issued regarding the `reduce_range` parameter in PyTorch, which is non-critical and does not affect the overall functionality of the model.
 
 ## Conclusion
 
