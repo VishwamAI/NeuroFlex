@@ -1,23 +1,22 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
+import optax
 from typing import List, Tuple, Optional, Callable
 import logging
 import time
 from NeuroFlex.utils import normalize_data, preprocess_data
-from NeuroFlex.utils import calculate_descriptive_statistics
 
 logging.basicConfig(level=logging.INFO)
 
 class CDSTDP(nn.Module):
-    def __init__(self, input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int],
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
-        super(CDSTDP, self).__init__()
-        self.input_shape = input_shape
-        self.output_dim = output_dim
-        self.hidden_layers = hidden_layers
-        self.dropout_rate = dropout_rate
-        self.learning_rate = learning_rate
+    input_shape: Tuple[int, ...]
+    output_dim: int
+    hidden_layers: List[int]
+    dropout_rate: float = 0.5
+    learning_rate: float = 0.001
+
+    def setup(self):
         self.performance_threshold = 0.8
         self.update_interval = 86400  # 24 hours in seconds
         self.gradient_norm_threshold = 10
@@ -29,45 +28,40 @@ class CDSTDP(nn.Module):
         self.gradient_norm = 0
         self.performance_history = []
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         self.time_window = 20
         self.a_plus = 0.1
         self.a_minus = 0.12
         self.tau_plus = 20.0
         self.tau_minus = 20.0
 
-        self.layers = nn.ModuleList([
-            nn.Linear(input_shape[0] if i == 0 else hidden_layers[i-1], units)
-            for i, units in enumerate(hidden_layers)
-        ])
+        self.layers = [nn.Dense(units) for units in self.hidden_layers]
         self.dropout = nn.Dropout(self.dropout_rate)
-        self.output_layer = nn.Linear(hidden_layers[-1], output_dim)
-        self.to(self.device)
+        self.output_layer = nn.Dense(self.output_dim)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         for layer in self.layers:
-            x = torch.relu(layer(x))
-            x = self.dropout(x)
+            x = jax.nn.relu(layer(x))
+            x = self.dropout(x, deterministic=False)
         return self.output_layer(x)
 
     def update_weights(self, inputs, conscious_state, feedback):
-        with torch.no_grad():
-            for layer in self.layers:
-                pre_synaptic = inputs.unsqueeze(1)
-                post_synaptic = conscious_state.unsqueeze(0)
+        def update_layer(layer, inputs, conscious_state):
+            pre_synaptic = jnp.expand_dims(inputs, 1)
+            post_synaptic = jnp.expand_dims(conscious_state, 0)
 
-                delta_t = torch.arange(-self.time_window, self.time_window + 1, device=self.device)
+            delta_t = jnp.arange(-self.time_window, self.time_window + 1)
 
-                stdp = torch.where(
-                    delta_t > 0,
-                    self.a_plus * torch.exp(-delta_t / self.tau_plus),
-                    -self.a_minus * torch.exp(delta_t / self.tau_minus)
-                )
+            stdp = jnp.where(
+                delta_t > 0,
+                self.a_plus * jnp.exp(-delta_t / self.tau_plus),
+                -self.a_minus * jnp.exp(delta_t / self.tau_minus)
+            )
 
-                dw = torch.outer(pre_synaptic, post_synaptic) * stdp
+            dw = jnp.outer(pre_synaptic, post_synaptic) * stdp
 
-                layer.weight.data += self.learning_rate * dw * feedback
+            return layer.update(weight=layer.weight + self.learning_rate * dw * feedback)
+
+        return jax.tree_map(update_layer, self.layers, inputs, conscious_state)
 
     def diagnose(self):
         issues = []
@@ -135,33 +129,41 @@ class CDSTDP(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-    def train(self, x_train: torch.Tensor, y_train: torch.Tensor, epochs: int = 10,
-              batch_size: int = 32, validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    def train(self, x_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int = 10,
+              batch_size: int = 32, validation_data: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
               callback: Optional[Callable[[float], None]] = None) -> dict:
-        criterion = nn.MSELoss()
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        criterion = optax.l2_loss
+        optimizer = optax.adam(learning_rate=self.learning_rate)
+        opt_state = optimizer.init(self.parameters())
 
         history = {'train_loss': [], 'val_loss': []}
 
         num_samples = x_train.shape[0]
         num_batches = max(1, num_samples // batch_size)
 
-        logging.info(f"CDSTDP model initial parameters: {sum(p.numel() for p in self.parameters())}")
+        logging.info(f"CDSTDP model initial parameters: {sum(p.size for p in jax.tree_leaves(self.parameters()))}")
+
+        @jax.jit
+        def train_step(params, opt_state, batch_x, batch_y):
+            def loss_fn(params):
+                outputs = self.apply(params, batch_x)
+                loss = jnp.mean(criterion(outputs, batch_y))
+                return loss, outputs
+
+            (loss, outputs), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+            updates, opt_state = optimizer.update(grads, opt_state, params)
+            params = optax.apply_updates(params, updates)
+            return params, opt_state, loss
 
         for epoch in range(epochs):
-            self.train()
             epoch_loss = 0.0
             for i in range(0, num_samples, batch_size):
-                batch_x = x_train[i:i+batch_size].to(self.device)
-                batch_y = y_train[i:i+batch_size].to(self.device)
+                batch_x = x_train[i:i+batch_size]
+                batch_y = y_train[i:i+batch_size]
 
-                optimizer.zero_grad()
-                outputs = self(batch_x)
-                loss = criterion(outputs, batch_y)
-                loss.backward()
-                optimizer.step()
-
-                epoch_loss += loss.item()
+                params, opt_state, loss = train_step(self.parameters(), opt_state, batch_x, batch_y)
+                self.parameters = params
+                epoch_loss += loss
 
             avg_loss = epoch_loss / num_batches
             logging.info(f"CDSTDP - Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}")
@@ -169,7 +171,7 @@ class CDSTDP(nn.Module):
             if callback:
                 callback(avg_loss)
 
-            self.gradient_norm = sum(p.grad.norm().item() for p in self.parameters() if p.grad is not None)
+            self.gradient_norm = jnp.sum(jnp.array([jnp.linalg.norm(g) for g in jax.tree_leaves(grads)]))
             self.performance = 1.0 - avg_loss  # Simple performance metric
             self.update_performance()
             self.adjust_learning_rate()
@@ -180,19 +182,17 @@ class CDSTDP(nn.Module):
                 self.heal(issues)
 
             # Compute epoch loss
-            self.eval()
-            with torch.no_grad():
-                train_loss = criterion(self(x_train), y_train).item()
-                history['train_loss'].append(train_loss)
+            train_loss = jnp.mean(criterion(self.apply(self.parameters(), x_train), y_train))
+            history['train_loss'].append(train_loss)
 
-                if validation_data:
-                    val_x, val_y = validation_data
-                    val_loss = criterion(self(val_x), val_y).item()
-                    history['val_loss'].append(val_loss)
+            if validation_data:
+                val_x, val_y = validation_data
+                val_loss = jnp.mean(criterion(self.apply(self.parameters(), val_x), val_y))
+                history['val_loss'].append(val_loss)
 
         self.is_trained = True
         self.last_update = time.time()
-        logging.info(f"CDSTDP model final parameters: {sum(p.numel() for p in self.parameters())}")
+        logging.info(f"CDSTDP model final parameters: {sum(p.size for p in jax.tree_leaves(self.parameters()))}")
 
         return history
 

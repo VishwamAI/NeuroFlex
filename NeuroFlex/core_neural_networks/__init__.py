@@ -7,9 +7,10 @@ Recent updates:
 - Enhanced support for TensorFlow and PyTorch submodules
 - Improved model creation and initialization functions
 - Added support for advanced thinking models like CDSTDP
+- Updated JAX module import
 """
 
-from .jax.pytorch_module_converted import PyTorchModel
+from .jax.jax_module_converted import EdgeAIOptimizationJAX
 from .advanced_thinking import CDSTDP, create_cdstdp
 from .model import NeuroFlex, SelfCuringAlgorithm
 from .cnn import CNN, create_cnn
@@ -22,7 +23,7 @@ from .tensorflow import *
 from .pytorch import *
 
 __all__ = [
-    'PyTorchModel',
+    'EdgeAIOptimizationJAX',
     'CDSTDP',
     'create_cdstdp',
     'NeuroFlex',
@@ -39,7 +40,7 @@ __all__ = [
 ]
 
 def get_core_nn_version():
-    return "1.0.0"
+    return "1.0.1"
 
 SUPPORTED_FRAMEWORKS = ['TensorFlow', 'PyTorch', 'JAX']
 
@@ -56,6 +57,10 @@ def create_model(framework, model_type, *args, **kwargs):
         # Import and use PyTorch-specific functions
         from .pytorch import create_pytorch_model
         return create_pytorch_model(*args, **kwargs)
+    elif framework.lower() == 'jax':
+        # Import and use JAX-specific functions
+        from .jax.jax_module_converted import EdgeAIOptimizationJAX
+        return EdgeAIOptimizationJAX(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported framework: {framework}")
 

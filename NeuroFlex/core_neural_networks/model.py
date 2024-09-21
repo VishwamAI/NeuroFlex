@@ -1,15 +1,13 @@
 import time
 import logging
 import numpy as np
-import torch
-import tensorflow as tf
+import jax
+import jax.numpy as jnp
 from Bio.Seq import Seq
 from NeuroFlex.utils.utils import tokenize_text
 from NeuroFlex.utils.descriptive_statistics import preprocess_data
 from NeuroFlex.utils.logging_config import setup_logging
-from .jax.pytorch_module_converted import PyTorchModel
-from .tensorflow.tensorflow_module import TensorFlowModel
-from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
+from .jax.jax_module_converted import EdgeAIOptimizationJAX
 from NeuroFlex.quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
 from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
 from NeuroFlex.ai_ethics.scikit_bio_integration import ScikitBioIntegration
@@ -296,7 +294,7 @@ class NeuroFlex:
         self.fairness_constraint = config.get('FAIRNESS_CONSTRAINT', None)
         self.use_quantum = config.get('USE_QUANTUM', False)
         self.use_alphafold = config.get('USE_ALPHAFOLD', False)
-        self.backend = config.get('BACKEND', 'pytorch')
+        self.backend = config.get('BACKEND', 'jax')
         self.bioinformatics_data = None
         self.core_model = None
         self.quantum_model = None
@@ -314,24 +312,14 @@ class NeuroFlex:
     def _setup_core_model(self):
         input_shape = self.config.get('INPUT_SHAPE', (28, 28, 1))
         input_dim = int(np.prod(input_shape))
-        if self.backend == 'pytorch':
-            self.core_model = PyTorchModel(
+        if self.backend == 'jax':
+            self.core_model = EdgeAIOptimizationJAX(
                 input_dim=input_dim,
                 output_dim=self.config.get('OUTPUT_DIM', 10),
                 hidden_layers=self.config.get('HIDDEN_LAYERS', [64, 32])
             )
-            self.optimizer = torch.optim.Adam(self.core_model.parameters(), lr=self.config.get('LEARNING_RATE', 0.001))
-            self.loss_fn = torch.nn.CrossEntropyLoss()
-        elif self.backend == 'tensorflow':
-            self.core_model = TensorFlowModel(
-                input_shape=input_shape,
-                output_dim=self.config.get('OUTPUT_DIM', 10),
-                hidden_layers=self.config.get('HIDDEN_LAYERS', [64, 32]),
-                use_cnn=self.use_cnn,
-                use_rnn=self.use_rnn
-            )
-            self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.config.get('LEARNING_RATE', 0.001))
-            self.loss_fn = tf.keras.losses.CategoricalCrossentropy()
+            self.optimizer = optax.adam(learning_rate=self.config.get('LEARNING_RATE', 0.001))
+            self.loss_fn = optax.softmax_cross_entropy
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
@@ -593,15 +581,22 @@ class NeuroFlex:
         if inputs.shape[1] != np.prod(input_shape):
             raise ValueError(f"Input shape mismatch. Expected {np.prod(input_shape)} features, got {inputs.shape[1]}")
 
-        if self.backend == 'pytorch':
-            inputs = torch.tensor(inputs, dtype=torch.float32)
-            targets = torch.tensor(targets, dtype=torch.long)
-            self.core_model.train()
-            self.optimizer.zero_grad()
-            outputs = self.core_model(inputs)
-            loss = self.loss_fn(outputs, targets)
-            loss.backward()
-            self.optimizer.step()
+        if self.backend == 'jax':
+            inputs = jnp.array(inputs, dtype=jnp.float32)
+            targets = jnp.array(targets, dtype=jnp.int32)
+
+            def loss_fn(params):
+                outputs = self.core_model.apply(params, inputs)
+                return self.loss_fn(outputs, targets)
+
+            grad_fn = jax.grad(loss_fn)
+            grads = grad_fn(self.core_model.params)
+            updates, new_opt_state = self.optimizer.update(grads, self.opt_state)
+            self.core_model = self.core_model.apply(updates)
+            self.opt_state = new_opt_state
+
+            loss = loss_fn(self.core_model.params)
+            outputs = self.core_model.apply(self.core_model.params, inputs)
         elif self.backend == 'tensorflow':
             inputs = tf.convert_to_tensor(inputs, dtype=tf.float32)
             targets = tf.convert_to_tensor(targets, dtype=tf.int64)
@@ -614,11 +609,11 @@ class NeuroFlex:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
         # Update the security agent with the new state
-        self.security_agent.update(inputs.cpu().numpy() if self.backend == 'pytorch' else inputs.numpy(),
-                                   outputs.detach().cpu().numpy() if self.backend == 'pytorch' else outputs.numpy(),
-                                   loss.item())
+        self.security_agent.update(inputs.numpy(),
+                                   outputs.numpy(),
+                                   loss.item() if hasattr(loss, 'item') else loss)
 
-        return loss.item()
+        return loss.item() if hasattr(loss, 'item') else loss
 
 config = {
     'CORE_MODEL_FEATURES': [64, 32, 10],
@@ -628,9 +623,8 @@ config = {
     'FAIRNESS_CONSTRAINT': 0.1,
     'USE_QUANTUM': True,
     'USE_ALPHAFOLD': True,
-    'BACKEND': 'pytorch',
-    'TENSORFLOW_MODEL': TensorFlowModel,
-    'PYTORCH_MODEL': PyTorchModel,
+    'BACKEND': 'jax',
+    'JAX_MODEL': EdgeAIOptimizationJAX,
     'QUANTUM_MODEL': QuantumNeuralNetwork,
     'BIOINFORMATICS_INTEGRATION': BioinformaticsIntegration(),
     'SCIKIT_BIO_INTEGRATION': ScikitBioIntegration(),  # This now refers to the correct ScikitBioIntegration class
@@ -671,8 +665,8 @@ def train_neuroflex_model(model, train_data, val_data):
                 batch_data = train_data[batch_start:batch_end]
 
                 # Prepare inputs and targets
-                inputs = np.array([x[0] for x in batch_data])
-                targets = np.array([x[1] for x in batch_data])
+                inputs = jnp.array([x[0] for x in batch_data])
+                targets = jnp.array([x[1] for x in batch_data])
 
                 # Reshape inputs to match the expected input shape
                 input_shape = model.config.get('INPUT_SHAPE', (28, 28, 1))
@@ -700,7 +694,7 @@ def train_neuroflex_model(model, train_data, val_data):
         health_status = security_agent.check_model_health()
         print(f"Final model health status: {health_status}")
 
-        trained_state = model.core_model.state_dict() if hasattr(model.core_model, 'state_dict') else None
+        trained_state = model.core_model.params if hasattr(model.core_model, 'params') else None
         trained_model = model
         return trained_state, trained_model
 

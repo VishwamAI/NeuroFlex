@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import pennylane as qml
 from typing import List, Tuple, Callable, Optional
 import time
 import logging
