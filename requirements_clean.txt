@@ -1,0 +1,7 @@
+jax
+flax
+optax
+tensorflow
+pytest
+typing_extensions
+numpy
