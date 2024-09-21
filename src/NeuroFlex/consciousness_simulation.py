@@ -326,7 +326,7 @@ class ConsciousnessSimulation(nn.Module):
                   (shape: (batch_size, output_dim + 2*working_memory_size + 4 + working_memory_size))
                 - new_working_memory (jnp.ndarray): Updated working memory
                   (shape: (batch_size, working_memory_size))
-                - working_memory (Dict[str, Any]): Dictionary containing the current working memory state
+                - working_memory_dict (Dict[str, Any]): Dictionary containing the current working memory state
                   and additional information.
                   Structure: {'working_memory': {'current_state': jnp.ndarray}, 'error': str (optional)}
         """
@@ -340,45 +340,65 @@ class ConsciousnessSimulation(nn.Module):
 
             # Validate and prepare PRNG keys
             rngs = self._prepare_rngs(rngs)
+            logging.debug(f"Prepared PRNG keys: {list(rngs.keys())}")
 
             # Validate input
-            if not isinstance(x, jnp.ndarray):
-                raise ValueError(f"Input x must be a jax.numpy array, got {type(x)}")
-            if len(x.shape) != 2:
-                raise ValueError(f"Input x must have shape (batch_size, input_dim), got {x.shape}")
+            self._validate_input(x)
+            logging.debug("Input validation passed")
 
+            # Call the main processing method
             result = self.__call__(x, deterministic=deterministic, rngs=rngs)
+            logging.debug(f"__call__ method returned result of type: {type(result)}")
 
-            if not isinstance(result, tuple) or len(result) != 3:
-                raise ValueError(f"__call__ method returned {len(result)} values instead of 3")
-
-            consciousness, new_working_memory, working_memory_dict = result
-            self._validate_outputs(consciousness, new_working_memory, working_memory_dict)
+            # Validate the result
+            consciousness, new_working_memory, working_memory_dict = self._validate_result(result)
+            logging.debug(f"Result validation passed. Consciousness shape: {consciousness.shape}, "
+                          f"New working memory shape: {new_working_memory.shape}")
 
             # Apply perturbation to working memory
             new_working_memory = self._apply_perturbation(new_working_memory, rngs['perturbation'])
+            logging.debug("Perturbation applied to working memory")
 
             # Update model state
             self._update_model_state(consciousness)
+            logging.debug("Model state updated")
 
-            working_memory = {'working_memory': {'current_state': new_working_memory}}
+            # Ensure working_memory_dict has the correct structure
+            working_memory_dict = {'working_memory': {'current_state': new_working_memory}}
 
-            logging.info(f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}, working_memory keys: {working_memory.keys()}")
-            return consciousness, new_working_memory, working_memory
+            logging.info(f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, "
+                         f"new_working_memory shape: {new_working_memory.shape}, working_memory_dict keys: {working_memory_dict.keys()}")
+            return consciousness, new_working_memory, working_memory_dict
         except Exception as e:
-            logging.error(f"Error in simulate_consciousness: {str(e)}")
+            logging.error(f"Unexpected error in simulate_consciousness: {str(e)}", exc_info=True)
             return self._handle_error(x, e)
+
+    def _validate_input(self, x: jnp.ndarray) -> None:
+        if not isinstance(x, jnp.ndarray):
+            raise ValueError(f"Input x must be a jax.numpy array, got {type(x)}")
+        if len(x.shape) != 2:
+            raise ValueError(f"Input x must have shape (batch_size, input_dim), got {x.shape}")
+
+    def _validate_result(self, result: Any) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
+        if not isinstance(result, tuple) or len(result) != 3:
+            raise ValueError(f"__call__ method returned {len(result)} values instead of 3")
+        consciousness, new_working_memory, working_memory_dict = result
+        self._validate_outputs(consciousness, new_working_memory, working_memory_dict)
+        return consciousness, new_working_memory, working_memory_dict
 
     def _handle_error(self, x: jnp.ndarray, error: Exception) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
         batch_size = x.shape[0] if len(x.shape) > 1 else 1
         empty_consciousness = jnp.zeros((batch_size, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size))
         empty_working_memory = jnp.zeros((batch_size, self.working_memory_size))
-        error_working_memory = {
+        error_working_memory_dict = {
             'working_memory': {'current_state': empty_working_memory},
             'error': str(error)
         }
-        logging.error(f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}")
-        return empty_consciousness, empty_working_memory, error_working_memory
+        logging.error(f"Error in consciousness simulation: {str(error)}")
+        logging.debug(f"Returning error case - empty_consciousness shape: {empty_consciousness.shape}, "
+                      f"empty_working_memory shape: {empty_working_memory.shape}, "
+                      f"error_working_memory_dict: {error_working_memory_dict}")
+        return empty_consciousness, empty_working_memory, error_working_memory_dict
 
     def _prepare_rngs(self, rngs: Dict[str, Any] = None) -> Dict[str, jnp.ndarray]:
         if rngs is None:
@@ -515,7 +535,7 @@ class ConsciousnessSimulation(nn.Module):
     @nn.compact
     def update_model(self, x: jnp.ndarray, full_update: bool = False):
         # Simulate a training step
-        consciousness_state, new_working_memory = self.__call__(x)
+        consciousness_state, new_working_memory, working_memory_dict = self.__call__(x)
         performance = jnp.mean(consciousness_state)  # Simple performance metric
         last_update = jnp.array(time.time())
 
@@ -539,7 +559,7 @@ class ConsciousnessSimulation(nn.Module):
             working_memory_var.value = 0.9 * working_memory_var.value + 0.1 * new_working_memory
             logging.info(f"Light model update completed. New performance: {performance_var.value}")
 
-        return consciousness_state, working_memory_var.value, performance_var.value
+        return consciousness_state, working_memory_var.value, performance_var.value, working_memory_dict
 
 def create_consciousness_simulation(features: List[int], output_dim: int, working_memory_size: int = 192, attention_heads: int = 4, qkv_features: int = 64, dropout_rate: float = 0.1, num_brain_areas: int = 90, simulation_length: float = 1.0) -> ConsciousnessSimulation:
     """

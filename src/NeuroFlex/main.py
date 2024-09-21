@@ -148,7 +148,12 @@ class NeuroFlex(NeuroFlexNN):
     def setup(self):
         if self.use_ddpm:
             self.ddpm = DDPM(
-                unet_config={},  # Add appropriate UNet config
+                unet_config={
+                    'attention_resolutions': '32, 16, 8',
+                    'channel_mult': (1, 2, 4, 8),
+                    'num_res_blocks': 2,
+                    'dropout': 0.1,
+                },
                 timesteps=self.ddpm_timesteps,
                 beta_schedule=self.ddpm_beta_schedule,
             )
@@ -158,22 +163,31 @@ class NeuroFlex(NeuroFlexNN):
             self.vae = VAE(
                 latent_dim=self.vae_latent_dim,
                 hidden_dim=self.vae_hidden_dim,
-                input_shape=input_shape
+                input_shape=input_shape,
+                kl_weight=0.1,  # Add KL divergence weight for better regularization
+                decoder_type='resnet'  # Use ResNet architecture for decoder
             )
         if self.use_cnn:
             self.Conv = nn.Conv if self.conv_dim == 2 else nn.Conv3D
+            # Add residual connections for improved gradient flow
+            self.use_residual = True
+            self.residual_layers = [nn.Dense(self.features[i]) for i in range(1, len(self.features))]
         if self.use_inception:
             self.inception_layers = [InceptionModule(channels=self.inception_channels,
-                                                     reduction_factor=self.inception_reduction_factor)
+                                                     reduction_factor=self.inception_reduction_factor,
+                                                     use_squeeze_excitation=True)  # Add Squeeze-and-Excitation for attention
                                      for _ in range(self.inception_modules)]
         if self.multi_scale_processing:
             self.multi_scale_layers = [nn.Dense(feat) for feat in self.multi_scale_features]
+            # Add skip connections for multi-scale processing
+            self.skip_connections = [nn.Dense(self.features[-1]) for _ in range(len(self.multi_scale_features))]
         if self.use_rnn:
-            self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size))
+            self.rnn = nn.RNN(nn.LSTMCell(self.rnn_hidden_size), return_sequences=True)  # Enable sequence output
         if self.use_lstm:
             self.lstm = nn.scan(nn.LSTMCell(self.lstm_hidden_size),
                                 variable_broadcast="params",
-                                split_rngs={"params": False})
+                                split_rngs={"params": False},
+                                unroll=16)  # Add unrolling for performance
         if self.use_lale:
             self.lale_pipeline = self.setup_lale_pipeline()
         if self.use_detectron2:
@@ -181,14 +195,17 @@ class NeuroFlex(NeuroFlexNN):
         if self.use_rl:
             if self.action_dim is None:
                 raise ValueError("action_dim must be specified when use_rl is True")
-            self.rl_agent = RLAgent(features=self.features[:-1], action_dim=self.action_dim)
+            self.rl_agent = RLAgent(features=self.features[:-1], action_dim=self.action_dim, use_double_dqn=True)  # Use Double DQN
             self.rl_env = RLEnvironment("CartPole-v1")  # Replace with appropriate environment
 
         # Initialize GenerativeAIFramework
         if self.use_generative_ai:
             self.generative_ai_framework = create_generative_ai_framework(
                 features=self.generative_ai_features,
-                output_dim=self.generative_ai_output_dim
+                output_dim=self.generative_ai_output_dim,
+                use_transformer=True,  # Use Transformer architecture
+                num_heads=8,
+                num_layers=6
             )
             self.generative_ai_state = self.generative_ai_framework.init_model(
                 jax.random.PRNGKey(0),
@@ -206,11 +223,20 @@ class NeuroFlex(NeuroFlexNN):
         # Initialize AlphaFold integration
         if self.use_alphafold:
             self.alphafold_integration = AlphaFoldIntegration()
-            self.alphafold_integration.setup_model({'max_recycling': self.alphafold_max_recycling})
+            self.alphafold_integration.setup_model({
+                'max_recycling': self.alphafold_max_recycling,
+                'use_templates': True,
+                'use_amber_refinement': True
+            })
 
         # Initialize Quantum Neural Network
         if self.use_quantum:
-            self.quantum_nn = QuantumNeuralNetwork(num_qubits=self.quantum_num_qubits, num_layers=self.quantum_num_layers)
+            self.quantum_nn = QuantumNeuralNetwork(
+                num_qubits=self.quantum_num_qubits,
+                num_layers=self.quantum_num_layers,
+                entanglement='full',  # Use full entanglement
+                measurement='expectation'  # Use expectation value measurement
+            )
 
         # Initialize advanced BCI functionality
         if self.use_bci:
@@ -218,19 +244,29 @@ class NeuroFlex(NeuroFlexNN):
                 channels=self.bci_channels,
                 sampling_rate=self.bci_sampling_rate,
                 noise_reduction=self.bci_noise_reduction,
-                feature_extraction=self.advanced_bci_feature_extraction if self.advanced_bci else 'fft'
+                feature_extraction=self.advanced_bci_feature_extraction if self.advanced_bci else 'fft',
+                use_adaptive_filtering=True,  # Add adaptive filtering
+                use_ica=True  # Use Independent Component Analysis
             )
 
         # Initialize cognitive architecture
         if self.cognitive_architecture:
-            self.cognitive_layers = [CognitiveLayer(size=64) for _ in range(self.cognitive_architecture_layers)]
+            self.cognitive_layers = [CognitiveLayer(size=64, activation='swish') for _ in range(self.cognitive_architecture_layers)]
+            self.attention_mechanism = nn.MultiHeadDotProductAttention(num_heads=4)  # Add attention mechanism
 
         # Set up consciousness simulation
         if self.consciousness_sim:
-            self.consciousness_module = ConsciousnessModule(complexity=self.consciousness_sim_complexity)
+            self.consciousness_module = ConsciousnessModule(
+                complexity=self.consciousness_sim_complexity,
+                use_global_workspace=True,  # Implement Global Workspace Theory
+                use_predictive_processing=True  # Implement Predictive Processing
+            )
 
         # Ensure compatibility with specified Python version
         self.ensure_python_compatibility()
+
+        # Initialize multi-backend integration
+        self.setup_multi_backend()
 
     def setup_detectron2(self):
         if not DETECTRON2_AVAILABLE:
