@@ -31,10 +31,10 @@ class SimpleModel(nn.Module):
 
 The Edge AI model incorporates several optimization techniques to enhance performance on edge devices:
 
-1. **Quantization**: Reduces the precision of the model's weights and activations to decrease memory usage and increase inference speed.
-2. **Pruning**: Removes unnecessary connections in the neural network to reduce model size and improve efficiency.
-3. **Knowledge Distillation**: Trains a smaller model (student) to mimic the behavior of a larger model (teacher), resulting in a compact yet efficient model.
-4. **Federated Learning**: Enables decentralized training across multiple devices while maintaining data privacy.
+1. **Quantization**: The model's parameters are quantized to a lower precision using JAX's tree mapping capabilities, reducing memory usage and increasing inference speed without significant loss of accuracy.
+2. **Pruning**: The model's parameters are pruned based on a sparsity threshold, removing unnecessary connections to reduce model size and improve computational efficiency.
+3. **Knowledge Distillation**: A smaller student model is trained to mimic the behavior of a larger teacher model using a distillation loss function, resulting in a compact yet efficient model that retains the teacher's knowledge.
+4. **Federated Learning**: Enables decentralized training across multiple devices while maintaining data privacy. (Implementation pending)
 
 ## Testing Procedures
 
