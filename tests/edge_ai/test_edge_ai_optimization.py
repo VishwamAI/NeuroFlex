@@ -1,25 +1,27 @@
 import unittest
 import pytest
-import torch
-import torch.nn as nn
-import numpy as np
+import jax
+import jax.numpy as jnp
+import flax
+import flax.linen as nn
 import time
-from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
+from NeuroFlex.core_neural_networks.jax.jax_module_converted import EdgeAIOptimizationJAX
 from NeuroFlex.constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
 class DummyModel(nn.Module):
-    def __init__(self, input_size=10, hidden_size=20, output_size=5):
-        super(DummyModel, self).__init__()
-        self.input_size = input_size
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
+    def setup(self):
+        self.fc1 = nn.Dense(20)
+        self.fc2 = nn.Dense(5)
 
-    def forward(self, x):
+    def __call__(self, x):
         x = self.fc1(x)
-        x = self.relu(x)
+        x = nn.relu(x)
         x = self.fc2(x)
         return x
+
+    def init_params(self, key):
+        input_shape = (1, 10)  # Assuming input dimension is 10
+        return self.init(key, jnp.ones(input_shape))['params']
 
 @pytest.fixture
 def sample_model():
@@ -27,57 +29,53 @@ def sample_model():
 
 @pytest.fixture
 def edge_ai_optimizer():
-    return EdgeAIOptimization()
+    return EdgeAIOptimizationJAX(input_dim=10, hidden_layers=[20], output_dim=5)
 
 class TestEdgeAIOptimization(unittest.TestCase):
     def setUp(self):
+        key = jax.random.PRNGKey(0)
+        x = jnp.ones((1, 10))  # Dummy input for initialization
         self.model = DummyModel()
-        self.edge_ai_optimizer = EdgeAIOptimization()
-        self.edge_ai_optimizer.initialize_optimizer(self.model)
-        self.test_data = torch.randn(100, 10)
+        self.variables = self.model.init(key, x)
+        self.model_params = self.variables['params']
+        self.edge_ai_optimizer = EdgeAIOptimizationJAX(input_dim=10, hidden_layers=[20], output_dim=5)
+        self.edge_ai_optimizer_variables = self.edge_ai_optimizer.init(key, x)
+        self.test_data = jnp.array(jax.random.normal(jax.random.PRNGKey(0), (100, 10)))
 
-    @pytest.mark.skip(reason="Test is failing and needs to be fixed")
     def test_quantize_model(self):
-        optimized_model = self.edge_ai_optimizer.optimize(self.model, 'quantization', bits=8)
-        self.assertIsInstance(optimized_model, nn.Module)
-        self.assertTrue(hasattr(optimized_model, 'qconfig') or
-                        any(hasattr(module, 'qconfig') for module in optimized_model.modules()))
-        # Check if the model or any of its submodules have been quantized
-        self.assertTrue(any(isinstance(module, torch.quantization.QuantizedModule)
-                            for module in optimized_model.modules()))
+        optimized_params = self.edge_ai_optimizer.optimize(self.model_params, 'quantization', bits=8)
+        self.assertIsInstance(optimized_params, dict)
+        # JAX quantization check
+        for param in jax.tree_leaves(optimized_params):
+            self.assertIn(param.dtype, [jnp.int8, jnp.uint8])
 
     def test_prune_model(self):
-        optimized_model = self.edge_ai_optimizer.optimize(self.model, 'pruning', sparsity=0.5)
-        self.assertIsInstance(optimized_model, nn.Module)
+        optimized_result = self.edge_ai_optimizer.optimize(self.model_params, 'pruning', sparsity=0.5)
+        self.assertIsInstance(optimized_result, dict)
+        self.assertIn('params', optimized_result)
         # Check if weights are actually pruned
-        for module in optimized_model.modules():
-            if isinstance(module, nn.Linear):
-                self.assertTrue(torch.sum(module.weight == 0) > 0)
+        for param in jax.tree_leaves(optimized_result['params']):
+            if param.ndim > 1:  # Only check multi-dimensional parameters (weights)
+                self.assertTrue(jnp.sum(param == 0) > 0)
 
     def test_model_compression(self):
-        optimized_model = self.edge_ai_optimizer.optimize(self.model, 'model_compression', compression_ratio=0.5)
-        self.assertIsInstance(optimized_model, nn.Module)
+        original_size = sum(p.size for p in jax.tree_leaves(self.model_params))
+        optimized_result = self.edge_ai_optimizer.optimize(self.model_params, 'model_compression', compression_ratio=0.5)
+        self.assertIsInstance(optimized_result, dict)
+        self.assertIn('params', optimized_result)
         # Check if the model size is reduced
-        original_size = sum(p.numel() for p in self.model.parameters())
-        compressed_size = sum(p.numel() for p in optimized_model.parameters())
+        compressed_size = sum(p.size for p in jax.tree_leaves(optimized_result['params']))
         self.assertLess(compressed_size, original_size)
 
     def test_hardware_specific_optimization(self):
-        optimized_model = self.edge_ai_optimizer.optimize(self.model, 'hardware_specific', target_hardware='cpu')
-        self.assertIsInstance(optimized_model, torch.jit.ScriptModule)
+        optimized_result = self.edge_ai_optimizer.optimize(self.model, 'hardware_specific', target_hardware='cpu')
+        self.assertIsInstance(optimized_result, dict)
+        self.assertIn('params', optimized_result)
 
     @pytest.mark.skip(reason="AssertionError: 0.1 != 0.0 within 0.08 delta (0.1 difference). Needs investigation.")
     def test_evaluate_model(self):
         # Set fixed seeds for reproducibility
-        np.random.seed(42)
-        torch.manual_seed(42)
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(device)
-        self.test_data = self.test_data.to(device)
-
-        # Create labels for test data (assuming binary classification for simplicity)
-        test_labels = torch.randint(0, 2, (self.test_data.size(0),), device=device)
+        jax.random.PRNGKey(42)
 
         performance = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
         self.assertIn('accuracy', performance)
@@ -100,10 +98,6 @@ class TestEdgeAIOptimization(unittest.TestCase):
         simulated_performance1 = self.edge_ai_optimizer._simulate_performance(self.model)
         simulated_performance2 = self.edge_ai_optimizer._simulate_performance(self.model)
         self.assertAlmostEqual(simulated_performance1, simulated_performance2, delta=0.05)
-
-        # Reset seeds to ensure no side effects on other tests
-        np.random.seed(None)
-        torch.seed()
 
     def test_update_performance(self):
         initial_performance = self.edge_ai_optimizer.performance
@@ -131,42 +125,64 @@ class TestEdgeAIOptimization(unittest.TestCase):
         self.assertGreater(self.edge_ai_optimizer.learning_rate, initial_lr)
 
     def test_diagnose(self):
-        self.edge_ai_optimizer.performance = 0.5
-        self.edge_ai_optimizer.last_update = 0  # Set last update to a long time ago
-        self.edge_ai_optimizer.performance_history = [0.4, 0.45, 0.48, 0.5, 0.5, 0.5]  # Simulate consistently low performance
+        # Initialize the optimizer with specific values for testing
+        optimizer = EdgeAIOptimizationJAX(input_dim=10, hidden_layers=[20], output_dim=5)
 
-        issues = self.edge_ai_optimizer.diagnose()
+        # Use init to create the initial state
+        key = jax.random.PRNGKey(0)
+        x = jax.random.normal(key, (1, 10))
+        variables = optimizer.init(key, x)
+
+        # Ensure params is a FrozenDict
+        params = variables['params']
+
+        # Use apply to set and access attributes
+        def update_state(params):
+            params = flax.core.unfreeze(params)
+            params['_performance'] = 0.5
+            params['last_update'] = 0
+            params['performance_history'] = [0.4, 0.45, 0.48, 0.5, 0.5, 0.5]
+            params['gradient_norm'] = 15  # Set high gradient norm
+            return flax.core.freeze(params)
+
+        params = update_state(params)
+
+        issues = optimizer.apply({'params': params}, params, method=optimizer.diagnose)
 
         self.assertEqual(len(issues), 3)  # Expect all three issues to be detected
-        self.assertIn("Low performance", issues[0])
-        self.assertIn("Long time since last update", issues[1])
-        self.assertIn("Consistently low performance", issues[2])
+        self.assertIn("Low performance", issues)
+        self.assertIn("Model not updated recently", issues)
+        self.assertIn("High gradient norm", issues)
 
         # Test with good performance
-        self.edge_ai_optimizer.performance = 0.9
-        self.edge_ai_optimizer.last_update = time.time()
-        self.edge_ai_optimizer.performance_history = [0.85, 0.87, 0.89, 0.9, 0.9, 0.9]
+        def update_good_performance(params):
+            params = flax.core.unfreeze(params)
+            params['_performance'] = 0.9
+            params['last_update'] = time.time()
+            params['performance_history'] = [0.85, 0.87, 0.89, 0.9, 0.9, 0.9]
+            params['gradient_norm'] = 5  # Set low gradient norm
+            return flax.core.freeze(params)
 
-        issues = self.edge_ai_optimizer.diagnose()
+        params = update_good_performance(params)
+
+        issues = optimizer.apply({'params': params}, params, method=optimizer.diagnose)
         self.assertEqual(len(issues), 0)  # Expect no issues
 
 def test_knowledge_distillation(edge_ai_optimizer, sample_model):
     teacher_model = sample_model
-    student_model = DummyModel(input_size=10, hidden_size=10, output_size=5)
-    # Create a dummy DataLoader
-    dummy_data = torch.randn(100, 10)
-    dummy_labels = torch.randint(0, 5, (100,))
-    dummy_dataset = torch.utils.data.TensorDataset(dummy_data, dummy_labels)
-    dummy_loader = torch.utils.data.DataLoader(dummy_dataset, batch_size=10)
+    student_model = DummyModel()
+    # Create dummy data
+    dummy_data = jnp.array(jax.random.normal(jax.random.PRNGKey(0), (100, 10)))
+    dummy_labels = jnp.array(jax.random.randint(jax.random.PRNGKey(1), (100,), 0, 5))
 
-    distilled_model = edge_ai_optimizer.knowledge_distillation(teacher_model, student_model, dummy_loader, epochs=1)
+    distilled_model = edge_ai_optimizer.knowledge_distillation(teacher_model, student_model, dummy_data, dummy_labels, epochs=1)
     assert isinstance(distilled_model, nn.Module)
 
 @pytest.mark.skip(reason="Test is failing due to assertion error and needs to be fixed")
 def test_optimize(edge_ai_optimizer, sample_model):
     optimized_model = edge_ai_optimizer.optimize(sample_model, 'quantization')
     assert isinstance(optimized_model, nn.Module)
-    assert hasattr(optimized_model, 'qconfig')
+    # JAX quantization check needs to be implemented
 
     with pytest.raises(ValueError):
         edge_ai_optimizer.optimize(sample_model, 'invalid_technique')
