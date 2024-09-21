@@ -1,7 +1,7 @@
 __version__ = "0.0.3"
 
 # Import main components
-from .advanced_thinking import NeuroFlex, data_augmentation, create_train_state, select_action, adversarial_training
+from .cognitive_architectures.advanced_thinking import NeuroFlex, data_augmentation, create_train_state, select_action, adversarial_training
 from .machinelearning import NeuroFlexClassifier
 from .array_libraries import ArrayLibraries
 from .art_integration import ARTIntegration
