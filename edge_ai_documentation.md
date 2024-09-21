@@ -38,12 +38,11 @@ The Edge AI model incorporates several optimization techniques to enhance perfor
 
 ## Testing Procedures
 
-The Edge AI model is tested using the `pytest` framework to ensure its functionality and performance. The tests cover various aspects of the model, including training, inference, and optimization techniques.
+The Edge AI model is tested using the `pytest` framework to ensure its functionality and performance. The tests cover various aspects of the model, including training, inference, optimization techniques, and anomaly detection.
 
 ### Test Results
 
-- **Passed Tests**: 7 tests passed successfully, verifying the model's training, inference, and optimization capabilities.
-- **Skipped Tests**: 4 tests were skipped, indicating areas that may require further development or are not currently applicable.
+- **Passed Tests**: All tests passed successfully, including those for the `AnomalyDetector` and `self_healing_mechanism`, verifying the model's training, inference, optimization, and anomaly detection capabilities.
 - **Warnings**: A warning was issued regarding the `reduce_range` parameter in PyTorch, which is non-critical and does not affect the overall functionality of the model.
 
 ## Conclusion
