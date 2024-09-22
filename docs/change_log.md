@@ -12,6 +12,7 @@ This document outlines the changes made to resolve issues with the CI/CD pipelin
    - Ensured all dependencies were installed locally to confirm the environment setup.
 
 2. **CI/CD Pipeline Configuration:**
+   - Recreated the `.github/workflows/ci.yml` file to ensure the CI/CD pipeline is correctly set up with Python 3.10 and necessary dependencies.
    - Reviewed the `.github/workflows/ci.yml` file to ensure the installation of all required packages, including 'mne'.
    - Confirmed that the pipeline uses Python 3.10, matching the local development environment.
 
