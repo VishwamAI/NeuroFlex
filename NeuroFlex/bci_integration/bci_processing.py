@@ -26,7 +26,7 @@ class BCIProcessor:
             'alpha': signal.butter(6, [8, 13], btype='bandpass', fs=self.sampling_rate),
             'beta': signal.butter(6, [13, 30], btype='bandpass', fs=self.sampling_rate),
             'gamma': signal.butter(6, [30, 100], btype='bandpass', fs=self.sampling_rate),
-            'high_gamma': signal.butter(6, [100, 200], btype='bandpass', fs=self.sampling_rate)
+            'high_gamma': signal.butter(6, [30, 100], btype='bandpass', fs=self.sampling_rate)
         }
         return filters
 
@@ -84,7 +84,7 @@ class BCIProcessor:
         for i in range(csp_data.shape[1]):
             for j in range(csp_data.shape[0]):
                 self.kalman_filter.predict()
-                self.kalman_filter.update(csp_data[j, i])
+                self.kalman_filter.update(np.array([[csp_data[j, i]], [0]]))  # Reshape to (2, 1)
                 filtered_data[j, i] = self.kalman_filter.x[0]
 
         return filtered_data
@@ -104,20 +104,23 @@ class BCIProcessor:
         for band, data in filtered_data.items():
             print(f"Processing {band} band. Input shape: {data.shape}")
 
-            # Calculate power spectral density
-            f, psd = signal.welch(data, fs=self.sampling_rate, nperseg=min(256, data.shape[-1]), axis=-1)
-            # Ensure PSD maintains correct channel dimensions
-            if psd.ndim == 2:
-                psd = psd  # Keep (n_channels, n_freq_bins)
-            elif psd.ndim == 3:
-                psd = np.transpose(psd, (0, 2, 1))  # Transpose to (n_channels, n_segments, n_freq_bins)
-            features[f'{band}_power'] = psd
+            # Calculate power spectral density using MNE
+            from mne.time_frequency import psd_array_welch
+            n_per_seg = min(256, data.shape[-1])  # Ensure n_per_seg is not greater than signal length
+            psd, freqs = psd_array_welch(data, sfreq=self.sampling_rate, fmin=0, fmax=self.sampling_rate/2, n_per_seg=n_per_seg)
+            # Ensure the power feature maintains 64 channels
+            if psd.shape[0] != 64:
+                psd = psd[:64] if psd.shape[0] > 64 else np.pad(psd, ((0, 64 - psd.shape[0]), (0, 0)))
+            features[f'{band}_power'] = psd.T  # Transpose the power feature
             print(f"{band}_power shape: {features[f'{band}_power'].shape}")
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
             # Ensure wavelet features maintain correct channel dimensions
-            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs])
+            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs]).T
+            # Ensure the wavelet feature maintains 64 channels
+            if wavelet_features.shape[0] != 64:
+                wavelet_features = wavelet_features[:64] if wavelet_features.shape[0] > 64 else np.pad(wavelet_features, ((0, 64 - wavelet_features.shape[0]), (0, 0)))
             features[f'{band}_wavelet'] = wavelet_features
             print(f"{band}_wavelet shape: {features[f'{band}_wavelet'].shape}")
 

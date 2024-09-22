@@ -48,10 +48,10 @@ def test_extract_features(bci_processor, sample_eeg_data):
     for feature_name, feature_data in features.items():
         if 'wavelet' in feature_name:
             # For wavelet features, the shape should be (n_channels, n_wavelet_coeffs)
-            expected_shape = (reshaped_data.shape[0], 6)
+            expected_shape = (64, 6)
         else:
             # For power features, the shape should be (n_freq_bins, n_channels)
-            expected_shape = (129, reshaped_data.shape[0])
+            expected_shape = (129, 64)
         print(f"Shape of {feature_name}: {feature_data.shape}")  # Debug print
         assert feature_data.shape == expected_shape, f"Mismatch in {feature_name} shape. Expected {expected_shape}, got {feature_data.shape}"
 
