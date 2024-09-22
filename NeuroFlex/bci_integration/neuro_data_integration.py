@@ -7,11 +7,11 @@ class NeuroDataIntegrator:
         self.bci_processor = bci_processor
         self.integrated_data = {}
 
-    def integrate_eeg_data(self, raw_eeg_data: np.ndarray) -> Dict[str, np.ndarray]:
+    def integrate_eeg_data(self, raw_eeg_data: np.ndarray, labels: np.ndarray) -> Dict[str, np.ndarray]:
         """
         Integrate EEG data using the BCIProcessor and store the results.
         """
-        processed_data = self.bci_processor.process(raw_eeg_data)
+        processed_data = self.bci_processor.process(raw_eeg_data, labels)
         self.integrated_data['eeg'] = processed_data
         return processed_data
 
