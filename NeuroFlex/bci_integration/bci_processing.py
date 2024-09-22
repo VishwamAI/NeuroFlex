@@ -7,35 +7,44 @@ import pywt
 from filterpy.kalman import KalmanFilter
 
 class BCIProcessor:
-    def __init__(self, sampling_rate: int, num_channels: int):
+    def __init__(self, sampling_rate: int, num_channels: int, electrode_thickness: float = 0.005):
         self.sampling_rate = sampling_rate
         self.num_channels = num_channels
+        self.electrode_thickness = electrode_thickness  # Ultra-thin electrode design (mm)
         self.filters = self._create_filters()
         self.ica = FastICA(n_components=self.num_channels)
         self.csp = CSP(n_components=self.num_channels)
         self.kalman_filter = self._create_kalman_filter()
+        self.wireless_transmitter = self._setup_wireless_communication()
 
     def _create_filters(self) -> Dict[str, tuple]:
         # Create bandpass filters for different frequency bands
         nyquist = 0.5 * self.sampling_rate
         filters = {
-            'delta': signal.butter(4, [0.5, 4], btype='bandpass', fs=self.sampling_rate),
-            'theta': signal.butter(4, [4, 8], btype='bandpass', fs=self.sampling_rate),
-            'alpha': signal.butter(4, [8, 13], btype='bandpass', fs=self.sampling_rate),
-            'beta': signal.butter(4, [13, 30], btype='bandpass', fs=self.sampling_rate),
-            'gamma': signal.butter(4, [30, 100], btype='bandpass', fs=self.sampling_rate)
+            'delta': signal.butter(6, [0.5, 4], btype='bandpass', fs=self.sampling_rate),
+            'theta': signal.butter(6, [4, 8], btype='bandpass', fs=self.sampling_rate),
+            'alpha': signal.butter(6, [8, 13], btype='bandpass', fs=self.sampling_rate),
+            'beta': signal.butter(6, [13, 30], btype='bandpass', fs=self.sampling_rate),
+            'gamma': signal.butter(6, [30, 100], btype='bandpass', fs=self.sampling_rate),
+            'high_gamma': signal.butter(6, [100, 200], btype='bandpass', fs=self.sampling_rate)
         }
         return filters
 
     def _create_kalman_filter(self) -> KalmanFilter:
-        kf = KalmanFilter(dim_x=2, dim_z=1)
-        kf.x = np.zeros((2, 1))  # initial state
-        kf.F = np.array([[1., 1.], [0., 1.]])  # state transition matrix
-        kf.H = np.array([[1., 0.]])  # measurement function
+        kf = KalmanFilter(dim_x=4, dim_z=2)  # Increased dimensions for higher resolution
+        kf.x = np.zeros((4, 1))  # initial state
+        kf.F = np.array([[1., 1., 0.5, 0.], [0., 1., 1., 0.], [0., 0., 1., 1.], [0., 0., 0., 1.]])  # state transition matrix
+        kf.H = np.array([[1., 0., 0., 0.], [0., 0., 1., 0.]])  # measurement function
         kf.P *= 1000.  # covariance matrix
-        kf.R = 5  # measurement noise
-        kf.Q = np.array([[0.1, 0.1], [0.1, 0.1]])  # process noise
+        kf.R = np.array([[5., 0.], [0., 5.]])  # measurement noise
+        kf.Q = np.eye(4) * 0.01  # process noise
         return kf
+
+    def _setup_wireless_communication(self):
+        # Placeholder for wireless communication setup
+        # In a real implementation, this would initialize hardware or software components
+        # for wireless data transmission
+        return {"protocol": "Bluetooth LE", "data_rate": "2 Mbps", "latency": "2ms"}
 
     def preprocess(self, raw_data: np.ndarray, labels: np.ndarray) -> np.ndarray:
         # Calculate n_trials and n_samples based on raw_data shape before any processing
