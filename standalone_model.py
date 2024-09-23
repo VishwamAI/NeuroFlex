@@ -14,6 +14,7 @@ from typing import List, Dict, Any
 
 from embodied_cognition_module import EmbodiedCognitionModule
 from connectionist_models_module import ConnectionistModelsModule
+from bayesian_inference_module import BayesianInferenceModule
 
 class SituatedCognitionModule:
     def __init__(self, config: Dict[str, Any]):
@@ -48,7 +49,8 @@ class StandaloneCognitiveModel:
             'memory': MemoryModule(config),
             'embodied_cognition': EmbodiedCognitionModule(config),
             'situated_cognition': SituatedCognitionModule(config),
-            'connectionist_models': ConnectionistModelsModule(config)
+            'connectionist_models': ConnectionistModelsModule(config),
+            'bayesian_inference': BayesianInferenceModule(config)
         }
         self.mcf = ModularCognitionFramework(self.modules)
 
