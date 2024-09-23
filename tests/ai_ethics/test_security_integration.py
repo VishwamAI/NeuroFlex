@@ -195,25 +195,30 @@ class TestSecurityIntegration(unittest.TestCase):
         # Verify the sequence of method calls
         mock_agent.env.reset.assert_called_once()
         self.assertEqual(mock_agent.make_decision.call_count, 2)
-        mock_agent.make_decision.assert_has_calls([
-            call([0.1, 0.2, 0.3, 0.4]),  # Initial state
-            call([0.2, 0.3, 0.4, 0.5]),  # State after first step
-        ])
+        mock_agent.make_decision.assert_has_calls(
+            [
+                call([0.1, 0.2, 0.3, 0.4]),  # Initial state
+                call([0.2, 0.3, 0.4, 0.5]),  # State after first step
+            ]
+        )
         self.assertEqual(mock_agent.env.step.call_count, 2)
-        mock_agent.env.step.assert_has_calls([
-            call(1),  # First action
-            call(2)   # Action after mitigation
-        ])
+        mock_agent.env.step.assert_has_calls(
+            [call(1), call(2)]  # First action  # Action after mitigation
+        )
         self.assertEqual(mock_threat_detector.detect_threat.call_count, 2)
-        mock_threat_detector.detect_threat.assert_has_calls([
-            call([0.1, 0.2, 0.3, 0.4], 1, [0.2, 0.3, 0.4, 0.5]),
-            call([0.2, 0.3, 0.4, 0.5], 2, [0.3, 0.4, 0.5, 0.6]),
-        ])
+        mock_threat_detector.detect_threat.assert_has_calls(
+            [
+                call([0.1, 0.2, 0.3, 0.4], 1, [0.2, 0.3, 0.4, 0.5]),
+                call([0.2, 0.3, 0.4, 0.5], 2, [0.3, 0.4, 0.5, 0.6]),
+            ]
+        )
         self.assertEqual(mock_agent.mitigate_threat.call_count, 2)
-        mock_agent.mitigate_threat.assert_has_calls([
-            call([0.1, 0.2, 0.3, 0.4], 1, [0.2, 0.3, 0.4, 0.5]),
-            call([0.2, 0.3, 0.4, 0.5], 2, [0.3, 0.4, 0.5, 0.6]),
-        ])
+        mock_agent.mitigate_threat.assert_has_calls(
+            [
+                call([0.1, 0.2, 0.3, 0.4], 1, [0.2, 0.3, 0.4, 0.5]),
+                call([0.2, 0.3, 0.4, 0.5], 2, [0.3, 0.4, 0.5, 0.6]),
+            ]
+        )
 
         # Verify that self_diagnose and evaluate_fairness are called
         mock_agent.self_diagnose.assert_called_once()
