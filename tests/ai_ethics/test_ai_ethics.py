@@ -98,13 +98,13 @@ def test_ethical_framework():
         return True
 
     framework.add_guideline(Guideline("Always ethical", always_ethical))
-    assert framework.evaluate_action("any_action") == True
+    assert framework.evaluate_action("any_action") is True
 
     def never_ethical(action):
         return False
 
     framework.add_guideline(Guideline("Never ethical", never_ethical))
-    assert framework.evaluate_action("any_action") == False
+    assert framework.evaluate_action("any_action") is False
 
 
 # Self-Fixing Algorithms Tests
