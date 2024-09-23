@@ -34,15 +34,25 @@ class TestBayesianInference(unittest.TestCase):
         input_data = [1, 2, 3]
         result = self.bi_module.integrate_with_standalone_model(input_data)
         self.assertIsInstance(result, list)
-        self.assertEqual(len(result), self.config['num_hypotheses'])
-        np.testing.assert_almost_equal(np.sum(result), 1.0)
+        self.assertEqual(len(result), 2)  # Updated belief and predictions
+        self.assertIsInstance(result[0], np.ndarray)  # Updated belief
+        self.assertIsInstance(result[1], np.ndarray)  # Predictions
+        self.assertEqual(len(result[0]), self.config['num_hypotheses'])
+        self.assertEqual(len(result[1]), len(input_data))
+        np.testing.assert_almost_equal(np.sum(result[0]), 1.0)
+        self.assertTrue(np.all(result[1] >= 0) and np.all(result[1] <= 1))
 
     def test_integrate_with_standalone_model_dict(self):
         input_data = {'observations': [1, 2], 'predictions': [0, 1]}
         result = self.bi_module.integrate_with_standalone_model(input_data)
         self.assertIsInstance(result, list)
-        self.assertEqual(len(result), 2)  # Number of predictions
-        self.assertTrue(np.all(np.array(result) >= 0) and np.all(np.array(result) <= 1))
+        self.assertEqual(len(result), 2)  # Updated belief and predictions
+        self.assertIsInstance(result[0], np.ndarray)  # Updated belief
+        self.assertIsInstance(result[1], np.ndarray)  # Predictions
+        self.assertEqual(len(result[0]), self.config['num_hypotheses'])
+        self.assertEqual(len(result[1]), len(input_data['predictions']))
+        np.testing.assert_almost_equal(np.sum(result[0]), 1.0)
+        self.assertTrue(np.all(result[1] >= 0) and np.all(result[1] <= 1))
 
 if __name__ == '__main__':
     unittest.main()

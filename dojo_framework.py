@@ -1,15 +1,19 @@
 import random
 import math
-
+from standalone_model import PerceptionModule, ReasoningModule, LearningModule, MemoryModule
 class DojoFramework:
     def __init__(self, config):
         self.config = config
+        self.perception_module = PerceptionModule(config)
+        self.reasoning_module = ReasoningModule(config)
+        self.learning_module = LearningModule(config)
+        self.memory_module = MemoryModule(config)
         self.data_efficiency_module = DataEfficiencyModule(config)
         self.hardware_optimization_module = HardwareOptimizationModule(config)
-        self.model = None
         self.resource_manager = ResourceManager(config)
         self.task_scheduler = TaskScheduler(config)
         self.optimizer = Optimizer(config)
+        self.model = None
 
     def train(self, data, labels):
         try:

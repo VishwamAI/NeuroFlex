@@ -68,11 +68,12 @@ class BayesianInferenceModule:
             raise ValueError("Input data must be a dictionary or a list")
         return result
 
-    def integrate_with_standalone_model(self, input_data: Any) -> Any:
+    def integrate_with_standalone_model(self, input_data: Any) -> List[np.ndarray]:
         """
         Integrate the Bayesian Inference module with the standalone cognitive model.
         """
-        return self.process(input_data)
+        result = self.process(input_data)
+        return [np.array(result.get('updated_belief', [])), np.array(result.get('predictions', []))]
 
 def configure_bayesian_inference() -> Dict[str, Any]:
     """
