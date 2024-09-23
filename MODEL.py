@@ -2,22 +2,21 @@ import time
 import torch
 import numpy as np
 from NeuroFlex import train_model
+from .core_neural_networks import *
+from .advanced_models import *
+from .generative_models import *
+from .Transformers import *
+from .quantum_neural_networks import *
+from .bci_integration import *
+from .cognitive_architectures import *
+from .scientific_domains import *
+from .edge_ai import *
+from .Prompt_Agent import *
+from .utils import *
+from .ai_ethics import *
 from NeuroFlex.core_neural_networks.jax.jax_module import JAXModel
 from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import TensorFlowModel
 from NeuroFlex.core_neural_networks.pytorch.pytorch_module import PyTorchModel
-from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
-from NeuroFlex.scientific_domains.bioinformatics.scikit_bio_integration import ScikitBioIntegration
-from NeuroFlex.scientific_domains.bioinformatics.ete_integration import ETEIntegration
-from NeuroFlex.scientific_domains.bioinformatics.alphafold_integration import AlphaFoldIntegration
-from NeuroFlex.scientific_domains.xarray_integration import XarrayIntegration
-from NeuroFlex.quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
-from NeuroFlex.utils.tokenizer import tokenize_text
-from NeuroFlex.transformers.unified_transformer import UnifiedTransformer, get_unified_transformer
-from NeuroFlex.ai_ethics.robustness import adversarial_attack_detection, model_drift_detection
-from NeuroFlex.ai_ethics.fairness import fairness_metrics, bias_mitigation
-from NeuroFlex.ai_ethics.ethical_framework import ethical_ai_guidelines
-from NeuroFlex.generative_models.ddpm import DDPM
-from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
 
 class SelfCuringAlgorithm:
     def __init__(self, model):
