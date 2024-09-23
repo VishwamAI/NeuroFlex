@@ -11,6 +11,7 @@ theoretical consistency and strong foundations in cognitive science.
 
 import numpy as np
 from typing import List, Dict, Any
+from line_profiler import profile
 
 from embodied_cognition_module import EmbodiedCognitionModule
 from connectionist_models_module import ConnectionistModelsModule
@@ -60,6 +61,7 @@ class StandaloneCognitiveModel:
         """
         return self.mcf.process(input_data)
 
+    @profile
     def adaptive_perception(self, input_data: Any) -> Any:
         """
         Advanced feature: Adaptive Perception
@@ -78,6 +80,7 @@ class StandaloneCognitiveModel:
             'context': structured_data['context']
         })()
 
+    @profile
     def context_aware_reasoning(self, input_data: Any) -> Any:
         """
         Advanced feature: Context-Aware Reasoning
@@ -93,6 +96,7 @@ class StandaloneCognitiveModel:
             }
         }
 
+    @profile
     def multi_modal_learning(self, input_data: Any) -> Any:
         """
         Advanced feature: Multi-Modal Learning

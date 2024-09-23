@@ -49,23 +49,30 @@ class BayesianInferenceModule:
             predictions.append(prediction)
         return np.array(predictions)
 
+    def process(self, input_data: Any) -> Dict[str, Any]:
+        """
+        Process input data and perform probabilistic reasoning.
+        """
+        result = {}
+        if isinstance(input_data, dict):
+            if 'observations' in input_data:
+                for observation in input_data['observations']:
+                    self.update_belief(observation)
+                result['updated_belief'] = self.prior.tolist()
+            if 'predictions' in input_data:
+                result['predictions'] = self.predict(input_data['predictions']).tolist()
+        elif isinstance(input_data, list):
+            result['updated_belief'] = self.update_belief(input_data[-1]).tolist()
+            result['predictions'] = self.predict(input_data).tolist()
+        else:
+            raise ValueError("Input data must be a dictionary or a list")
+        return result
+
     def integrate_with_standalone_model(self, input_data: Any) -> Any:
         """
         Integrate the Bayesian Inference module with the standalone cognitive model.
         """
-        if isinstance(input_data, list):
-            # Treat input as a list of observations
-            for observation in input_data:
-                self.update_belief(observation)
-            return self.prior.tolist()
-        elif isinstance(input_data, dict):
-            # Treat input as a dictionary with 'observations' and 'predictions' keys
-            if 'observations' in input_data:
-                for observation in input_data['observations']:
-                    self.update_belief(observation)
-            if 'predictions' in input_data:
-                return self.predict(input_data['predictions']).tolist()
-        return self.prior.tolist()
+        return self.process(input_data)
 
 def configure_bayesian_inference() -> Dict[str, Any]:
     """

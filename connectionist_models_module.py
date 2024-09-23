@@ -28,10 +28,18 @@ class ConnectionistModelsModule:
         else:
             raise ValueError(f"Unsupported activation function: {activation}")
 
-    def process(self, input_data: np.ndarray) -> np.ndarray:
+    def process(self, input_data: Any) -> np.ndarray:
         """
         Process input data through the connectionist network.
         """
+        # Convert input data to numpy array if necessary
+        if not isinstance(input_data, np.ndarray):
+            input_data = np.array(input_data).flatten()
+
+        # Ensure input data shape matches the first layer's input size
+        if input_data.shape[0] != self.layers[0].shape[1]:
+            raise ValueError(f"Input data shape {input_data.shape} does not match expected shape {(self.layers[0].shape[1],)}")
+
         activation = input_data
         for layer in self.layers:
             activation = self.activation_function(np.dot(layer, activation))
