@@ -157,3 +157,4 @@ psutil
 aif360
 mne
 PyWavelets
+filterpy
