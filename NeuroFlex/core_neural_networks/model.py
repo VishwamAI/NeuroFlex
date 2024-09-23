@@ -18,6 +18,12 @@ from NeuroFlex.scientific_domains.bioinformatics.alphafold_integration import Al
 from NeuroFlex.scientific_domains.xarray_integration import XarrayIntegration
 from NeuroFlex.generative_models.ddpm import DDPM
 from NeuroFlex.ai_ethics.advanced_security_agent import AdvancedSecurityAgent
+from NeuroFlex.advanced_models import *
+from NeuroFlex.Transformers import *
+from NeuroFlex.bci_integration import *
+from NeuroFlex.cognitive_architectures import *
+from NeuroFlex.edge_ai import *
+from NeuroFlex.Prompt_Agent import *
 
 # Set up logging
 logger = setup_logging()
