@@ -1,9 +1,6 @@
 import unittest
 import pytest
 from unittest.mock import patch, MagicMock
-import openmm
-import openmm.app as app
-import openmm.unit as unit
 import ml_collections
 import sys
 import jax
