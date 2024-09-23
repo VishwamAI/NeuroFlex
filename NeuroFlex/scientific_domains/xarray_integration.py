@@ -70,4 +70,29 @@ class XarrayIntegration:
         self.datasets[dataset_name].to_netcdf(file_path)
         print(f"Dataset '{dataset_name}' saved to {file_path}")
 
+    def load_dataset(self, file_path, dataset_name=None):
+        """
+        Load a dataset from a NetCDF file and register it in the datasets dictionary.
+
+        Args:
+            file_path (str): Path to the NetCDF file to load.
+            dataset_name (str, optional): Name to assign to the loaded dataset.
+                If not provided, the filename (without extension) will be used.
+
+        Returns:
+            xarray.Dataset: The loaded dataset.
+
+        Raises:
+            IOError: If there's an error loading the file.
+        """
+        try:
+            dataset = xr.open_dataset(file_path)
+            if dataset_name is None:
+                dataset_name = file_path.split('/')[-1].split('.')[0]
+            self.datasets[dataset_name] = dataset
+            print(f"Dataset loaded from {file_path} and registered as '{dataset_name}'")
+            return dataset
+        except Exception as e:
+            raise IOError(f"Error loading dataset from {file_path}: {str(e)}")
+
     # Additional methods can be added here as needed
