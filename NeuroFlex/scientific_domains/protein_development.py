@@ -17,6 +17,7 @@ from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from scipy.spatial.distance import pdist, squareform
 
+
 class ProteinDevelopment:
     def __init__(self):
         self.alphafold_model = None
@@ -26,8 +27,12 @@ class ProteinDevelopment:
 
     def setup_alphafold(self):
         try:
-            model_config = config.model_config('model_3_ptm')  # Using the latest AlphaFold 3 model
-            model_params = data.get_model_haiku_params(model_name='model_3_ptm', data_dir='/path/to/alphafold/data')
+            model_config = config.model_config(
+                "model_3_ptm"
+            )  # Using the latest AlphaFold 3 model
+            model_params = data.get_model_haiku_params(
+                model_name="model_3_ptm", data_dir="/path/to/alphafold/data"
+            )
             self.alphafold_model = model.RunModel(model_config, model_params)
         except FileNotFoundError as e:
             raise ValueError(f"AlphaFold data files not found: {str(e)}")
@@ -38,13 +43,19 @@ class ProteinDevelopment:
 
     def predict_structure(self, sequence):
         if not self.alphafold_model:
-            raise ValueError("AlphaFold model not set up. Call setup_alphafold() first.")
+            raise ValueError(
+                "AlphaFold model not set up. Call setup_alphafold() first."
+            )
 
         if not isinstance(sequence, str) or not sequence.isalpha():
-            raise ValueError("Invalid sequence. Must be a string containing only alphabetic characters.")
+            raise ValueError(
+                "Invalid sequence. Must be a string containing only alphabetic characters."
+            )
 
         try:
-            features = pipeline.make_sequence_features(sequence, description="", num_res=len(sequence))
+            features = pipeline.make_sequence_features(
+                sequence, description="", num_res=len(sequence)
+            )
         except Exception as e:
             raise ValueError(f"Error creating sequence features: {str(e)}")
 
@@ -54,9 +65,9 @@ class ProteinDevelopment:
             raise RuntimeError(f"Error during structure prediction: {str(e)}")
 
         # Extract confidence metrics
-        plddt = prediction.get('plddt')
-        predicted_tm_score = prediction.get('predicted_tm_score')
-        pae = prediction.get('predicted_aligned_error')
+        plddt = prediction.get("plddt")
+        predicted_tm_score = prediction.get("predicted_tm_score")
+        pae = prediction.get("predicted_aligned_error")
 
         if plddt is None:
             raise ValueError("pLDDT score not found in prediction output")
@@ -64,14 +75,16 @@ class ProteinDevelopment:
         try:
             structure = protein.from_prediction(prediction, features)
         except Exception as e:
-            raise RuntimeError(f"Error creating protein structure from prediction: {str(e)}")
+            raise RuntimeError(
+                f"Error creating protein structure from prediction: {str(e)}"
+            )
 
         return {
-            'structure': structure,
-            'plddt': plddt,
-            'predicted_tm_score': predicted_tm_score,
-            'pae': pae,
-            'unrelaxed_protein': prediction.get('unrelaxed_protein')
+            "structure": structure,
+            "plddt": plddt,
+            "predicted_tm_score": predicted_tm_score,
+            "pae": pae,
+            "unrelaxed_protein": prediction.get("unrelaxed_protein"),
         }
 
     def setup_openmm_simulation(self, protein_structure):
@@ -85,57 +98,83 @@ class ProteinDevelopment:
 
             for atom in range(len(protein_structure.atom_mask[residue])):
                 if protein_structure.atom_mask[residue][atom]:
-                    element = app.Element.getBySymbol(protein_structure.atom_types[residue][atom])
-                    topology.addAtom(protein_structure.atom_names[residue][atom], element, chain.residues[-1])
-                    positions.append(protein_structure.atom_positions[residue][atom] * unit.angstrom)
+                    element = app.Element.getBySymbol(
+                        protein_structure.atom_types[residue][atom]
+                    )
+                    topology.addAtom(
+                        protein_structure.atom_names[residue][atom],
+                        element,
+                        chain.residues[-1],
+                    )
+                    positions.append(
+                        protein_structure.atom_positions[residue][atom] * unit.angstrom
+                    )
 
-        forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+        forcefield = app.ForceField("amber14-all.xml", "amber14/tip3pfb.xml")
         modeller = app.Modeller(topology, positions)
-        modeller.addSolvent(forcefield, model='tip3p', padding=1.0*unit.nanometers)
-        system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1*unit.nanometer, constraints=app.HBonds)
-        integrator = openmm.LangevinMiddleIntegrator(300*unit.kelvin, 1/unit.picosecond, 0.002*unit.picoseconds)
+        modeller.addSolvent(forcefield, model="tip3p", padding=1.0 * unit.nanometers)
+        system = forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1 * unit.nanometer,
+            constraints=app.HBonds,
+        )
+        integrator = openmm.LangevinMiddleIntegrator(
+            300 * unit.kelvin, 1 / unit.picosecond, 0.002 * unit.picoseconds
+        )
         self.openmm_simulation = app.Simulation(modeller.topology, system, integrator)
         self.openmm_simulation.context.setPositions(modeller.positions)
 
     def run_molecular_dynamics(self, steps, minimize=True, equilibrate=True):
         if not self.openmm_simulation:
-            raise ValueError("OpenMM simulation not set up. Call setup_openmm_simulation() first.")
+            raise ValueError(
+                "OpenMM simulation not set up. Call setup_openmm_simulation() first."
+            )
 
         if minimize:
             self.openmm_simulation.minimizeEnergy()
 
         if equilibrate:
-            self.openmm_simulation.context.setVelocitiesToTemperature(300*unit.kelvin)
+            self.openmm_simulation.context.setVelocitiesToTemperature(300 * unit.kelvin)
             self.openmm_simulation.step(1000)  # Short equilibration
 
         self.openmm_simulation.step(steps)
 
     def get_current_positions(self):
         if not self.openmm_simulation:
-            raise ValueError("OpenMM simulation not set up. Call setup_openmm_simulation() first.")
+            raise ValueError(
+                "OpenMM simulation not set up. Call setup_openmm_simulation() first."
+            )
 
         return self.openmm_simulation.context.getState(getPositions=True).getPositions()
 
     def analyze_structure(self, positions):
         # Calculate RMSD
-        initial_positions = self.openmm_simulation.context.getState(getPositions=True, enforcePeriodicBox=False).getPositions(asNumpy=True)
-        rmsd = np.sqrt(np.mean(np.sum((positions - initial_positions)**2, axis=1)))
+        initial_positions = self.openmm_simulation.context.getState(
+            getPositions=True, enforcePeriodicBox=False
+        ).getPositions(asNumpy=True)
+        rmsd = np.sqrt(np.mean(np.sum((positions - initial_positions) ** 2, axis=1)))
 
         # Calculate radius of gyration
         masses = [atom.element.mass for atom in self.openmm_simulation.topology.atoms()]
         center_of_mass = np.average(positions, axis=0, weights=masses)
-        rg = np.sqrt(np.average(np.sum((positions - center_of_mass)**2, axis=1), weights=masses))
+        rg = np.sqrt(
+            np.average(
+                np.sum((positions - center_of_mass) ** 2, axis=1), weights=masses
+            )
+        )
 
         # Analyze secondary structure
         structure = self.pdb_parser.get_structure("protein", positions)
-        self.dssp = DSSP(structure[0], positions, dssp='mkdssp')
+        self.dssp = DSSP(structure[0], positions, dssp="mkdssp")
         secondary_structure = {residue[1]: residue[2] for residue in self.dssp}
 
         return {
-            'rmsd': rmsd,
-            'radius_of_gyration': rg,
-            'secondary_structure': secondary_structure
+            "rmsd": rmsd,
+            "radius_of_gyration": rg,
+            "secondary_structure": secondary_structure,
         }
+
 
 # Example usage
 if __name__ == "__main__":

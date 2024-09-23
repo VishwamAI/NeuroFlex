@@ -22,41 +22,48 @@ from .tensorflow import *
 from .pytorch import *
 
 __all__ = [
-    'PyTorchModel',
-    'CDSTDP',
-    'create_cdstdp',
-    'NeuroFlex',
-    'SelfCuringAlgorithm',
-    'CNN',
-    'create_cnn',
-    'LSTMModule',
-    'LRNN',
-    'MachineLearning',
-    'get_core_nn_version',
-    'SUPPORTED_FRAMEWORKS',
-    'initialize_core_nn',
-    'create_model'
+    "PyTorchModel",
+    "CDSTDP",
+    "create_cdstdp",
+    "NeuroFlex",
+    "SelfCuringAlgorithm",
+    "CNN",
+    "create_cnn",
+    "LSTMModule",
+    "LRNN",
+    "MachineLearning",
+    "get_core_nn_version",
+    "SUPPORTED_FRAMEWORKS",
+    "initialize_core_nn",
+    "create_model",
 ]
+
 
 def get_core_nn_version():
     return "1.0.0"
 
-SUPPORTED_FRAMEWORKS = ['TensorFlow', 'PyTorch', 'JAX']
+
+SUPPORTED_FRAMEWORKS = ["TensorFlow", "PyTorch", "JAX"]
+
 
 def initialize_core_nn():
     print("Initializing Core Neural Networks Module...")
     # Add any necessary initialization code here
 
+
 def create_model(framework, model_type, *args, **kwargs):
-    if framework.lower() == 'tensorflow':
+    if framework.lower() == "tensorflow":
         # Import and use TensorFlow-specific functions
         from .tensorflow import create_tensorflow_model
+
         return create_tensorflow_model(*args, **kwargs)
-    elif framework.lower() == 'pytorch':
+    elif framework.lower() == "pytorch":
         # Import and use PyTorch-specific functions
         from .pytorch import create_pytorch_model
+
         return create_pytorch_model(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported framework: {framework}")
+
 
 # Add any other utility functions or constants as needed

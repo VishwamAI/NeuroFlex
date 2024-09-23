@@ -2,6 +2,7 @@
 
 from NeuroFlex.utils import utils
 
+
 class ExplainableAI:
     def __init__(self):
         self.model = None
@@ -12,7 +13,9 @@ class ExplainableAI:
 
     def explain_prediction(self, input_data):
         if self.model is None:
-            raise ValueError("Model not set. Please set a model using set_model() method.")
+            raise ValueError(
+                "Model not set. Please set a model using set_model() method."
+            )
 
         prediction = self.model.predict(input_data)
         explanation = self._generate_explanation(input_data, prediction)
@@ -33,6 +36,7 @@ class ExplainableAI:
         # Placeholder for visualization logic
         # This should be implemented to create visual representations of explanations
         print(f"Visualization of explanation: {explanation}")
+
 
 # Example usage:
 # explainable_model = ExplainableAI()

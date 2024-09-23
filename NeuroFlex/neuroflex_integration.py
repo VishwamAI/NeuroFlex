@@ -1,5 +1,6 @@
 import logging
 
+
 class NeuroFlexIntegrator:
     """
     NeuroFlexIntegrator is responsible for integrating various components of the NeuroFlex system.

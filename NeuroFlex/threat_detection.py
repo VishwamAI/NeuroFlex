@@ -8,6 +8,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
 import joblib
 
+
 class ThreatDetector:
     """
     A class for detecting and analyzing threats in a system using various methods including
@@ -58,13 +59,17 @@ class ThreatDetector:
         """
         Initialize and compile the deep learning model for threat detection.
         """
-        self.deep_learning_model = Sequential([
-            LSTM(64, input_shape=(1, 25), return_sequences=True),
-            LSTM(32),
-            Dense(16, activation='relu'),
-            Dense(1, activation='sigmoid')
-        ])
-        self.deep_learning_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        self.deep_learning_model = Sequential(
+            [
+                LSTM(64, input_shape=(1, 25), return_sequences=True),
+                LSTM(32),
+                Dense(16, activation="relu"),
+                Dense(1, activation="sigmoid"),
+            ]
+        )
+        self.deep_learning_model.compile(
+            optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"]
+        )
 
     def detect_threat(self, state: Any, action: Any, next_state: Any) -> bool:
         """
@@ -109,11 +114,15 @@ class ThreatDetector:
             combined_data = np.concatenate([state, action, next_state])
             scaled_data = self.scaler.transform(combined_data.reshape(1, -1))
             # Reshape the input data to match LSTM's expected dimensions
-            reshaped_data = scaled_data.reshape(1, 1, -1)  # (batch_size, timesteps, features)
+            reshaped_data = scaled_data.reshape(
+                1, 1, -1
+            )  # (batch_size, timesteps, features)
             threat_probability = self.deep_learning_model.predict(reshaped_data)
             if threat_probability > 0.7:  # Adjust this threshold as needed
                 threat_detected = True
-                self.logger.warning(f"Deep learning model detected potential threat: probability {threat_probability}")
+                self.logger.warning(
+                    f"Deep learning model detected potential threat: probability {threat_probability}"
+                )
 
         if threat_detected:
             self.threat_history.append((state, action, next_state))
@@ -172,7 +181,9 @@ class ThreatDetector:
                 if isinstance(layer, tf.keras.layers.Dense):
                     weights = layer.get_weights()[0]
                     if np.any(np.isnan(weights)) or np.any(np.isinf(weights)):
-                        vulnerabilities.append(f"NaN or Inf weights detected in layer {layer.name}")
+                        vulnerabilities.append(
+                            f"NaN or Inf weights detected in layer {layer.name}"
+                        )
         return vulnerabilities
 
     def analyze(self) -> Dict[str, Any]:
@@ -185,9 +196,11 @@ class ThreatDetector:
         analysis_result = {
             "total_threats": len(self.threat_history),
             "recent_threats": self.threat_history[-5:] if self.threat_history else [],
-            "vulnerability_summary": self.scan_for_vulnerabilities(self.deep_learning_model),
+            "vulnerability_summary": self.scan_for_vulnerabilities(
+                self.deep_learning_model
+            ),
             "anomaly_detector_performance": self._evaluate_anomaly_detector(),
-            "deep_learning_model_performance": self._evaluate_deep_learning_model()
+            "deep_learning_model_performance": self._evaluate_deep_learning_model(),
         }
         return analysis_result
 
@@ -239,5 +252,7 @@ class ThreatDetector:
             path (str): The directory path to load the models from.
         """
         self.anomaly_detector = joblib.load(f"{path}/anomaly_detector.joblib")
-        self.deep_learning_model = tf.keras.models.load_model(f"{path}/deep_learning_model.h5")
+        self.deep_learning_model = tf.keras.models.load_model(
+            f"{path}/deep_learning_model.h5"
+        )
         self.scaler = joblib.load(f"{path}/scaler.joblib")

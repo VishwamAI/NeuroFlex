@@ -2,17 +2,20 @@ import numpy as np
 from typing import List, Dict, Any
 from .bci_processing import BCIProcessor
 
+
 class NeuroDataIntegrator:
     def __init__(self, bci_processor: BCIProcessor):
         self.bci_processor = bci_processor
         self.integrated_data = {}
 
-    def integrate_eeg_data(self, raw_eeg_data: np.ndarray, labels: np.ndarray) -> Dict[str, np.ndarray]:
+    def integrate_eeg_data(
+        self, raw_eeg_data: np.ndarray, labels: np.ndarray
+    ) -> Dict[str, np.ndarray]:
         """
         Integrate EEG data using the BCIProcessor and store the results.
         """
         processed_data = self.bci_processor.process(raw_eeg_data, labels)
-        self.integrated_data['eeg'] = processed_data
+        self.integrated_data["eeg"] = processed_data
         return processed_data
 
     def integrate_external_data(self, data_type: str, data: np.ndarray) -> None:
@@ -35,13 +38,14 @@ class NeuroDataIntegrator:
         # This method should be implemented based on specific research requirements
         results = {}
         for data_type, data in self.integrated_data.items():
-            if data_type == 'eeg':
+            if data_type == "eeg":
                 results[data_type] = {
-                    'mean_power': {band: np.mean(power) for band, power in data.items()}
+                    "mean_power": {band: np.mean(power) for band, power in data.items()}
                 }
             else:
-                results[data_type] = {'mean': np.mean(data), 'std': np.std(data)}
+                results[data_type] = {"mean": np.mean(data), "std": np.std(data)}
         return results
+
 
 # Example usage
 if __name__ == "__main__":
@@ -59,7 +63,7 @@ if __name__ == "__main__":
 
     # Simulate some external data (e.g., fMRI)
     fmri_data = np.random.randn(100, 100, 100)  # Example fMRI volume
-    integrator.integrate_external_data('fmri', fmri_data)
+    integrator.integrate_external_data("fmri", fmri_data)
 
     # Perform multimodal analysis
     results = integrator.perform_multimodal_analysis()

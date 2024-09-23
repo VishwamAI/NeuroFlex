@@ -7,22 +7,33 @@ import logging
 from ..utils.utils import normalize_data
 from ..utils.descriptive_statistics import preprocess_data
 
+
 class LRNNCell(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, activation: Callable = nn.Tanh()):
+    def __init__(
+        self, input_size: int, hidden_size: int, activation: Callable = nn.Tanh()
+    ):
         super(LRNNCell, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.activation = activation
         self.linear = nn.Linear(input_size + hidden_size, hidden_size)
 
-    def forward(self, h: torch.Tensor, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, h: torch.Tensor, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         combined = torch.cat([h, x], dim=1)
         new_h = self.activation(self.linear(combined))
         return new_h, new_h
 
+
 class LRNN(nn.Module):
-    def __init__(self, features: Tuple[int, ...], activation: Callable = nn.Tanh(),
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        features: Tuple[int, ...],
+        activation: Callable = nn.Tanh(),
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super(LRNN, self).__init__()
         self.features = features
         self.activation = activation
@@ -41,20 +52,26 @@ class LRNN(nn.Module):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.cells = nn.ModuleList([LRNNCell(features[i-1] if i > 0 else features[0], feat, activation)
-                                    for i, feat in enumerate(features)])
+        self.cells = nn.ModuleList(
+            [
+                LRNNCell(features[i - 1] if i > 0 else features[0], feat, activation)
+                for i, feat in enumerate(features)
+            ]
+        )
         self.dropout = nn.Dropout(self.dropout_rate)
         self.to(self.device)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, seq_len, input_dim = x.shape
-        h = [torch.zeros(batch_size, feat, device=self.device) for feat in self.features]
+        h = [
+            torch.zeros(batch_size, feat, device=self.device) for feat in self.features
+        ]
         outputs = []
 
         for t in range(seq_len):
             x_t = x[:, t, :]
             for i, cell in enumerate(self.cells):
-                h[i], _ = cell(h[i], x_t if i == 0 else h[i-1])
+                h[i], _ = cell(h[i], x_t if i == 0 else h[i - 1])
                 h[i] = self.dropout(h[i])
             outputs.append(h[-1].unsqueeze(1))
 
@@ -71,7 +88,9 @@ class LRNN(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -127,6 +146,16 @@ class LRNN(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-def create_rnn_block(features: Tuple[int, ...], activation: Callable = nn.Tanh(),
-                     dropout_rate: float = 0.5, learning_rate: float = 0.001) -> LRNN:
-    return LRNN(features=features, activation=activation, dropout_rate=dropout_rate, learning_rate=learning_rate)
+
+def create_rnn_block(
+    features: Tuple[int, ...],
+    activation: Callable = nn.Tanh(),
+    dropout_rate: float = 0.5,
+    learning_rate: float = 0.001,
+) -> LRNN:
+    return LRNN(
+        features=features,
+        activation=activation,
+        dropout_rate=dropout_rate,
+        learning_rate=learning_rate,
+    )

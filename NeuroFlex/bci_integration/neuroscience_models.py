@@ -6,8 +6,15 @@ from typing import List, Dict, Any, Tuple
 from functools import partial
 import torch
 
+
 class NeuroscienceModel:
-    def __init__(self, input_size: int, hidden_size: int, output_size: int, model_type: str = 'SNN'):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        model_type: str = "SNN",
+    ):
         self.model_parameters = {}
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -16,11 +23,13 @@ class NeuroscienceModel:
         self.model = self._create_model()
 
     def _create_model(self):
-        if self.model_type == 'SNN':
-            return SpikingNeuralNetwork(self.input_size, self.hidden_size, self.output_size)
-        elif self.model_type == 'LSTM':
+        if self.model_type == "SNN":
+            return SpikingNeuralNetwork(
+                self.input_size, self.hidden_size, self.output_size
+            )
+        elif self.model_type == "LSTM":
             return LSTMNetwork(self.input_size, self.hidden_size, self.output_size)
-        elif self.model_type == 'TCN':
+        elif self.model_type == "TCN":
             return TemporalConvNet(self.input_size, self.hidden_size, self.output_size)
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
@@ -38,10 +47,13 @@ class NeuroscienceModel:
     def train(self, data: torch.Tensor, labels: torch.Tensor):
         """Train the neuroscience model."""
         self.model.train()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.model_parameters.get('learning_rate', 0.001))
+        optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.model_parameters.get("learning_rate", 0.001),
+        )
         criterion = nn.CrossEntropyLoss()
 
-        for epoch in range(self.model_parameters.get('epochs', 100)):
+        for epoch in range(self.model_parameters.get("epochs", 100)):
             optimizer.zero_grad()
             outputs = self.model(data)
             loss = criterion(outputs, labels)
@@ -62,6 +74,7 @@ class NeuroscienceModel:
         # Placeholder for result interpretation
         return {"interpretation": "Advanced interpretation not implemented"}
 
+
 class SpikingNeuralNetwork(nn.Module):
     input_size: int
     hidden_size: int
@@ -78,11 +91,14 @@ class SpikingNeuralNetwork(nn.Module):
         for t in range(x.shape[1]):
             cur = fc1(x[:, t, :])
             mem = mem * 0.9 + cur * (1 - 0.9)  # Leaky integration
-            spk = jnp.where(mem > 1.0, 1.0, 0.0)  # Spike if membrane potential > threshold
+            spk = jnp.where(
+                mem > 1.0, 1.0, 0.0
+            )  # Spike if membrane potential > threshold
             mem = jnp.where(mem > 1.0, 0.0, mem)  # Reset membrane potential after spike
 
         output = fc2(spk)
         return output
+
 
 class LSTMNetwork(nn.Module):
     hidden_size: int
@@ -95,13 +111,16 @@ class LSTMNetwork(nn.Module):
             variable_broadcast="params",
             split_rngs={"params": False},
             in_axes=1,
-            out_axes=1
+            out_axes=1,
         )
         lstm = ScanLSTM(self.hidden_size)
         batch_size, seq_len, input_size = x.shape
-        carry = lstm.initialize_carry(jax.random.PRNGKey(0), (batch_size,), self.hidden_size)
+        carry = lstm.initialize_carry(
+            jax.random.PRNGKey(0), (batch_size,), self.hidden_size
+        )
         carry, outputs = lstm(carry, x)
         return nn.Dense(features=self.output_size)(outputs[:, -1, :])
+
 
 class TemporalConvNet(nn.Module):
     input_size: int
@@ -110,21 +129,24 @@ class TemporalConvNet(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = jnp.transpose(x, (0, 2, 1))  # (batch, time, features) -> (batch, features, time)
-        x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding='SAME')(x)
+        x = jnp.transpose(
+            x, (0, 2, 1)
+        )  # (batch, time, features) -> (batch, features, time)
+        x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding="SAME")(x)
         x = nn.relu(x)
-        x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding='SAME')(x)
+        x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding="SAME")(x)
         x = nn.relu(x)
         x = jnp.mean(x, axis=-1)  # Global average pooling
         x = nn.Dense(features=self.output_size)(x)
         return x
+
 
 # Example usage
 if __name__ == "__main__":
     input_size = 32
     hidden_size = 64
     output_size = 2
-    model = NeuroscienceModel(input_size, hidden_size, output_size, model_type='SNN')
+    model = NeuroscienceModel(input_size, hidden_size, output_size, model_type="SNN")
     model.set_parameters({"learning_rate": 0.01, "epochs": 100})
 
     # Simulated data

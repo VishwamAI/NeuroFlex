@@ -10,29 +10,28 @@ from .quantum_nn_demo import quantum_nn_example
 from .bci_integration_demo import bci_integration_example
 
 __all__ = [
-    'basic_neuroflex_example',
-    'advanced_neuroflex_example',
-    'quantum_nn_example',
-    'bci_integration_example',
-    'get_examples_version',
-    'SUPPORTED_EXAMPLES',
-    'initialize_examples',
-    'run_example'
+    "basic_neuroflex_example",
+    "advanced_neuroflex_example",
+    "quantum_nn_example",
+    "bci_integration_example",
+    "get_examples_version",
+    "SUPPORTED_EXAMPLES",
+    "initialize_examples",
+    "run_example",
 ]
+
 
 def get_examples_version():
     return "1.0.0"
 
-SUPPORTED_EXAMPLES = [
-    "basic",
-    "advanced",
-    "quantum_nn",
-    "bci_integration"
-]
+
+SUPPORTED_EXAMPLES = ["basic", "advanced", "quantum_nn", "bci_integration"]
+
 
 def initialize_examples():
     print("Initializing Examples Module...")
     # Add any necessary initialization code here
+
 
 def run_example(example_type, *args, **kwargs):
     if example_type == "basic":
@@ -45,5 +44,6 @@ def run_example(example_type, *args, **kwargs):
         return bci_integration_example(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported example type: {example_type}")
+
 
 # Add any other Examples-specific utility functions or constants as needed

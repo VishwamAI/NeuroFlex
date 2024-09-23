@@ -1,11 +1,15 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from typing import List, Optional
+
+
 class Visualization:
     def __init__(self):
         self.plt = plt
 
-    def plot_line(self, x: jnp.ndarray, y: jnp.ndarray, title: str, xlabel: str, ylabel: str):
+    def plot_line(
+        self, x: jnp.ndarray, y: jnp.ndarray, title: str, xlabel: str, ylabel: str
+    ):
         """
         Create a line plot.
 
@@ -23,7 +27,9 @@ class Visualization:
         self.plt.ylabel(ylabel)
         self.plt.show()
 
-    def plot_scatter(self, x: jnp.ndarray, y: jnp.ndarray, title: str, xlabel: str, ylabel: str):
+    def plot_scatter(
+        self, x: jnp.ndarray, y: jnp.ndarray, title: str, xlabel: str, ylabel: str
+    ):
         """
         Create a scatter plot.
 
@@ -41,7 +47,9 @@ class Visualization:
         self.plt.ylabel(ylabel)
         self.plt.show()
 
-    def plot_histogram(self, data: jnp.ndarray, bins: int, title: str, xlabel: str, ylabel: str):
+    def plot_histogram(
+        self, data: jnp.ndarray, bins: int, title: str, xlabel: str, ylabel: str
+    ):
         """
         Create a histogram.
 
@@ -70,15 +78,22 @@ class Visualization:
             ylabel (str): Y-axis label
         """
         self.plt.figure(figsize=(10, 8))
-        self.plt.imshow(data, cmap='viridis', aspect='auto')
+        self.plt.imshow(data, cmap="viridis", aspect="auto")
         self.plt.colorbar()
         self.plt.title(title)
         self.plt.xlabel(xlabel)
         self.plt.ylabel(ylabel)
         self.plt.show()
 
-    def plot_multiple_lines(self, x: jnp.ndarray, y_list: List[jnp.ndarray], labels: List[str],
-                            title: str, xlabel: str, ylabel: str):
+    def plot_multiple_lines(
+        self,
+        x: jnp.ndarray,
+        y_list: List[jnp.ndarray],
+        labels: List[str],
+        title: str,
+        xlabel: str,
+        ylabel: str,
+    ):
         """
         Create a plot with multiple lines.
 

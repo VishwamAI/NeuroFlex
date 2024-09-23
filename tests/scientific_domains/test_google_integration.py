@@ -6,6 +6,7 @@ import flax.linen as nn
 import tensorflow as tf
 from NeuroFlex.scientific_domains.google_integration import GoogleIntegration
 
+
 class TestGoogleIntegration(unittest.TestCase):
     def setUp(self):
         self.input_shape = (28, 28, 1)
@@ -23,13 +24,11 @@ class TestGoogleIntegration(unittest.TestCase):
         output = cnn_model.apply(params, x)
         self.assertEqual(output.shape, (1, self.num_classes))
 
-
-
-
-
     def test_xla_compilation(self):
         cnn_model = self.google_integration.create_cnn_model()
-        compiled_fn = self.google_integration.xla_compilation(cnn_model, (1,) + self.input_shape)
+        compiled_fn = self.google_integration.xla_compilation(
+            cnn_model, (1,) + self.input_shape
+        )
         self.assertTrue(callable(compiled_fn))
 
         # Test compiled function
@@ -42,11 +41,13 @@ class TestGoogleIntegration(unittest.TestCase):
     @pytest.mark.skip(reason="Skipping failing test")
     def test_integrate_tensorflow_model(self):
         # Create a simple TensorFlow model
-        tf_model = tf.keras.Sequential([
-            tf.keras.layers.Flatten(input_shape=self.input_shape),
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dense(self.num_classes)
-        ])
+        tf_model = tf.keras.Sequential(
+            [
+                tf.keras.layers.Flatten(input_shape=self.input_shape),
+                tf.keras.layers.Dense(128, activation="relu"),
+                tf.keras.layers.Dense(self.num_classes),
+            ]
+        )
 
         integrated_model = self.google_integration.integrate_tensorflow_model(tf_model)
         self.assertIsInstance(integrated_model, nn.Module)
@@ -89,7 +90,10 @@ class TestGoogleIntegration(unittest.TestCase):
 
         # Test with invalid number of classes
         with self.assertRaises(ValueError):
-            GoogleIntegration(self.input_shape, 0)  # Number of classes should be positive
+            GoogleIntegration(
+                self.input_shape, 0
+            )  # Number of classes should be positive
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

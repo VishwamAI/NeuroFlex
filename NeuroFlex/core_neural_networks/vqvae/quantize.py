@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VectorQuantizer(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, commitment_cost):
         super(VectorQuantizer, self).__init__()
@@ -11,7 +12,7 @@ class VectorQuantizer(nn.Module):
         self.commitment_cost = commitment_cost
 
         self.embedding = nn.Embedding(num_embeddings, embedding_dim)
-        self.embedding.weight.data.uniform_(-1/num_embeddings, 1/num_embeddings)
+        self.embedding.weight.data.uniform_(-1 / num_embeddings, 1 / num_embeddings)
 
     def forward(self, inputs):
         # Convert inputs from BCHW -> BHWC
@@ -22,13 +23,17 @@ class VectorQuantizer(nn.Module):
         flat_input = inputs.view(-1, self.embedding_dim)
 
         # Calculate distances
-        distances = (torch.sum(flat_input**2, dim=1, keepdim=True)
-                    + torch.sum(self.embedding.weight**2, dim=1)
-                    - 2 * torch.matmul(flat_input, self.embedding.weight.t()))
+        distances = (
+            torch.sum(flat_input**2, dim=1, keepdim=True)
+            + torch.sum(self.embedding.weight**2, dim=1)
+            - 2 * torch.matmul(flat_input, self.embedding.weight.t())
+        )
 
         # Encoding
         encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
-        encodings = torch.zeros(encoding_indices.shape[0], self.num_embeddings, device=inputs.device)
+        encodings = torch.zeros(
+            encoding_indices.shape[0], self.num_embeddings, device=inputs.device
+        )
         encodings.scatter_(1, encoding_indices, 1)
 
         # Quantize and unflatten

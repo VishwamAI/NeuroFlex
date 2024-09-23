@@ -3,6 +3,7 @@ from typing import Dict, Any, List
 import numpy as np
 from collections import deque
 
+
 class ModelMonitor:
     """
     ModelMonitor class for monitoring and analyzing the performance and health of a model.
@@ -43,7 +44,9 @@ class ModelMonitor:
         """Set up the ModelMonitor."""
         self.logger.info("Setting up ModelMonitor...")
 
-    def update(self, state: Any, action: Any, reward: float, next_state: Any, done: bool):
+    def update(
+        self, state: Any, action: Any, reward: float, next_state: Any, done: bool
+    ):
         """
         Update the performance history with a new reward.
 
@@ -64,11 +67,13 @@ class ModelMonitor:
             Dict[str, Any]: A dictionary containing health status information including
                             average reward, performance trend, and model stability.
         """
-        avg_performance = np.mean(self.performance_history) if self.performance_history else 0
+        avg_performance = (
+            np.mean(self.performance_history) if self.performance_history else 0
+        )
         health_status = {
             "average_reward": avg_performance,
             "performance_trend": self._calculate_trend(),
-            "model_stability": self._assess_stability()
+            "model_stability": self._assess_stability(),
         }
         self.health_history.append(health_status)
         return health_status
@@ -109,7 +114,7 @@ class ModelMonitor:
         std_dev = np.std(self.performance_history)
         mean = np.mean(self.performance_history)
 
-        cv = std_dev / mean if mean != 0 else float('inf')
+        cv = std_dev / mean if mean != 0 else float("inf")
 
         if cv < 0.1:
             return "Very Stable"

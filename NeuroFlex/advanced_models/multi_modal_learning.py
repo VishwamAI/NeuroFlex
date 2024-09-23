@@ -9,10 +9,18 @@ from tqdm import tqdm
 import random
 import psutil
 from torch.utils.tensorboard import SummaryWriter
-from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
+from ..constants import (
+    PERFORMANCE_THRESHOLD,
+    UPDATE_INTERVAL,
+    LEARNING_RATE_ADJUSTMENT,
+    MAX_HEALING_ATTEMPTS,
+)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class MultiModalLearning(nn.Module):
     def __init__(self, output_dim: int = 10):
@@ -30,33 +38,33 @@ class MultiModalLearning(nn.Module):
         self.train_loss_history = []
         self.val_loss_history = []
         self.strategy_success_rates = {
-            '_adjust_learning_rate': 0.0,
-            '_reinitialize_layers': 0.0,
-            '_increase_model_capacity': 0.0,
-            '_apply_regularization': 0.0
+            "_adjust_learning_rate": 0.0,
+            "_reinitialize_layers": 0.0,
+            "_increase_model_capacity": 0.0,
+            "_apply_regularization": 0.0,
         }
         self.applied_strategies = []  # Initialize applied_strategies attribute
-        self.writer = SummaryWriter('logs/multi_modal_learning')
+        self.writer = SummaryWriter("logs/multi_modal_learning")
 
     def add_modality(self, name: str, input_shape: tuple):
         """Add a new modality to the multi-modal learning model."""
-        if name not in ['text', 'image', 'tabular', 'time_series']:
+        if name not in ["text", "image", "tabular", "time_series"]:
             raise ValueError(f"Unsupported modality: {name}")
         self.modalities[name] = {
-            'input_shape': input_shape,
-            'encoder': self._create_encoder(name, input_shape)
+            "input_shape": input_shape,
+            "encoder": self._create_encoder(name, input_shape),
         }
 
     def _create_encoder(self, modality: str, input_shape: tuple) -> nn.Module:
         """Create a modality-specific encoder network for a given input shape."""
-        if modality == 'text':
+        if modality == "text":
             vocab_size = 30000  # Increased vocabulary size
             return nn.Sequential(
                 nn.Embedding(vocab_size, 100),
                 nn.LSTM(100, 64, batch_first=True),
-                nn.Linear(64, 64)
+                nn.Linear(64, 64),
             )
-        elif modality == 'image':
+        elif modality == "image":
             return nn.Sequential(
                 nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1, padding=1),
                 nn.ReLU(),
@@ -65,15 +73,13 @@ class MultiModalLearning(nn.Module):
                 nn.ReLU(),
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(64, 64)
+                nn.Linear(64, 64),
             )
-        elif modality == 'tabular':
+        elif modality == "tabular":
             return nn.Sequential(
-                nn.Linear(input_shape[0], 128),
-                nn.ReLU(),
-                nn.Linear(128, 64)
+                nn.Linear(input_shape[0], 128), nn.ReLU(), nn.Linear(128, 64)
             )
-        elif modality == 'time_series':
+        elif modality == "time_series":
             return nn.Sequential(
                 nn.Conv1d(input_shape[0], 32, kernel_size=3, padding=1),
                 nn.ReLU(),
@@ -82,19 +88,23 @@ class MultiModalLearning(nn.Module):
                 nn.ReLU(),
                 nn.AdaptiveAvgPool1d(1),
                 nn.Flatten(),
-                nn.Linear(64, 64)
+                nn.Linear(64, 64),
             )
         else:
             raise ValueError(f"Unsupported modality: {modality}")
 
     def set_fusion_method(self, method: str):
         """Set the fusion method for combining modalities."""
-        supported_methods = ['concatenation', 'attention']
+        supported_methods = ["concatenation", "attention"]
         if method not in supported_methods:
-            raise ValueError(f"Unsupported fusion method. Choose from {supported_methods}")
+            raise ValueError(
+                f"Unsupported fusion method. Choose from {supported_methods}"
+            )
         self.fusion_method = method
 
-    def fuse_modalities(self, encoded_modalities: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def fuse_modalities(
+        self, encoded_modalities: Dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         """Fuse the encoded modalities based on the selected fusion method."""
         # Get the maximum batch size among all modalities
         max_batch_size = max(tensor.size(0) for tensor in encoded_modalities.values())
@@ -106,9 +116,17 @@ class MultiModalLearning(nn.Module):
                 # Repeat or truncate the tensor along the batch dimension to match max_batch_size
                 if tensor.size(0) < max_batch_size:
                     repeat_factor = max_batch_size // tensor.size(0)
-                    adjusted_tensor = tensor.repeat(repeat_factor, *[1] * (tensor.dim() - 1))
+                    adjusted_tensor = tensor.repeat(
+                        repeat_factor, *[1] * (tensor.dim() - 1)
+                    )
                     if max_batch_size % tensor.size(0) != 0:
-                        adjusted_tensor = torch.cat([adjusted_tensor, tensor[:max_batch_size % tensor.size(0)]], dim=0)
+                        adjusted_tensor = torch.cat(
+                            [
+                                adjusted_tensor,
+                                tensor[: max_batch_size % tensor.size(0)],
+                            ],
+                            dim=0,
+                        )
                 else:
                     adjusted_tensor = tensor[:max_batch_size]
                 adjusted_modalities[name] = adjusted_tensor
@@ -117,14 +135,18 @@ class MultiModalLearning(nn.Module):
 
         # Ensure all adjusted tensors have the same batch size
         if len(set(tensor.size(0) for tensor in adjusted_modalities.values())) != 1:
-            raise ValueError("Failed to adjust batch sizes consistently across modalities")
+            raise ValueError(
+                "Failed to adjust batch sizes consistently across modalities"
+            )
 
-        if self.fusion_method == 'concatenation':
+        if self.fusion_method == "concatenation":
             return torch.cat(list(adjusted_modalities.values()), dim=1)
-        elif self.fusion_method == 'attention':
+        elif self.fusion_method == "attention":
             # Implement attention-based fusion
             stacked_tensors = torch.stack(list(adjusted_modalities.values()), dim=1)
-            attention_weights = torch.nn.functional.softmax(torch.rand(stacked_tensors.size(0), stacked_tensors.size(1)), dim=1)
+            attention_weights = torch.nn.functional.softmax(
+                torch.rand(stacked_tensors.size(0), stacked_tensors.size(1)), dim=1
+            )
             return (stacked_tensors * attention_weights.unsqueeze(-1)).sum(dim=1)
         else:
             raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
@@ -141,55 +163,80 @@ class MultiModalLearning(nn.Module):
         # Check for batch size consistency across all input modalities
         batch_sizes = [tensor.size(0) for tensor in inputs.values()]
         if len(set(batch_sizes)) > 1:
-            raise ValueError(f"Inconsistent batch sizes across modalities: {dict(zip(inputs.keys(), batch_sizes))}")
+            raise ValueError(
+                f"Inconsistent batch sizes across modalities: {dict(zip(inputs.keys(), batch_sizes))}"
+            )
 
         # Handle individual modality inputs
         if set(inputs.keys()) != set(self.modalities.keys()):
             missing_modalities = set(self.modalities.keys()) - set(inputs.keys())
             for modality in missing_modalities:
-                inputs[modality] = torch.zeros((batch_sizes[0],) + self.modalities[modality]['input_shape'])
+                inputs[modality] = torch.zeros(
+                    (batch_sizes[0],) + self.modalities[modality]["input_shape"]
+                )
 
         max_batch_size = batch_sizes[0]
 
         if max_batch_size == 0:
             # Handle zero-sized batch
-            return torch.zeros((0, self.classifier.out_features), device=next(self.parameters()).device)
+            return torch.zeros(
+                (0, self.classifier.out_features), device=next(self.parameters()).device
+            )
 
         encoded_modalities = {}
         for name, modality in self.modalities.items():
-            if inputs[name].shape[1:] != modality['input_shape']:
-                raise ValueError(f"Input shape for {name} {inputs[name].shape} does not match the defined shape (batch_size, {modality['input_shape']})")
+            if inputs[name].shape[1:] != modality["input_shape"]:
+                raise ValueError(
+                    f"Input shape for {name} {inputs[name].shape} does not match the defined shape (batch_size, {modality['input_shape']})"
+                )
 
-            if name == 'image':
+            if name == "image":
                 # For image modality, preserve the 4D structure
-                encoded_modalities[name] = modality['encoder'](inputs[name])
-            elif name == 'text':
+                encoded_modalities[name] = modality["encoder"](inputs[name])
+            elif name == "text":
                 # For text modality, ensure long type for embedding and float type for LSTM
                 text_input = inputs[name].long().clamp(0, 29999)  # Clamp to valid range
-                logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
-                embedded = modality['encoder'][0](text_input)
-                lstm_out, (hidden, _) = modality['encoder'][1](embedded.float())
-                encoded_modalities[name] = modality['encoder'][2](lstm_out[:, -1, :])  # Use last time step output
-            elif name == 'time_series':
+                logger.debug(
+                    f"Text input shape: {text_input.shape}, type: {type(text_input)}"
+                )
+                embedded = modality["encoder"][0](text_input)
+                lstm_out, (hidden, _) = modality["encoder"][1](embedded.float())
+                encoded_modalities[name] = modality["encoder"][2](
+                    lstm_out[:, -1, :]
+                )  # Use last time step output
+            elif name == "time_series":
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
                     inputs[name] = inputs[name].unsqueeze(1)
-                encoded_modalities[name] = modality['encoder'](inputs[name])
-            elif name == 'tabular':
+                encoded_modalities[name] = modality["encoder"](inputs[name])
+            elif name == "tabular":
                 # For tabular data, ensure 2D input (batch_size, features)
-                encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
+                encoded_modalities[name] = modality["encoder"](
+                    inputs[name].view(inputs[name].size(0), -1)
+                )
             else:
                 # For other modalities, flatten the input
-                encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
+                encoded_modalities[name] = modality["encoder"](
+                    inputs[name].view(inputs[name].size(0), -1)
+                )
 
-            logger.debug(f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}")
+            logger.debug(
+                f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}"
+            )
 
         # Ensure all encoded modalities have the same batch size and are 2D tensors
-        encoded_modalities = {name: tensor.view(max_batch_size, -1) if isinstance(tensor, torch.Tensor) else torch.tensor(tensor, dtype=torch.float32).view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
+        encoded_modalities = {
+            name: (
+                tensor.view(max_batch_size, -1)
+                if isinstance(tensor, torch.Tensor)
+                else torch.tensor(tensor, dtype=torch.float32).view(max_batch_size, -1)
+            )
+            for name, tensor in encoded_modalities.items()
+        }
 
-        if self.fusion_method == 'concatenation':
+        if self.fusion_method == "concatenation":
             fused = torch.cat(list(encoded_modalities.values()), dim=1)
-        elif self.fusion_method == 'attention':
+        elif self.fusion_method == "attention":
             fused = self.fuse_modalities(encoded_modalities)
         else:
             raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
@@ -199,7 +246,9 @@ class MultiModalLearning(nn.Module):
         # Ensure fused tensor is 2D and matches the classifier's input size
         if fused.dim() != 2 or fused.size(1) != self.classifier.in_features:
             fused = fused.view(max_batch_size, -1)
-            fused = nn.functional.adaptive_avg_pool1d(fused.unsqueeze(1), self.classifier.in_features).squeeze(1)
+            fused = nn.functional.adaptive_avg_pool1d(
+                fused.unsqueeze(1), self.classifier.in_features
+            ).squeeze(1)
 
         # Ensure fused tensor is a valid input for the classifier
         fused = fused.float()  # Convert to float if not already
@@ -212,13 +261,25 @@ class MultiModalLearning(nn.Module):
 
         return self.classifier(fused)
 
-    def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5, batch_size: int = 32):
+    def fit(
+        self,
+        data: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        val_data: Dict[str, torch.Tensor] = None,
+        val_labels: torch.Tensor = None,
+        epochs: int = 10,
+        lr: float = 0.001,
+        patience: int = 5,
+        batch_size: int = 32,
+    ):
         """Train the multi-modal learning model."""
         if len(data) == 0 or len(labels) == 0:
             raise ValueError("Input data or labels are empty")
 
         if val_data is None or val_labels is None:
-            train_data, val_data, train_labels, val_labels = self._split_data(data, labels)
+            train_data, val_data, train_labels, val_labels = self._split_data(
+                data, labels
+            )
         else:
             train_data, train_labels = data, labels
 
@@ -226,7 +287,9 @@ class MultiModalLearning(nn.Module):
             raise ValueError("Batch sizes of input data and labels do not match")
 
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
+        scheduler = ReduceLROnPlateau(
+            optimizer, mode="max", factor=0.5, patience=3, verbose=True
+        )
         criterion = nn.CrossEntropyLoss()
         logger.info(f"Starting training with initial learning rate: {lr}")
 
@@ -237,7 +300,9 @@ class MultiModalLearning(nn.Module):
         best_epoch = 0
         self_healing_count = 0
         initial_performance = self.performance
-        self_heal_threshold = self.performance_threshold * 0.9  # Adjusted threshold for self-healing
+        self_heal_threshold = (
+            self.performance_threshold * 0.9
+        )  # Adjusted threshold for self-healing
 
         for epoch in range(epochs):
             epoch_start_time = time.time()
@@ -246,20 +311,26 @@ class MultiModalLearning(nn.Module):
             # Log CPU and memory usage before training
             cpu_usage = psutil.cpu_percent()
             memory_usage = psutil.virtual_memory().percent
-            self.writer.add_scalar('System/CPU_Usage', cpu_usage, epoch)
-            self.writer.add_scalar('System/Memory_Usage', memory_usage, epoch)
+            self.writer.add_scalar("System/CPU_Usage", cpu_usage, epoch)
+            self.writer.add_scalar("System/Memory_Usage", memory_usage, epoch)
 
             # Log GPU usage if available
             if torch.cuda.is_available():
-                gpu_usage = torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated()
-                self.writer.add_scalar('System/GPU_Usage', gpu_usage, epoch)
+                gpu_usage = (
+                    torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated()
+                )
+                self.writer.add_scalar("System/GPU_Usage", gpu_usage, epoch)
 
             train_start_time = time.time()
-            train_loss, train_accuracy = self._train_epoch(train_data, train_labels, optimizer, criterion, batch_size)
+            train_loss, train_accuracy = self._train_epoch(
+                train_data, train_labels, optimizer, criterion, batch_size
+            )
             train_duration = time.time() - train_start_time
 
             val_start_time = time.time()
-            val_loss, val_accuracy = self._validate(val_data, val_labels, criterion, batch_size)
+            val_loss, val_accuracy = self._validate(
+                val_data, val_labels, criterion, batch_size
+            )
             val_duration = time.time() - val_start_time
 
             self.train_loss_history.append(train_loss)
@@ -275,14 +346,31 @@ class MultiModalLearning(nn.Module):
             self._update_performance(moving_avg_performance)
 
             # Log metrics
-            self._log_metrics(epoch, train_loss, val_loss, train_accuracy, val_accuracy, moving_avg_performance, train_duration, val_duration)
+            self._log_metrics(
+                epoch,
+                train_loss,
+                val_loss,
+                train_accuracy,
+                val_accuracy,
+                moving_avg_performance,
+                train_duration,
+                val_duration,
+            )
 
             logger.info(f"Epoch {epoch + 1}/{epochs}:")
-            logger.info(f"  Train Loss: {train_loss:.6f}, Train Accuracy: {train_accuracy:.6f}")
-            logger.info(f"  Validation Loss: {val_loss:.6f}, Validation Accuracy: {val_accuracy:.6f}")
-            logger.info(f"  Current Performance (Moving Avg): {moving_avg_performance:.6f}")
+            logger.info(
+                f"  Train Loss: {train_loss:.6f}, Train Accuracy: {train_accuracy:.6f}"
+            )
+            logger.info(
+                f"  Validation Loss: {val_loss:.6f}, Validation Accuracy: {val_accuracy:.6f}"
+            )
+            logger.info(
+                f"  Current Performance (Moving Avg): {moving_avg_performance:.6f}"
+            )
             logger.info(f"  Updated Overall Performance: {self.performance:.6f}")
-            logger.info(f"  Performance Change: {self.performance - previous_performance:.6f}")
+            logger.info(
+                f"  Performance Change: {self.performance - previous_performance:.6f}"
+            )
 
             self._log_model_parameters(epoch)
 
@@ -304,48 +392,83 @@ class MultiModalLearning(nn.Module):
 
             # Adjusted self-healing trigger condition
             if moving_avg_performance < self_heal_threshold and epoch >= epochs // 4:
-                logger.warning(f"Moving average performance {moving_avg_performance:.4f} below threshold {self_heal_threshold:.4f}. Initiating self-healing.")
+                logger.warning(
+                    f"Moving average performance {moving_avg_performance:.4f} below threshold {self_heal_threshold:.4f}. Initiating self-healing."
+                )
                 self._self_heal()
                 self_healing_count += 1
                 optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-                scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
-                logger.info(f"After self-healing - Learning Rate: {self.learning_rate:.6f}, Performance: {self.performance:.4f}")
+                scheduler = ReduceLROnPlateau(
+                    optimizer, mode="max", factor=0.5, patience=3, verbose=True
+                )
+                logger.info(
+                    f"After self-healing - Learning Rate: {self.learning_rate:.6f}, Performance: {self.performance:.4f}"
+                )
 
             epoch_duration = time.time() - epoch_start_time
-            self.writer.add_scalar('Time/Epoch_Duration', epoch_duration, epoch)
+            self.writer.add_scalar("Time/Epoch_Duration", epoch_duration, epoch)
 
-        self.writer.add_scalar('Training/Self_Healing_Count', self_healing_count, 0)
+        self.writer.add_scalar("Training/Self_Healing_Count", self_healing_count, 0)
         self._load_best_model()
-        logger.info(f"Training completed. Best Performance: {best_performance:.4f} at epoch {best_epoch + 1}")
+        logger.info(
+            f"Training completed. Best Performance: {best_performance:.4f} at epoch {best_epoch + 1}"
+        )
         logger.info(f"Final Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
         logger.info(f"Performance History: {self.performance_history}")
         self._plot_training_history()
 
-    def _log_metrics(self, epoch, train_loss, val_loss, train_accuracy, val_accuracy, moving_avg_performance, train_duration, val_duration):
-        self.writer.add_scalar('Performance/Train_Loss', train_loss, epoch)
-        self.writer.add_scalar('Performance/Val_Loss', val_loss, epoch)
-        self.writer.add_scalar('Performance/Train_Accuracy', train_accuracy, epoch)
-        self.writer.add_scalar('Performance/Val_Accuracy', val_accuracy, epoch)
-        self.writer.add_scalar('Performance/Moving_Avg_Performance', moving_avg_performance, epoch)
-        self.writer.add_scalar('Performance/Overall_Performance', self.performance, epoch)
-        self.writer.add_scalar('Time/Train_Duration', train_duration, epoch)
-        self.writer.add_scalar('Time/Val_Duration', val_duration, epoch)
+    def _log_metrics(
+        self,
+        epoch,
+        train_loss,
+        val_loss,
+        train_accuracy,
+        val_accuracy,
+        moving_avg_performance,
+        train_duration,
+        val_duration,
+    ):
+        self.writer.add_scalar("Performance/Train_Loss", train_loss, epoch)
+        self.writer.add_scalar("Performance/Val_Loss", val_loss, epoch)
+        self.writer.add_scalar("Performance/Train_Accuracy", train_accuracy, epoch)
+        self.writer.add_scalar("Performance/Val_Accuracy", val_accuracy, epoch)
+        self.writer.add_scalar(
+            "Performance/Moving_Avg_Performance", moving_avg_performance, epoch
+        )
+        self.writer.add_scalar(
+            "Performance/Overall_Performance", self.performance, epoch
+        )
+        self.writer.add_scalar("Time/Train_Duration", train_duration, epoch)
+        self.writer.add_scalar("Time/Val_Duration", val_duration, epoch)
 
         if len(self.train_loss_history) > 1:
             loss_deviation = abs(train_loss - self.train_loss_history[-2])
-            self.writer.add_scalar('Performance/Train_Loss_Deviation', loss_deviation, epoch)
+            self.writer.add_scalar(
+                "Performance/Train_Loss_Deviation", loss_deviation, epoch
+            )
 
         if epoch > 0:
-            improvement_ratio = (self.performance - self.performance_history[0]) / (epoch + 1)
-            self.writer.add_scalar('Performance/Improvement_Ratio', improvement_ratio, epoch)
+            improvement_ratio = (self.performance - self.performance_history[0]) / (
+                epoch + 1
+            )
+            self.writer.add_scalar(
+                "Performance/Improvement_Ratio", improvement_ratio, epoch
+            )
 
     def _log_model_parameters(self, epoch):
         for name, param in self.named_parameters():
             if param.requires_grad and param.grad is not None:
-                self.writer.add_histogram(f'Gradients/{name}', param.grad, epoch)
-                self.writer.add_histogram(f'Weights/{name}', param.data, epoch)
+                self.writer.add_histogram(f"Gradients/{name}", param.grad, epoch)
+                self.writer.add_histogram(f"Weights/{name}", param.data, epoch)
 
-    def _split_data(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_ratio: float = 0.2) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    def _split_data(
+        self,
+        data: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        val_ratio: float = 0.2,
+    ) -> Tuple[
+        Dict[str, torch.Tensor], Dict[str, torch.Tensor], torch.Tensor, torch.Tensor
+    ]:
         """Split data into training and validation sets."""
         num_samples = labels.size(0)
         num_val_samples = int(num_samples * val_ratio)
@@ -360,7 +483,14 @@ class MultiModalLearning(nn.Module):
 
         return train_data, val_data, train_labels, val_labels
 
-    def _train_epoch(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, optimizer: torch.optim.Optimizer, criterion: nn.Module, batch_size: int = 32) -> Tuple[float, float]:
+    def _train_epoch(
+        self,
+        data: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        optimizer: torch.optim.Optimizer,
+        criterion: nn.Module,
+        batch_size: int = 32,
+    ) -> Tuple[float, float]:
         self.train()
         epoch_loss = 0
         correct_predictions = 0
@@ -375,9 +505,13 @@ class MultiModalLearning(nn.Module):
             num_samples = len(first_modality_data)
             num_batches = (num_samples + batch_size - 1) // batch_size
 
-            for i, (batch_data, batch_labels) in enumerate(self._batch_data(data, labels, batch_size)):
+            for i, (batch_data, batch_labels) in enumerate(
+                self._batch_data(data, labels, batch_size)
+            ):
                 if not batch_data or not batch_labels.numel():
-                    logger.warning(f"Empty batch encountered at iteration {i+1}/{num_batches}. Skipping.")
+                    logger.warning(
+                        f"Empty batch encountered at iteration {i+1}/{num_batches}. Skipping."
+                    )
                     continue
 
                 print(f"\rTraining: {i+1}/{num_batches}", end="", flush=True)
@@ -392,7 +526,9 @@ class MultiModalLearning(nn.Module):
                 # Log gradients before update
                 for name, param in self.named_parameters():
                     if param.grad is not None:
-                        logger.debug(f"Gradient norm for {name}: {param.grad.norm().item():.4f}")
+                        logger.debug(
+                            f"Gradient norm for {name}: {param.grad.norm().item():.4f}"
+                        )
 
                 optimizer.step()
 
@@ -402,7 +538,9 @@ class MultiModalLearning(nn.Module):
                 total_samples += batch_labels.size(0)
 
                 # Log batch-level metrics
-                logger.debug(f"Batch loss: {loss.item():.4f}, Accuracy: {(predicted == batch_labels).sum().item() / batch_labels.size(0):.4f}")
+                logger.debug(
+                    f"Batch loss: {loss.item():.4f}, Accuracy: {(predicted == batch_labels).sum().item() / batch_labels.size(0):.4f}"
+                )
 
             if num_batches > 0:
                 avg_loss = epoch_loss / num_batches
@@ -411,14 +549,22 @@ class MultiModalLearning(nn.Module):
                 logger.warning("No batches processed in the epoch.")
                 avg_loss, accuracy = 0.0, 0.0
 
-            logger.info(f"Epoch completed - Avg Loss: {avg_loss:.4f}, Accuracy: {accuracy:.4f}")
+            logger.info(
+                f"Epoch completed - Avg Loss: {avg_loss:.4f}, Accuracy: {accuracy:.4f}"
+            )
             return avg_loss, accuracy
 
         except Exception as e:
             logger.error(f"Error in _train_epoch: {str(e)}")
             return 0.0, 0.0
 
-    def _validate(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, criterion: nn.Module, batch_size: int = 32) -> Tuple[float, float]:
+    def _validate(
+        self,
+        data: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        criterion: nn.Module,
+        batch_size: int = 32,
+    ) -> Tuple[float, float]:
         self.eval()
         val_loss = 0
         correct_predictions = 0
@@ -438,25 +584,29 @@ class MultiModalLearning(nn.Module):
         accuracy = correct_predictions / total_samples
         return avg_loss, accuracy
 
-    def _batch_data(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, batch_size: int = 32):
+    def _batch_data(
+        self, data: Dict[str, torch.Tensor], labels: torch.Tensor, batch_size: int = 32
+    ):
         """Generate batches from the data."""
         num_samples = labels.size(0)
         for i in range(0, num_samples, batch_size):
-            batch_data = {k: v[i:i+batch_size] for k, v in data.items()}
-            batch_labels = labels[i:i+batch_size]
+            batch_data = {k: v[i : i + batch_size] for k, v in data.items()}
+            batch_labels = labels[i : i + batch_size]
             yield batch_data, batch_labels
 
     def _save_best_model(self):
         """Save the best model state."""
-        torch.save(self.state_dict(), 'best_model.pth')
+        torch.save(self.state_dict(), "best_model.pth")
 
     def _load_best_model(self):
         """Load the best model state."""
         try:
-            self.load_state_dict(torch.load('best_model.pth'))
+            self.load_state_dict(torch.load("best_model.pth"))
             logger.info("Successfully loaded the best model.")
         except FileNotFoundError:
-            logger.warning("Best model file 'best_model.pth' not found. Continuing with current model state.")
+            logger.warning(
+                "Best model file 'best_model.pth' not found. Continuing with current model state."
+            )
             return  # Return early to avoid raising the exception
         except Exception as e:
             logger.error(f"Error loading best model: {str(e)}")
@@ -489,9 +639,13 @@ class MultiModalLearning(nn.Module):
             self._save_best_model()
 
         if performance_change < 0:
-            logger.warning(f"Performance decreased: {old_performance:.4f} -> {self.performance:.4f}")
+            logger.warning(
+                f"Performance decreased: {old_performance:.4f} -> {self.performance:.4f}"
+            )
         elif performance_change > 0:
-            logger.info(f"Performance improved: {old_performance:.4f} -> {self.performance:.4f}")
+            logger.info(
+                f"Performance improved: {old_performance:.4f} -> {self.performance:.4f}"
+            )
         else:
             logger.info(f"Performance unchanged: {self.performance:.4f}")
 
@@ -512,7 +666,7 @@ class MultiModalLearning(nn.Module):
             self._adjust_learning_rate,
             self._reinitialize_layers,
             self._increase_model_capacity,
-            self._apply_regularization
+            self._apply_regularization,
         ]
 
         logger.info(f"Initial performance: {initial_performance:.4f}")
@@ -520,11 +674,15 @@ class MultiModalLearning(nn.Module):
 
         performance_window = []
         window_size = 5
-        improvement_threshold = 0.0005  # Further reduced threshold for more gradual improvements
+        improvement_threshold = (
+            0.0005  # Further reduced threshold for more gradual improvements
+        )
         max_performance_drop = 0.002  # Further reduced maximum allowed performance drop
         self.applied_strategies = []  # Initialize applied_strategies list
         consecutive_failures = 0
-        max_consecutive_failures = 10  # Increased to allow more attempts before stopping
+        max_consecutive_failures = (
+            10  # Increased to allow more attempts before stopping
+        )
 
         for attempt in range(self.max_healing_attempts):
             # Adaptive strategy selection based on success rates and randomness
@@ -532,7 +690,9 @@ class MultiModalLearning(nn.Module):
             strategy_name = strategy.__name__
             logger.info(f"Attempt {attempt + 1}: Applying strategy '{strategy_name}'")
 
-            logger.debug(f"Before {strategy_name} - Performance: {self.performance:.4f}, Learning rate: {self.learning_rate:.6f}")
+            logger.debug(
+                f"Before {strategy_name} - Performance: {self.performance:.4f}, Learning rate: {self.learning_rate:.6f}"
+            )
 
             strategy()
             self.applied_strategies.append(strategy_name)  # Track applied strategy
@@ -540,7 +700,9 @@ class MultiModalLearning(nn.Module):
             # Adjust learning rate more conservatively
             old_lr = self.learning_rate
             self._adjust_learning_rate(factor=0.95)  # Smaller adjustment factor
-            logger.info(f"Learning rate adjusted from {old_lr:.6f} to {self.learning_rate:.6f}")
+            logger.info(
+                f"Learning rate adjusted from {old_lr:.6f} to {self.learning_rate:.6f}"
+            )
 
             new_performance = self._simulate_performance()
             logger.info(f"New performance after {strategy_name}: {new_performance:.4f}")
@@ -556,11 +718,15 @@ class MultiModalLearning(nn.Module):
                 logger.info(f"Reverted learning rate to {self.learning_rate:.6f}")
                 consecutive_failures += 1
                 if consecutive_failures >= max_consecutive_failures:
-                    logger.warning(f"Too many consecutive failures. Pausing self-healing process.")
+                    logger.warning(
+                        f"Too many consecutive failures. Pausing self-healing process."
+                    )
                     break
                 continue
             else:
-                consecutive_failures = max(0, consecutive_failures - 1)  # Decrease failure count, but not below 0
+                consecutive_failures = max(
+                    0, consecutive_failures - 1
+                )  # Decrease failure count, but not below 0
 
             performance_window.append(new_performance)
             if len(performance_window) > window_size:
@@ -569,7 +735,9 @@ class MultiModalLearning(nn.Module):
             avg_performance = sum(performance_window) / len(performance_window)
 
             logger.info(f"Performance change: {performance_change:.4f}")
-            logger.info(f"Average performance (last {len(performance_window)} attempts): {avg_performance:.4f}")
+            logger.info(
+                f"Average performance (last {len(performance_window)} attempts): {avg_performance:.4f}"
+            )
 
             if new_performance > best_performance:
                 best_performance = new_performance
@@ -579,34 +747,52 @@ class MultiModalLearning(nn.Module):
 
             # More gradual healing approach
             if avg_performance > self.performance + improvement_threshold:
-                self._update_performance(self.performance + (avg_performance - self.performance) * 0.5)  # More conservative update
-                logger.info(f"Gradually updating performance to: {self.performance:.4f}")
+                self._update_performance(
+                    self.performance + (avg_performance - self.performance) * 0.5
+                )  # More conservative update
+                logger.info(
+                    f"Gradually updating performance to: {self.performance:.4f}"
+                )
                 self._update_strategy_success_rates(strategy_name, True)
             elif new_performance > self.performance:
                 # Update performance even if improvement is small, as long as it's positive
-                self._update_performance(self.performance + (new_performance - self.performance) * 0.3)  # Even more conservative for small improvements
-                logger.info(f"Small improvement detected. Updating performance to: {self.performance:.4f}")
+                self._update_performance(
+                    self.performance + (new_performance - self.performance) * 0.3
+                )  # Even more conservative for small improvements
+                logger.info(
+                    f"Small improvement detected. Updating performance to: {self.performance:.4f}"
+                )
                 self._update_strategy_success_rates(strategy_name, True)
             else:
-                logger.info("No improvement in performance. Continuing healing process.")
+                logger.info(
+                    "No improvement in performance. Continuing healing process."
+                )
                 self._update_strategy_success_rates(strategy_name, False)
 
             if self.performance >= self.performance_threshold:
-                logger.info(f"Self-healing reached performance threshold after {attempt + 1} attempts.")
+                logger.info(
+                    f"Self-healing reached performance threshold after {attempt + 1} attempts."
+                )
                 break
 
             # Update strategy success rates and re-sort strategies
             healing_strategies.sort(key=self._strategy_success_rate, reverse=True)
-            logger.info(f"Updated strategy order: {[s.__name__ for s in healing_strategies]}")
+            logger.info(
+                f"Updated strategy order: {[s.__name__ for s in healing_strategies]}"
+            )
 
         # Always apply the best found configuration
         if best_performance > initial_performance:
-            logger.info(f"Self-healing improved performance. New performance: {best_performance:.4f}")
+            logger.info(
+                f"Self-healing improved performance. New performance: {best_performance:.4f}"
+            )
             self.performance = best_performance
             self.learning_rate = best_learning_rate
             logger.info(f"Final learning rate: {self.learning_rate:.6f}")
         else:
-            logger.warning("Self-healing did not improve performance. Keeping initial configuration.")
+            logger.warning(
+                "Self-healing did not improve performance. Keeping initial configuration."
+            )
             self.performance = initial_performance
             self.learning_rate = initial_learning_rate
             self._revert_model_changes()
@@ -614,12 +800,16 @@ class MultiModalLearning(nn.Module):
             logger.info(f"Kept initial learning rate: {self.learning_rate:.6f}")
 
         self._save_best_model()  # Save the best model after self-healing
-        logger.info(f"Self-healing process completed. Final performance: {self.performance:.4f}")
+        logger.info(
+            f"Self-healing process completed. Final performance: {self.performance:.4f}"
+        )
         logger.info(f"Final learning rate: {self.learning_rate:.6f}")
 
         # Explicitly update performance history with final performance
         self._update_performance(self.performance)
-        logger.info(f"Updated performance history with final performance: {self.performance:.4f}")
+        logger.info(
+            f"Updated performance history with final performance: {self.performance:.4f}"
+        )
 
     def _strategy_success_rate(self, strategy):
         """Return the success rate of a given strategy."""
@@ -631,10 +821,14 @@ class MultiModalLearning(nn.Module):
         if total_success == 0:
             return random.choice(strategies)
 
-        probabilities = [self._strategy_success_rate(s) / total_success for s in strategies]
+        probabilities = [
+            self._strategy_success_rate(s) / total_success for s in strategies
+        ]
         return random.choices(strategies, weights=probabilities, k=1)[0]
 
-    def _update_strategy_success_rates(self, strategy_name: str = None, success: bool = None):
+    def _update_strategy_success_rates(
+        self, strategy_name: str = None, success: bool = None
+    ):
         """Update the success rate of a specific healing strategy or all strategies."""
         if strategy_name and success is not None:
             current_rate = self.strategy_success_rates.get(strategy_name, 0.0)
@@ -656,11 +850,13 @@ class MultiModalLearning(nn.Module):
         logger.info(f"Adjusting learning rate. Current rate: {self.learning_rate:.6f}")
         old_rate = self.learning_rate
         adjustment = factor if factor is not None else LEARNING_RATE_ADJUSTMENT
-        self.learning_rate *= (1 + adjustment)
+        self.learning_rate *= 1 + adjustment
         initial_lr = 0.001  # Initial learning rate
         max_lr = initial_lr * (1 + LEARNING_RATE_ADJUSTMENT * MAX_HEALING_ATTEMPTS)
         self.learning_rate = min(max(self.learning_rate, initial_lr * 0.1), max_lr)
-        logger.info(f"Adjusted learning rate from {old_rate:.6f} to {self.learning_rate:.6f}")
+        logger.info(
+            f"Adjusted learning rate from {old_rate:.6f} to {self.learning_rate:.6f}"
+        )
         logger.debug(f"Learning rate adjustment factor: {1 + adjustment}")
         logger.debug(f"Learning rate bounds: [{initial_lr * 0.1:.6f}, {max_lr:.6f}]")
 
@@ -673,14 +869,11 @@ class MultiModalLearning(nn.Module):
 
     def _increase_model_capacity(self):
         for name, modality in self.modalities.items():
-            old_encoder = modality['encoder']
+            old_encoder = modality["encoder"]
             new_encoder = nn.Sequential(
-                old_encoder,
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, 64)
+                old_encoder, nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)
             )
-            self.modalities[name]['encoder'] = new_encoder
+            self.modalities[name]["encoder"] = new_encoder
         logger.info("Increased model capacity")
 
     def _apply_regularization(self):
@@ -689,7 +882,7 @@ class MultiModalLearning(nn.Module):
         logger.info("Applied noise regularization")
 
     def _revert_model_changes(self):
-        self.load_state_dict(torch.load('best_model.pth'))
+        self.load_state_dict(torch.load("best_model.pth"))
         logger.info("Reverted model to best known state")
 
     def diagnose(self) -> List[str]:
@@ -698,8 +891,12 @@ class MultiModalLearning(nn.Module):
         if self.performance < self.performance_threshold:
             issues.append(f"Low performance: {self.performance:.4f}")
         if (time.time() - self.last_update) > self.update_interval:
-            issues.append(f"Long time since last update: {(time.time() - self.last_update) / 3600:.2f} hours")
-        if len(self.performance_history) >= 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+            issues.append(
+                f"Long time since last update: {(time.time() - self.last_update) / 3600:.2f} hours"
+            )
+        if len(self.performance_history) >= 5 and all(
+            p < self.performance_threshold for p in self.performance_history[-5:]
+        ):
             issues.append("Consistently low performance")
         if any(torch.isnan(p).any() or torch.isinf(p).any() for p in self.parameters()):
             issues.append("NaN or Inf values detected in model parameters")
@@ -709,16 +906,18 @@ class MultiModalLearning(nn.Module):
         """Adjust the learning rate based on recent performance."""
         if len(self.performance_history) >= 2:
             if self.performance_history[-1] > self.performance_history[-2]:
-                self.learning_rate *= (1 + LEARNING_RATE_ADJUSTMENT)
+                self.learning_rate *= 1 + LEARNING_RATE_ADJUSTMENT
             else:
-                self.learning_rate *= (1 - LEARNING_RATE_ADJUSTMENT)
+                self.learning_rate *= 1 - LEARNING_RATE_ADJUSTMENT
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         logger.info(f"Adjusted learning rate to {self.learning_rate:.6f}")
 
     def _simulate_performance(self) -> float:
         """Simulate new performance after applying healing strategies."""
         # Introduce randomness to make the simulation more realistic
-        improvement = np.random.normal(0.05, 0.02)  # Mean of 0.05 with standard deviation of 0.02
+        improvement = np.random.normal(
+            0.05, 0.02
+        )  # Mean of 0.05 with standard deviation of 0.02
         improvement = max(0, improvement)  # Ensure non-negative improvement
         new_performance = min(self.performance + improvement, 1.0)
         logger.debug(f"Simulated performance improvement: {improvement:.4f}")
@@ -728,45 +927,54 @@ class MultiModalLearning(nn.Module):
     def _plot_training_history(self):
         """Plot the training and validation loss history."""
         import matplotlib
-        matplotlib.use('Agg')  # Use non-interactive backend
+
+        matplotlib.use("Agg")  # Use non-interactive backend
         import matplotlib.pyplot as plt
 
         # Disable font-related operations
-        plt.rcParams['font.family'] = 'sans-serif'
-        plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
-        plt.rcParams['svg.fonttype'] = 'none'
+        plt.rcParams["font.family"] = "sans-serif"
+        plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+        plt.rcParams["svg.fonttype"] = "none"
 
         try:
             plt.figure(figsize=(10, 5))
-            plt.plot(self.train_loss_history, label='Training Loss')
-            plt.plot(self.val_loss_history, label='Validation Loss')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.title('Training and Validation Loss History')
+            plt.plot(self.train_loss_history, label="Training Loss")
+            plt.plot(self.val_loss_history, label="Validation Loss")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.title("Training and Validation Loss History")
             plt.legend()
-            plt.savefig('loss_history.png', dpi=300, bbox_inches='tight')
+            plt.savefig("loss_history.png", dpi=300, bbox_inches="tight")
             plt.close()
 
             plt.figure(figsize=(10, 5))
-            plt.plot(self.performance_history, label='Performance')
-            plt.axhline(y=self.performance_threshold, color='r', linestyle='--', label='Performance Threshold')
-            plt.xlabel('Update')
-            plt.ylabel('Performance')
-            plt.title('Performance History')
+            plt.plot(self.performance_history, label="Performance")
+            plt.axhline(
+                y=self.performance_threshold,
+                color="r",
+                linestyle="--",
+                label="Performance Threshold",
+            )
+            plt.xlabel("Update")
+            plt.ylabel("Performance")
+            plt.title("Performance History")
             plt.legend()
-            plt.savefig('performance_history.png', dpi=300, bbox_inches='tight')
+            plt.savefig("performance_history.png", dpi=300, bbox_inches="tight")
             plt.close()
 
-            logger.info("Training history plots saved as 'loss_history.png' and 'performance_history.png'")
+            logger.info(
+                "Training history plots saved as 'loss_history.png' and 'performance_history.png'"
+            )
         except Exception as e:
             logger.error(f"Error while plotting training history: {str(e)}")
+
 
 # Example usage
 if __name__ == "__main__":
     model = MultiModalLearning()
-    model.add_modality('image', (3, 64, 64))
-    model.add_modality('text', (100,))
-    model.set_fusion_method('concatenation')
+    model.add_modality("image", (3, 64, 64))
+    model.add_modality("text", (100,))
+    model.set_fusion_method("concatenation")
 
     # Simulated data
     batch_size = 32
@@ -774,8 +982,8 @@ if __name__ == "__main__":
     text_data = torch.randn(batch_size, 100)
     labels = torch.randint(0, 10, (batch_size,))
 
-    inputs = {'image': image_data, 'text': text_data}
+    inputs = {"image": image_data, "text": text_data}
     fused_output = model.forward(inputs)
     print("Fused output shape:", fused_output.shape)
 
-    model.train({'image': image_data, 'text': text_data}, labels)
+    model.train({"image": image_data, "text": text_data}, labels)

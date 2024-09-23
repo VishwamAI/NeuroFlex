@@ -18,17 +18,20 @@ from NeuroFlex.core_neural_networks.jax.jax_module import JAXModel
 from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import TensorFlowModel
 from NeuroFlex.core_neural_networks.pytorch.pytorch_module import PyTorchModel
 
+
 class SelfCuringAlgorithm:
     def __init__(self, model):
         self.model = model
 
     def diagnose(self):
         issues = []
-        if not hasattr(self.model, 'is_trained') or not self.model.is_trained:
+        if not hasattr(self.model, "is_trained") or not self.model.is_trained:
             issues.append("Model is not trained")
-        if not hasattr(self.model, 'performance') or self.model.performance < 0.8:
+        if not hasattr(self.model, "performance") or self.model.performance < 0.8:
             issues.append("Model performance is below threshold")
-        if not hasattr(self.model, 'last_update') or (time.time() - self.model.last_update > 86400):
+        if not hasattr(self.model, "last_update") or (
+            time.time() - self.model.last_update > 86400
+        ):
             issues.append("Model hasn't been updated in 24 hours")
 
         if adversarial_attack_detection(self.model):
@@ -71,14 +74,37 @@ class SelfCuringAlgorithm:
     def correct_model_drift(self):
         print("Correcting model drift...")
         # Implement model recalibration or retraining on recent data
+
+
 class NeuroFlex:
-    def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
-                 use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
-                 pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
-                 ete_integration=None, alphafold_integration=None, alphafold_params=None,
-                 fairness_threshold=0.8, ethical_guidelines=None, use_unified_transformer=False,
-                 unified_transformer_params=None, use_consciousness_simulation=False,
-                 use_bci=False, use_edge_ai=False, use_prompt_agent=False):
+    def __init__(
+        self,
+        features,
+        use_cnn=False,
+        use_rnn=False,
+        use_gan=False,
+        fairness_constraint=None,
+        use_quantum=False,
+        use_alphafold=False,
+        backend="jax",
+        jax_model=None,
+        tensorflow_model=None,
+        pytorch_model=None,
+        quantum_model=None,
+        bioinformatics_integration=None,
+        scikit_bio_integration=None,
+        ete_integration=None,
+        alphafold_integration=None,
+        alphafold_params=None,
+        fairness_threshold=0.8,
+        ethical_guidelines=None,
+        use_unified_transformer=False,
+        unified_transformer_params=None,
+        use_consciousness_simulation=False,
+        use_bci=False,
+        use_edge_ai=False,
+        use_prompt_agent=False,
+    ):
         self.features = features
         self.use_cnn = use_cnn
         self.use_rnn = use_rnn
@@ -109,7 +135,9 @@ class NeuroFlex:
         self.performance = None  # Initialize performance attribute
 
         if self.use_unified_transformer:
-            self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)
+            self.unified_transformer = UnifiedTransformer(
+                **self.unified_transformer_params
+            )
 
         if self.use_consciousness_simulation:
             self.consciousness_simulation = ConsciousnessSimulation()
@@ -130,7 +158,9 @@ class NeuroFlex:
             return tokenize_text(text)
 
     def check_fairness(self, predictions, sensitive_attributes):
-        fairness_score = self._calculate_fairness_score(predictions, sensitive_attributes)
+        fairness_score = self._calculate_fairness_score(
+            predictions, sensitive_attributes
+        )
         return fairness_score >= self.fairness_threshold
 
     def _calculate_fairness_score(self, predictions, sensitive_attributes):
@@ -142,13 +172,19 @@ class NeuroFlex:
             decision = action(decision)
         return decision
 
-    def train(self, train_data, val_data, num_epochs=10, batch_size=32, learning_rate=1e-3):
+    def train(
+        self, train_data, val_data, num_epochs=10, batch_size=32, learning_rate=1e-3
+    ):
         return train_model(
-            self, train_data, val_data,
-            num_epochs=num_epochs, batch_size=batch_size, learning_rate=learning_rate,
+            self,
+            train_data,
+            val_data,
+            num_epochs=num_epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
             use_alphafold=self.use_alphafold,
             use_quantum=self.use_quantum,
-            transformer=self.unified_transformer
+            transformer=self.unified_transformer,
         )
 
     def fine_tune_transformer(self, task, num_labels):
@@ -156,11 +192,11 @@ class NeuroFlex:
             self.unified_transformer.fine_tune(task=task, num_labels=num_labels)
 
     def predict(self, input_data):
-        if self.backend == 'jax':
+        if self.backend == "jax":
             return self.jax_model.predict(input_data)
-        elif self.backend == 'tensorflow':
+        elif self.backend == "tensorflow":
             return self.tensorflow_model.predict(input_data)
-        elif self.backend == 'pytorch':
+        elif self.backend == "pytorch":
             return self.pytorch_model.predict(input_data)
         elif self.use_quantum:
             return self.quantum_model.predict(input_data)
@@ -207,7 +243,9 @@ class NeuroFlex:
 
     def analyze_protein_structure(self, sequence):
         if self.use_alphafold:
-            return self.alphafold_integration.predict_structure(sequence, **self.alphafold_params)
+            return self.alphafold_integration.predict_structure(
+                sequence, **self.alphafold_params
+            )
         else:
             raise ValueError("AlphaFold integration is not enabled")
 
@@ -223,6 +261,7 @@ class NeuroFlex:
         else:
             raise ValueError("ETE integration is not initialized")
 
+
 def create_neuroflex_model():
     return NeuroFlex(
         features=[64, 32, 10],
@@ -232,7 +271,7 @@ def create_neuroflex_model():
         fairness_constraint=0.1,
         use_quantum=True,
         use_alphafold=True,
-        backend='jax',
+        backend="jax",
         jax_model=JAXModel,
         tensorflow_model=TensorFlowModel,
         pytorch_model=PyTorchModel,
@@ -241,18 +280,19 @@ def create_neuroflex_model():
         scikit_bio_integration=ScikitBioIntegration(),
         ete_integration=ETEIntegration(),
         alphafold_integration=AlphaFoldIntegration(),
-        alphafold_params={'max_recycling': 3},
+        alphafold_params={"max_recycling": 3},
         use_unified_transformer=True,
         unified_transformer_params={
-            'vocab_size': 30000,
-            'd_model': 512,
-            'num_heads': 8,
-            'num_layers': 6,
-            'd_ff': 2048,
-            'max_seq_length': 512,
-            'dropout': 0.1
-        }
+            "vocab_size": 30000,
+            "d_model": 512,
+            "num_heads": 8,
+            "num_layers": 6,
+            "d_ff": 2048,
+            "max_seq_length": 512,
+            "dropout": 0.1,
+        },
     )
+
 
 # Example usage
 if __name__ == "__main__":
@@ -264,10 +304,12 @@ if __name__ == "__main__":
     trained_model = model.train(train_data, val_data)
 
     # Fine-tune for classification
-    model.fine_tune_transformer(task='classification', num_labels=2)
+    model.fine_tune_transformer(task="classification", num_labels=2)
 
     # Generate text
-    generated_text = model.generate_text("This is an example input for text generation.")
+    generated_text = model.generate_text(
+        "This is an example input for text generation."
+    )
     print("Generated text:", generated_text)
 
     # Few-shot learning example

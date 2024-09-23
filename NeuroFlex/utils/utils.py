@@ -3,6 +3,7 @@ import os
 import json
 from typing import List, Dict, Any
 
+
 def load_data(file_path: str) -> np.ndarray:
     """
     Load data from a file (supports .npy and .csv formats).
@@ -13,12 +14,13 @@ def load_data(file_path: str) -> np.ndarray:
     Returns:
     np.ndarray: Loaded data
     """
-    if file_path.endswith('.npy'):
+    if file_path.endswith(".npy"):
         return np.load(file_path)
-    elif file_path.endswith('.csv'):
-        return np.genfromtxt(file_path, delimiter=',')
+    elif file_path.endswith(".csv"):
+        return np.genfromtxt(file_path, delimiter=",")
     else:
         raise ValueError("Unsupported file format. Use .npy or .csv")
+
 
 def save_data(data: np.ndarray, file_path: str) -> None:
     """
@@ -28,12 +30,13 @@ def save_data(data: np.ndarray, file_path: str) -> None:
     data (np.ndarray): Data to be saved
     file_path (str): Path to save the data
     """
-    if file_path.endswith('.npy'):
+    if file_path.endswith(".npy"):
         np.save(file_path, data)
-    elif file_path.endswith('.csv'):
-        np.savetxt(file_path, data, delimiter=',')
+    elif file_path.endswith(".csv"):
+        np.savetxt(file_path, data, delimiter=",")
     else:
         raise ValueError("Unsupported file format. Use .npy or .csv")
+
 
 def normalize_data(data: np.ndarray) -> np.ndarray:
     """
@@ -47,6 +50,7 @@ def normalize_data(data: np.ndarray) -> np.ndarray:
     """
     return (data - np.mean(data)) / np.std(data)
 
+
 def create_directory(directory: str) -> None:
     """
     Create a directory if it doesn't exist.
@@ -56,6 +60,7 @@ def create_directory(directory: str) -> None:
     """
     if not os.path.exists(directory):
         os.makedirs(directory)
+
 
 def load_json(file_path: str) -> Dict[str, Any]:
     """
@@ -67,8 +72,9 @@ def load_json(file_path: str) -> Dict[str, Any]:
     Returns:
     Dict[str, Any]: Loaded JSON data
     """
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         return json.load(f)
+
 
 def save_json(data: Dict[str, Any], file_path: str) -> None:
     """
@@ -78,8 +84,9 @@ def save_json(data: Dict[str, Any], file_path: str) -> None:
     data (Dict[str, Any]): Data to be saved
     file_path (str): Path to save the JSON file
     """
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         json.dump(data, f, indent=4)
+
 
 def flatten_list(nested_list: List[Any]) -> List[Any]:
     """
@@ -99,6 +106,7 @@ def flatten_list(nested_list: List[Any]) -> List[Any]:
             flattened.append(item)
     return flattened
 
+
 def tokenize_text(text: str) -> List[str]:
     """
     Tokenize a given text into words.
@@ -113,6 +121,7 @@ def tokenize_text(text: str) -> List[str]:
     # consider using libraries like NLTK or spaCy
     return text.lower().split()
 
+
 def get_activation_function(activation_name: str):
     """
     Get the activation function based on the given name.
@@ -124,19 +133,26 @@ def get_activation_function(activation_name: str):
     Callable: JAX/Flax compatible activation function
     """
     import jax.nn as jnn
+
     activations = {
-        'relu': jnn.relu,
-        'sigmoid': jnn.sigmoid,
-        'tanh': jnn.tanh,
-        'leaky_relu': jnn.leaky_relu,
+        "relu": jnn.relu,
+        "sigmoid": jnn.sigmoid,
+        "tanh": jnn.tanh,
+        "leaky_relu": jnn.leaky_relu,
     }
     return activations.get(activation_name.lower(), jnn.relu)
+
 
 # TODO: Add more utility functions as needed for the NeuroFlex project
 # TODO: Implement error handling and logging in these utility functions
 
-def preprocess_data(data: np.ndarray, categorical_columns: List[int] = None,
-                    scale: bool = True, handle_missing: bool = True) -> np.ndarray:
+
+def preprocess_data(
+    data: np.ndarray,
+    categorical_columns: List[int] = None,
+    scale: bool = True,
+    handle_missing: bool = True,
+) -> np.ndarray:
     """
     Preprocess data for neural network inputs.
 
@@ -163,7 +179,9 @@ def preprocess_data(data: np.ndarray, categorical_columns: List[int] = None,
 
         # Scale numerical features
         if scale:
-            numerical_columns = [i for i in range(data.shape[1]) if i not in (categorical_columns or [])]
+            numerical_columns = [
+                i for i in range(data.shape[1]) if i not in (categorical_columns or [])
+            ]
             data[:, numerical_columns] = normalize_data(data[:, numerical_columns])
 
         return data

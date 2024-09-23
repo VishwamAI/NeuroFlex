@@ -8,6 +8,7 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
+
 class AdvancedNN(nn.Module):
     """
     An advanced neural network module with self-healing mechanisms and adaptive learning rate adjustments.
@@ -23,9 +24,19 @@ class AdvancedNN(nn.Module):
         dropout_rate (float, optional): Dropout rate for regularization. Defaults to 0.5.
         learning_rate (float, optional): Initial learning rate for optimization. Defaults to 0.001.
     """
-    def __init__(self, features: List[int], input_shape: Tuple[int, ...], output_shape: Tuple[int, ...],
-                 conv_dim: int = 2, action_dim: Optional[int] = None, use_cnn: bool = False,
-                 use_rl: bool = False, dropout_rate: float = 0.5, learning_rate: float = 0.001):
+
+    def __init__(
+        self,
+        features: List[int],
+        input_shape: Tuple[int, ...],
+        output_shape: Tuple[int, ...],
+        conv_dim: int = 2,
+        action_dim: Optional[int] = None,
+        use_cnn: bool = False,
+        use_rl: bool = False,
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super(AdvancedNN, self).__init__()
         self.features = features
         self.input_shape = input_shape
@@ -86,7 +97,9 @@ class AdvancedNN(nn.Module):
             self._cleanup()
             raise
 
-        self.step_count = self.variable('state', 'step_count', jnp.zeros, shape=(), dtype=jnp.int32)
+        self.step_count = self.variable(
+            "state", "step_count", jnp.zeros, shape=(), dtype=jnp.int32
+        )
         logging.debug(f"Step count initialized: {self.step_count}")
 
         try:
@@ -126,19 +139,27 @@ class AdvancedNN(nn.Module):
             raise
 
         self._setup_required_attributes()
-        logging.info("NeuroFlexNN setup completed successfully with all required attributes")
+        logging.info(
+            "NeuroFlexNN setup completed successfully with all required attributes"
+        )
         logging.debug(f"Final NeuroFlexNN configuration: {self.__dict__}")
 
     def _setup_required_attributes(self):
-        required_attributes = ['params', 'step_count']
+        required_attributes = ["params", "step_count"]
         if self.use_cnn:
-            required_attributes.extend(['batch_stats', 'cnn_block'])
+            required_attributes.extend(["batch_stats", "cnn_block"])
         if self.use_rl:
-            required_attributes.extend(['rl_layer'] if not self.use_dueling else ['value_stream', 'advantage_stream'])
+            required_attributes.extend(
+                ["rl_layer"]
+                if not self.use_dueling
+                else ["value_stream", "advantage_stream"]
+            )
 
         for attr in required_attributes:
             if not hasattr(self, attr):
-                raise AttributeError(f"Required attribute '{attr}' is missing after setup")
+                raise AttributeError(
+                    f"Required attribute '{attr}' is missing after setup"
+                )
             if getattr(self, attr) is None:
                 raise ValueError(f"Required attribute '{attr}' is None after setup")
 
@@ -146,14 +167,16 @@ class AdvancedNN(nn.Module):
         """Initialize the parameters of the neural network."""
         logging.info("Starting parameter initialization")
         try:
-            rng = self.make_rng('params')
+            rng = self.make_rng("params")
             dummy_input = jnp.ones((1,) + self.input_shape[1:], dtype=self.dtype)
             variables = self.init(rng, dummy_input)
-            self.params = variables['params']
+            self.params = variables["params"]
             if self.params is None:
                 raise ValueError("Parameters initialization failed: params is None")
 
-            logging.info("Parameters initialized. Proceeding with detailed verification.")
+            logging.info(
+                "Parameters initialized. Proceeding with detailed verification."
+            )
 
             self._log_layer_initialization()
             self._verify_expected_layers()
@@ -176,21 +199,27 @@ class AdvancedNN(nn.Module):
             self.params = None  # Reset params if initialization fails
             raise
         finally:
-            params_status = 'Set' if self.params is not None else 'Not set'
-            logging.info(f"Parameter initialization process completed. Params status: {params_status}")
+            params_status = "Set" if self.params is not None else "Not set"
+            logging.info(
+                f"Parameter initialization process completed. Params status: {params_status}"
+            )
             if self.params is not None:
-                logging.debug(f"Final params structure: {jax.tree_map(lambda x: x.shape, self.params)}")
+                logging.debug(
+                    f"Final params structure: {jax.tree_map(lambda x: x.shape, self.params)}"
+                )
 
         return self.params
 
     def _perform_dummy_forward_pass(self, dummy_input):
         """Perform a dummy forward pass to ensure all layers are properly connected."""
         try:
-            _ = self.apply({'params': self.params}, dummy_input, train=False)
+            _ = self.apply({"params": self.params}, dummy_input, train=False)
             logging.info("Dummy forward pass completed successfully")
         except Exception as e:
             logging.error(f"Error during dummy forward pass: {str(e)}")
-            raise ValueError("Failed to perform dummy forward pass. Layers may not be properly connected.")
+            raise ValueError(
+                "Failed to perform dummy forward pass. Layers may not be properly connected."
+            )
 
     def _log_layer_initialization(self):
         """Log detailed information about each layer's initialization."""
@@ -199,50 +228,84 @@ class AdvancedNN(nn.Module):
             for param_name, param_value in layer_params.items():
                 logging.debug(f"  {param_name} shape: {param_value.shape}")
                 if not jnp.all(jnp.isfinite(param_value)):
-                    raise ValueError(f"Non-finite values found in {layer_name}.{param_name}")
-                logging.debug(f"  {param_name} stats: min={param_value.min():.4f}, max={param_value.max():.4f}, mean={param_value.mean():.4f}, std={param_value.std():.4f}")
+                    raise ValueError(
+                        f"Non-finite values found in {layer_name}.{param_name}"
+                    )
+                logging.debug(
+                    f"  {param_name} stats: min={param_value.min():.4f}, max={param_value.max():.4f}, mean={param_value.mean():.4f}, std={param_value.std():.4f}"
+                )
 
     def _verify_expected_layers(self):
         """Verify that all expected layers are present in the initialized parameters."""
-        expected_layers = ['conv_layers', 'bn_layers', 'dense_layers'] if self.use_cnn else ['dense_layers']
+        expected_layers = (
+            ["conv_layers", "bn_layers", "dense_layers"]
+            if self.use_cnn
+            else ["dense_layers"]
+        )
         if self.use_rl:
-            expected_layers.extend(['value_stream', 'advantage_stream'] if self.use_dueling else ['rl_layer'])
+            expected_layers.extend(
+                ["value_stream", "advantage_stream"]
+                if self.use_dueling
+                else ["rl_layer"]
+            )
         else:
-            expected_layers.append('final_dense')
+            expected_layers.append("final_dense")
 
         for layer in expected_layers:
             if layer not in self.params:
-                raise ValueError(f"Expected layer '{layer}' not found in initialized parameters")
+                raise ValueError(
+                    f"Expected layer '{layer}' not found in initialized parameters"
+                )
             logging.debug(f"Verified presence of {layer}")
 
     def _verify_layer_shapes(self):
         """Verify the shapes of initialized layers."""
         if self.use_cnn:
             for i, feat in enumerate(self.features[:-1]):
-                conv_shape = self.params['conv_layers'][f'conv_{i}']['kernel'].shape
-                expected_shape = (3,) * self.conv_dim + (self.input_shape[-1] if i == 0 else self.features[i-1], feat)
+                conv_shape = self.params["conv_layers"][f"conv_{i}"]["kernel"].shape
+                expected_shape = (3,) * self.conv_dim + (
+                    self.input_shape[-1] if i == 0 else self.features[i - 1],
+                    feat,
+                )
                 if conv_shape != expected_shape:
-                    raise ValueError(f"Conv layer {i} shape mismatch. Expected {expected_shape}, got {conv_shape}")
+                    raise ValueError(
+                        f"Conv layer {i} shape mismatch. Expected {expected_shape}, got {conv_shape}"
+                    )
 
         for i, feat in enumerate(self.features):
-            dense_shape = self.params['dense_layers'][f'dense_{i}']['kernel'].shape
-            expected_shape = (self.calculate_input_size() if i == 0 else self.features[i-1], feat)
+            dense_shape = self.params["dense_layers"][f"dense_{i}"]["kernel"].shape
+            expected_shape = (
+                self.calculate_input_size() if i == 0 else self.features[i - 1],
+                feat,
+            )
             if dense_shape != expected_shape:
-                raise ValueError(f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}")
+                raise ValueError(
+                    f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}"
+                )
 
         logging.debug("All layer shapes verified successfully")
 
     def _verify_expected_layers(self):
         """Verify that all expected layers are present in the initialized parameters."""
-        expected_layers = ['conv_layers', 'bn_layers', 'dense_layers'] if self.use_cnn else ['dense_layers']
+        expected_layers = (
+            ["conv_layers", "bn_layers", "dense_layers"]
+            if self.use_cnn
+            else ["dense_layers"]
+        )
         if self.use_rl:
-            expected_layers.extend(['value_stream', 'advantage_stream'] if self.use_dueling else ['rl_layer'])
+            expected_layers.extend(
+                ["value_stream", "advantage_stream"]
+                if self.use_dueling
+                else ["rl_layer"]
+            )
         else:
-            expected_layers.append('final_dense')
+            expected_layers.append("final_dense")
 
         for layer in expected_layers:
             if layer not in self.params:
-                raise ValueError(f"Expected layer '{layer}' not found in initialized parameters")
+                raise ValueError(
+                    f"Expected layer '{layer}' not found in initialized parameters"
+                )
             logging.debug(f"Verified presence of {layer}")
 
     def _verify_parameter_flow(self):
@@ -251,42 +314,62 @@ class AdvancedNN(nn.Module):
             for param_name, param_value in layer_params.items():
                 # Check if parameters are leaf nodes (not further nested)
                 if isinstance(param_value, (jnp.ndarray, np.ndarray)):
-                    logging.debug(f"Parameter flow verified for {layer_name}.{param_name}")
+                    logging.debug(
+                        f"Parameter flow verified for {layer_name}.{param_name}"
+                    )
                 else:
-                    raise ValueError(f"Unexpected parameter structure in {layer_name}.{param_name}")
+                    raise ValueError(
+                        f"Unexpected parameter structure in {layer_name}.{param_name}"
+                    )
 
         # Verify that params can be accessed and used in a forward pass
         try:
             dummy_input = jnp.ones((1,) + self.input_shape[1:], dtype=self.dtype)
-            _ = self.apply({'params': self.params}, dummy_input)
-            logging.debug("Successfully performed a forward pass with initialized parameters")
+            _ = self.apply({"params": self.params}, dummy_input)
+            logging.debug(
+                "Successfully performed a forward pass with initialized parameters"
+            )
         except Exception as e:
-            raise ValueError(f"Error in forward pass with initialized parameters: {str(e)}")
+            raise ValueError(
+                f"Error in forward pass with initialized parameters: {str(e)}"
+            )
 
     def _verify_layer_shapes(self):
         """Verify the shapes of initialized layers."""
         if self.use_cnn:
             for i, feat in enumerate(self.features[:-1]):
-                conv_shape = self.params['conv_layers'][f'conv_{i}']['kernel'].shape
-                expected_shape = (3,) * self.conv_dim + (self.input_shape[-1] if i == 0 else self.features[i-1], feat)
+                conv_shape = self.params["conv_layers"][f"conv_{i}"]["kernel"].shape
+                expected_shape = (3,) * self.conv_dim + (
+                    self.input_shape[-1] if i == 0 else self.features[i - 1],
+                    feat,
+                )
                 if conv_shape != expected_shape:
-                    raise ValueError(f"Conv layer {i} shape mismatch. Expected {expected_shape}, got {conv_shape}")
+                    raise ValueError(
+                        f"Conv layer {i} shape mismatch. Expected {expected_shape}, got {conv_shape}"
+                    )
 
         for i, feat in enumerate(self.features):
-            dense_shape = self.params['dense_layers'][f'dense_{i}']['kernel'].shape
-            expected_shape = (self.calculate_input_size() if i == 0 else self.features[i-1], feat)
+            dense_shape = self.params["dense_layers"][f"dense_{i}"]["kernel"].shape
+            expected_shape = (
+                self.calculate_input_size() if i == 0 else self.features[i - 1],
+                feat,
+            )
             if dense_shape != expected_shape:
-                raise ValueError(f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}")
+                raise ValueError(
+                    f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}"
+                )
 
     def _verify_custom_layers(self):
         """Verify the initialization of custom layers."""
-        custom_layers = ['ResidualBlock'] if self.use_residual else []
+        custom_layers = ["ResidualBlock"] if self.use_residual else []
         if self.use_rl and self.use_dueling:
-            custom_layers.extend(['value_stream', 'advantage_stream'])
+            custom_layers.extend(["value_stream", "advantage_stream"])
 
         for layer in custom_layers:
             if layer not in self.params:
-                raise ValueError(f"Custom layer '{layer}' not found in initialized parameters")
+                raise ValueError(
+                    f"Custom layer '{layer}' not found in initialized parameters"
+                )
             logging.debug(f"Verified initialization of custom layer: {layer}")
 
         if self.use_residual:
@@ -296,39 +379,50 @@ class AdvancedNN(nn.Module):
         """Verify the initialization of residual blocks."""
         for i, layer in enumerate(self.dense_layers):
             if isinstance(layer, ResidualBlock):
-                if f'ResidualBlock_{i}' not in self.params:
-                    raise ValueError(f"ResidualBlock_{i} not found in initialized parameters")
+                if f"ResidualBlock_{i}" not in self.params:
+                    raise ValueError(
+                        f"ResidualBlock_{i} not found in initialized parameters"
+                    )
                 logging.debug(f"Verified initialization of ResidualBlock_{i}")
 
         for i, feat in enumerate(self.features):
-            dense_shape = self.params['dense_layers'][f'dense_{i}']['kernel'].shape
-            expected_shape = (self.calculate_input_size() if i == 0 else self.features[i-1], feat)
+            dense_shape = self.params["dense_layers"][f"dense_{i}"]["kernel"].shape
+            expected_shape = (
+                self.calculate_input_size() if i == 0 else self.features[i - 1],
+                feat,
+            )
             if dense_shape != expected_shape:
-                raise ValueError(f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}")
+                raise ValueError(
+                    f"Dense layer {i} shape mismatch. Expected {expected_shape}, got {dense_shape}"
+                )
 
         logging.debug("All layer shapes verified successfully")
 
     def _validate_initialization(self):
         """Validate that all necessary components are initialized."""
         logging.info("Validating initialization")
-        if not hasattr(self, 'params'):
+        if not hasattr(self, "params"):
             raise ValueError("params attribute is missing")
         if not self.params:
             raise ValueError("params is empty")
 
         if self.use_cnn:
-            if not hasattr(self, 'batch_stats'):
+            if not hasattr(self, "batch_stats"):
                 raise ValueError("batch_stats attribute is missing for CNN")
-            if not hasattr(self, 'cnn_block'):
+            if not hasattr(self, "cnn_block"):
                 raise ValueError("cnn_block is missing")
-            if 'conv_layers' not in self.params:
+            if "conv_layers" not in self.params:
                 raise ValueError("conv_layers not found in params")
 
         if not self.use_rl:
-            if not hasattr(self, 'final_dense'):
+            if not hasattr(self, "final_dense"):
                 raise ValueError("final_dense layer is missing for non-RL setup")
         else:
-            if 'rl_layer' not in self.params and not (self.use_dueling and 'value_stream' in self.params and 'advantage_stream' in self.params):
+            if "rl_layer" not in self.params and not (
+                self.use_dueling
+                and "value_stream" in self.params
+                and "advantage_stream" in self.params
+            ):
                 raise ValueError("RL layers not properly initialized")
 
         logging.info("Initialization validation complete")
@@ -354,51 +448,68 @@ class AdvancedNN(nn.Module):
             self.final_dense = nn.Dense(
                 self.output_shape[-1],
                 dtype=self.dtype,
-                kernel_init=nn.initializers.kaiming_normal()
+                kernel_init=nn.initializers.kaiming_normal(),
             )
             logging.debug(f"Final dense layer set up: {self.final_dense}")
 
     def _initialize_params(self):
         logging.info("Initializing parameters")
-        self.params = self.init_params(self.make_rng('params'))
+        self.params = self.init_params(self.make_rng("params"))
         if self.params is None:
             raise ValueError("Parameters initialization failed")
-        logging.debug(f"Parameters initialized: {jax.tree_map(lambda x: x.shape, self.params)}")
+        logging.debug(
+            f"Parameters initialized: {jax.tree_map(lambda x: x.shape, self.params)}"
+        )
 
     def _initialize_batch_stats(self):
         if self.use_cnn:
-            self.batch_stats = self.init_batch_stats(self.make_rng('batch_stats'))
+            self.batch_stats = self.init_batch_stats(self.make_rng("batch_stats"))
             if self.batch_stats is None:
                 raise ValueError("Batch stats initialization failed")
-            logging.debug(f"Batch stats initialized: {jax.tree_map(lambda x: x.shape, self.batch_stats)}")
+            logging.debug(
+                f"Batch stats initialized: {jax.tree_map(lambda x: x.shape, self.batch_stats)}"
+            )
 
     def _verify_params(self):
-        if not hasattr(self, 'params') or self.params is None:
-            raise ValueError("params attribute was not set or is None after initialization")
+        if not hasattr(self, "params") or self.params is None:
+            raise ValueError(
+                "params attribute was not set or is None after initialization"
+            )
 
-        logging.info(f"Final params structure: {jax.tree_map(lambda x: x.shape, self.params)}")
+        logging.info(
+            f"Final params structure: {jax.tree_map(lambda x: x.shape, self.params)}"
+        )
 
-        expected_keys = ['conv_layers', 'bn_layers', 'dense_layers'] if self.use_cnn else ['dense_layers']
+        expected_keys = (
+            ["conv_layers", "bn_layers", "dense_layers"]
+            if self.use_cnn
+            else ["dense_layers"]
+        )
         if self.use_rl:
-            expected_keys.extend(['value_stream', 'advantage_stream'] if self.use_dueling else ['rl_layer'])
+            expected_keys.extend(
+                ["value_stream", "advantage_stream"]
+                if self.use_dueling
+                else ["rl_layer"]
+            )
         else:
-            expected_keys.append('final_dense')
+            expected_keys.append("final_dense")
 
         for key in expected_keys:
             if key not in self.params:
                 raise ValueError(f"Expected key '{key}' not found in params")
 
         logging.info("All expected keys found in params")
+
     def _validate_initialization(self):
         """Validate that all necessary components are initialized."""
         logging.info("Validating initialization")
-        if not hasattr(self, 'params'):
+        if not hasattr(self, "params"):
             raise ValueError("params attribute is missing")
-        if self.use_cnn and not hasattr(self, 'batch_stats'):
+        if self.use_cnn and not hasattr(self, "batch_stats"):
             raise ValueError("batch_stats attribute is missing for CNN")
-        if self.use_cnn and not hasattr(self, 'cnn_block'):
+        if self.use_cnn and not hasattr(self, "cnn_block"):
             raise ValueError("cnn_block is missing")
-        if not self.use_rl and not hasattr(self, 'final_dense'):
+        if not self.use_rl and not hasattr(self, "final_dense"):
             raise ValueError("final_dense layer is missing for non-RL setup")
         logging.info("Initialization validation complete")
 
@@ -408,9 +519,9 @@ class AdvancedNN(nn.Module):
         # Add cleanup logic here, e.g., resetting attributes
         self.params = None
         self.batch_stats = None
-        if hasattr(self, 'cnn_block'):
+        if hasattr(self, "cnn_block"):
             del self.cnn_block
-        if hasattr(self, 'final_dense'):
+        if hasattr(self, "final_dense"):
             del self.final_dense
 
     def make_rng(self, name: str) -> jax.random.PRNGKey:
@@ -419,10 +530,20 @@ class AdvancedNN(nn.Module):
 
     def _setup_rl_components(self):
         if self.use_dueling:
-            self.value_stream = nn.Dense(1, dtype=self.dtype, kernel_init=nn.initializers.kaiming_normal())
-            self.advantage_stream = nn.Dense(self.action_dim, dtype=self.dtype, kernel_init=nn.initializers.kaiming_normal())
+            self.value_stream = nn.Dense(
+                1, dtype=self.dtype, kernel_init=nn.initializers.kaiming_normal()
+            )
+            self.advantage_stream = nn.Dense(
+                self.action_dim,
+                dtype=self.dtype,
+                kernel_init=nn.initializers.kaiming_normal(),
+            )
         else:
-            self.rl_layer = nn.Dense(self.action_dim, dtype=self.dtype, kernel_init=nn.initializers.kaiming_normal())
+            self.rl_layer = nn.Dense(
+                self.action_dim,
+                dtype=self.dtype,
+                kernel_init=nn.initializers.kaiming_normal(),
+            )
 
         if self.use_double:
             self.target_network = self._create_target_network()
@@ -432,20 +553,25 @@ class AdvancedNN(nn.Module):
             peak_value=self.rl_learning_rate,
             warmup_steps=1000,
             decay_steps=10000,
-            end_value=self.rl_learning_rate / 100
+            end_value=self.rl_learning_rate / 100,
         )
         self.rl_optimizer = optax.chain(
-            optax.clip_by_global_norm(1.0),
-            optax.adam(learning_rate=self.lr_schedule)
+            optax.clip_by_global_norm(1.0), optax.adam(learning_rate=self.lr_schedule)
         )
-        self.replay_buffer = PrioritizedReplayBuffer(100000)  # Using PrioritizedReplayBuffer
-        self.rl_epsilon = self.variable('state', 'rl_epsilon', lambda: jnp.array(self.rl_epsilon_start, dtype=jnp.float32))
+        self.replay_buffer = PrioritizedReplayBuffer(
+            100000
+        )  # Using PrioritizedReplayBuffer
+        self.rl_epsilon = self.variable(
+            "state",
+            "rl_epsilon",
+            lambda: jnp.array(self.rl_epsilon_start, dtype=jnp.float32),
+        )
 
     def init_params(self, rng):
         """Initialize the parameters of the neural network."""
         dummy_input = jnp.ones((1,) + self.input_shape[1:], dtype=self.dtype)
         variables = self.init(rng, dummy_input)
-        self.params = variables['params']
+        self.params = variables["params"]
         return self.params
 
     def _init_params(self, key):
@@ -456,71 +582,127 @@ class AdvancedNN(nn.Module):
 
         if self.use_cnn:
             logging.debug("Initializing CNN layers")
-            params['conv_layers'] = {}
-            params['bn_layers'] = {}
+            params["conv_layers"] = {}
+            params["bn_layers"] = {}
             for i, feat in enumerate(self.features[:-1]):
                 key, subkey = jax.random.split(key)
-                kernel_shape = (3,) * self.conv_dim + (dummy_input.shape[-1] if i == 0 else self.features[i-1], feat)
-                params['conv_layers'][f'conv_{i}'] = {
-                    'kernel': self.param(f'conv_kernel_{i}', nn.initializers.kaiming_normal(), kernel_shape),
-                    'bias': self.param(f'conv_bias_{i}', nn.initializers.zeros, (feat,))
+                kernel_shape = (3,) * self.conv_dim + (
+                    dummy_input.shape[-1] if i == 0 else self.features[i - 1],
+                    feat,
+                )
+                params["conv_layers"][f"conv_{i}"] = {
+                    "kernel": self.param(
+                        f"conv_kernel_{i}",
+                        nn.initializers.kaiming_normal(),
+                        kernel_shape,
+                    ),
+                    "bias": self.param(
+                        f"conv_bias_{i}", nn.initializers.zeros, (feat,)
+                    ),
                 }
-                params['bn_layers'][f'bn_{i}'] = {
-                    'scale': self.param(f'bn_scale_{i}', nn.initializers.ones, (feat,)),
-                    'bias': self.param(f'bn_bias_{i}', nn.initializers.zeros, (feat,))
+                params["bn_layers"][f"bn_{i}"] = {
+                    "scale": self.param(f"bn_scale_{i}", nn.initializers.ones, (feat,)),
+                    "bias": self.param(f"bn_bias_{i}", nn.initializers.zeros, (feat,)),
                 }
                 logging.debug(f"Initialized CNN layer {i} with shape {kernel_shape}")
             dummy_input = dummy_input.reshape((1, -1))  # Flatten for dense layers
 
         logging.debug("Initializing dense layers")
-        params['dense_layers'] = {}
+        params["dense_layers"] = {}
         for i, feat in enumerate(self.features):
             key, subkey = jax.random.split(key)
-            input_dim = dummy_input.shape[-1] if i == 0 else self.features[i-1]
-            params['dense_layers'][f'dense_{i}'] = {
-                'kernel': self.param(f'dense_kernel_{i}', nn.initializers.kaiming_normal(), (input_dim, feat)),
-                'bias': self.param(f'dense_bias_{i}', nn.initializers.zeros, (feat,))
+            input_dim = dummy_input.shape[-1] if i == 0 else self.features[i - 1]
+            params["dense_layers"][f"dense_{i}"] = {
+                "kernel": self.param(
+                    f"dense_kernel_{i}",
+                    nn.initializers.kaiming_normal(),
+                    (input_dim, feat),
+                ),
+                "bias": self.param(f"dense_bias_{i}", nn.initializers.zeros, (feat,)),
             }
-            logging.debug(f"Initialized dense layer {i} with shape ({input_dim}, {feat})")
+            logging.debug(
+                f"Initialized dense layer {i} with shape ({input_dim}, {feat})"
+            )
 
         if self.use_rl:
             logging.debug("Initializing RL-specific layers")
             if self.use_dueling:
-                params['value_stream'] = {
-                    'kernel': self.param('value_kernel', nn.initializers.kaiming_normal(), (self.features[-1], 1)),
-                    'bias': self.param('value_bias', nn.initializers.zeros, (1,))
+                params["value_stream"] = {
+                    "kernel": self.param(
+                        "value_kernel",
+                        nn.initializers.kaiming_normal(),
+                        (self.features[-1], 1),
+                    ),
+                    "bias": self.param("value_bias", nn.initializers.zeros, (1,)),
                 }
-                params['advantage_stream'] = {
-                    'kernel': self.param('advantage_kernel', nn.initializers.kaiming_normal(), (self.features[-1], self.action_dim)),
-                    'bias': self.param('advantage_bias', nn.initializers.zeros, (self.action_dim,))
+                params["advantage_stream"] = {
+                    "kernel": self.param(
+                        "advantage_kernel",
+                        nn.initializers.kaiming_normal(),
+                        (self.features[-1], self.action_dim),
+                    ),
+                    "bias": self.param(
+                        "advantage_bias", nn.initializers.zeros, (self.action_dim,)
+                    ),
                 }
-                logging.debug(f"Initialized dueling streams with shapes: value ({self.features[-1]}, 1), advantage ({self.features[-1]}, {self.action_dim})")
+                logging.debug(
+                    f"Initialized dueling streams with shapes: value ({self.features[-1]}, 1), advantage ({self.features[-1]}, {self.action_dim})"
+                )
             else:
-                params['rl_layer'] = {
-                    'kernel': self.param('rl_kernel', nn.initializers.kaiming_normal(), (self.features[-1], self.action_dim)),
-                    'bias': self.param('rl_bias', nn.initializers.zeros, (self.action_dim,))
+                params["rl_layer"] = {
+                    "kernel": self.param(
+                        "rl_kernel",
+                        nn.initializers.kaiming_normal(),
+                        (self.features[-1], self.action_dim),
+                    ),
+                    "bias": self.param(
+                        "rl_bias", nn.initializers.zeros, (self.action_dim,)
+                    ),
                 }
-                logging.debug(f"Initialized RL layer with shape ({self.features[-1]}, {self.action_dim})")
+                logging.debug(
+                    f"Initialized RL layer with shape ({self.features[-1]}, {self.action_dim})"
+                )
         else:
             logging.debug("Initializing final dense layer")
-            params['final_dense'] = {
-                'kernel': self.param('final_dense_kernel', nn.initializers.kaiming_normal(), (self.features[-1], self.output_shape[-1])),
-                'bias': self.param('final_dense_bias', nn.initializers.zeros, (self.output_shape[-1],))
+            params["final_dense"] = {
+                "kernel": self.param(
+                    "final_dense_kernel",
+                    nn.initializers.kaiming_normal(),
+                    (self.features[-1], self.output_shape[-1]),
+                ),
+                "bias": self.param(
+                    "final_dense_bias", nn.initializers.zeros, (self.output_shape[-1],)
+                ),
             }
-            logging.debug(f"Initialized final dense layer with shape ({self.features[-1]}, {self.output_shape[-1]})")
+            logging.debug(
+                f"Initialized final dense layer with shape ({self.features[-1]}, {self.output_shape[-1]})"
+            )
 
         logging.info("Parameter initialization completed")
         return params
 
     def _create_cnn_block(self):
         """Create the CNN block."""
+
         def cnn_block(x, train: bool = True, variables: Optional[Dict] = None):
             for i, (conv, bn) in enumerate(zip(self.conv_layers, self.bn_layers)):
-                x = conv(x, variables=variables['conv_layers'][f'conv_{i}'] if variables else None)
-                x = bn(x, use_running_average=not train, variables=variables['bn_layers'][f'bn_{i}'] if variables else None)
+                x = conv(
+                    x,
+                    variables=(
+                        variables["conv_layers"][f"conv_{i}"] if variables else None
+                    ),
+                )
+                x = bn(
+                    x,
+                    use_running_average=not train,
+                    variables=variables["bn_layers"][f"bn_{i}"] if variables else None,
+                )
                 x = self.activation(x)
-                x = nn.max_pool(x, window_shape=(2,) * self.conv_dim, strides=(2,) * self.conv_dim)
+                x = nn.max_pool(
+                    x, window_shape=(2,) * self.conv_dim, strides=(2,) * self.conv_dim
+                )
             return x.reshape((x.shape[0], -1))  # Flatten
+
         return cnn_block
 
     def _fallback_output(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -540,7 +722,9 @@ class AdvancedNN(nn.Module):
             jnp.ndarray: Output tensor.
         """
         logging.debug(f"Input shape: {x.shape}, Train mode: {train}")
-        logging.debug(f"Params structure: {jax.tree_map(lambda x: x.shape, self.params)}")
+        logging.debug(
+            f"Params structure: {jax.tree_map(lambda x: x.shape, self.params)}"
+        )
 
         try:
             self._validate_input_shape(x)
@@ -563,7 +747,7 @@ class AdvancedNN(nn.Module):
 
     def _forward(self, x: jnp.ndarray, train: bool) -> jnp.ndarray:
         """Internal forward pass implementation."""
-        return self.apply({'params': self.params}, x, train=train)
+        return self.apply({"params": self.params}, x, train=train)
 
     def _validate_shapes(self):
         """Validate the input and output shapes of the network."""
@@ -574,11 +758,19 @@ class AdvancedNN(nn.Module):
                 logging.error(f"{name} must be a tuple, got {type(shape)}")
                 raise ValueError(f"{name} must be a tuple, got {type(shape)}")
             if len(shape) < min_dims:
-                logging.error(f"{name} must have at least {min_dims} dimensions, got {shape}")
-                raise ValueError(f"{name} must have at least {min_dims} dimensions, got {shape}")
+                logging.error(
+                    f"{name} must have at least {min_dims} dimensions, got {shape}"
+                )
+                raise ValueError(
+                    f"{name} must have at least {min_dims} dimensions, got {shape}"
+                )
             if any(not isinstance(dim, int) or dim <= 0 for dim in shape):
-                logging.error(f"All dimensions in {name} must be positive integers, got {shape}")
-                raise ValueError(f"All dimensions in {name} must be positive integers, got {shape}")
+                logging.error(
+                    f"All dimensions in {name} must be positive integers, got {shape}"
+                )
+                raise ValueError(
+                    f"All dimensions in {name} must be positive integers, got {shape}"
+                )
             logging.debug(f"{name} validation passed: {shape}")
 
         try:
@@ -593,11 +785,19 @@ class AdvancedNN(nn.Module):
                 logging.error(f"Features must be a tuple, got {type(self.features)}")
                 raise ValueError(f"Features must be a tuple, got {type(self.features)}")
             if len(self.features) < 2:
-                logging.error(f"Features must have at least two elements, got {self.features}")
-                raise ValueError(f"Features must have at least two elements, got {self.features}")
+                logging.error(
+                    f"Features must have at least two elements, got {self.features}"
+                )
+                raise ValueError(
+                    f"Features must have at least two elements, got {self.features}"
+                )
             if any(not isinstance(feat, int) or feat <= 0 for feat in self.features):
-                logging.error(f"All features must be positive integers, got {self.features}")
-                raise ValueError(f"All features must be positive integers, got {self.features}")
+                logging.error(
+                    f"All features must be positive integers, got {self.features}"
+                )
+                raise ValueError(
+                    f"All features must be positive integers, got {self.features}"
+                )
             logging.debug(f"Features validation passed: {self.features}")
 
             logging.info("Validating network architecture...")
@@ -628,13 +828,21 @@ class AdvancedNN(nn.Module):
 
             # Additional check for input and output shape consistency
             if self.input_shape[0] != self.output_shape[0]:
-                logging.error(f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}")
-                raise ValueError(f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}")
+                logging.error(
+                    f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}"
+                )
+                raise ValueError(
+                    f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}"
+                )
 
             # Check if the last feature matches the output shape
             if self.features[-1] != self.output_shape[-1]:
-                logging.error(f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}")
-                raise ValueError(f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}")
+                logging.error(
+                    f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}"
+                )
+                raise ValueError(
+                    f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}"
+                )
 
             logging.info("Shape validation completed successfully.")
         except ValueError as e:
@@ -646,19 +854,29 @@ class AdvancedNN(nn.Module):
         if self.conv_dim not in [2, 3]:
             raise ValueError(f"conv_dim must be 2 or 3 for CNN, got {self.conv_dim}")
         if len(self.input_shape) != self.conv_dim + 2:
-            raise ValueError(f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}")
+            raise ValueError(
+                f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}"
+            )
         if self.input_shape[-1] != self.features[0]:
-            logging.warning(f"Input channels {self.input_shape[-1]} do not match first feature dimension {self.features[0]}. Adjusting features.")
+            logging.warning(
+                f"Input channels {self.input_shape[-1]} do not match first feature dimension {self.features[0]}. Adjusting features."
+            )
             self.features = (self.input_shape[-1],) + self.features[1:]
-        logging.debug(f"CNN parameters validation passed: conv_dim={self.conv_dim}, input_shape={self.input_shape}, features={self.features}")
+        logging.debug(
+            f"CNN parameters validation passed: conv_dim={self.conv_dim}, input_shape={self.input_shape}, features={self.features}"
+        )
 
     def _validate_rl_params(self):
         if self.action_dim is None:
             raise ValueError("action_dim must be provided when use_rl is True")
         if not isinstance(self.action_dim, int) or self.action_dim <= 0:
-            raise ValueError(f"action_dim must be a positive integer, got {self.action_dim}")
+            raise ValueError(
+                f"action_dim must be a positive integer, got {self.action_dim}"
+            )
         if self.action_dim != self.output_shape[-1]:
-            raise ValueError(f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}"
+            )
         logging.debug(f"RL parameters validation passed: action_dim={self.action_dim}")
 
     def _validate_network_architecture(self):
@@ -674,47 +892,71 @@ class AdvancedNN(nn.Module):
         if self.conv_dim not in [2, 3]:
             raise ValueError(f"conv_dim must be 2 or 3 for CNN, got {self.conv_dim}")
         if len(self.input_shape) != self.conv_dim + 2:
-            raise ValueError(f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}")
+            raise ValueError(
+                f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}"
+            )
         if self.input_shape[-1] != self.features[0]:
-            raise ValueError(f"For CNN, input channels {self.input_shape[-1]} must match first feature dimension {self.features[0]}")
-        logging.debug(f"CNN shape validation passed: conv_dim={self.conv_dim}, input_shape={self.input_shape}")
+            raise ValueError(
+                f"For CNN, input channels {self.input_shape[-1]} must match first feature dimension {self.features[0]}"
+            )
+        logging.debug(
+            f"CNN shape validation passed: conv_dim={self.conv_dim}, input_shape={self.input_shape}"
+        )
 
     def _validate_dnn_shapes(self):
         if len(self.input_shape) != 2:
-            raise ValueError(f"For DNN, input shape must have 2 dimensions, got {len(self.input_shape)}")
+            raise ValueError(
+                f"For DNN, input shape must have 2 dimensions, got {len(self.input_shape)}"
+            )
         if self.input_shape[-1] != self.features[0]:
-            raise ValueError(f"For DNN, input features {self.input_shape[-1]} must match first feature dimension {self.features[0]}")
+            raise ValueError(
+                f"For DNN, input features {self.input_shape[-1]} must match first feature dimension {self.features[0]}"
+            )
         logging.debug(f"DNN shape validation passed: input_shape={self.input_shape}")
 
     def _validate_rl_shapes(self):
         if not isinstance(self.action_dim, int) or self.action_dim <= 0:
-            raise ValueError(f"action_dim must be a positive integer for RL, got {self.action_dim}")
+            raise ValueError(
+                f"action_dim must be a positive integer for RL, got {self.action_dim}"
+            )
         if self.action_dim != self.output_shape[-1]:
-            raise ValueError(f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}"
+            )
         logging.debug(f"RL shape validation passed: action_dim={self.action_dim}")
 
     def _validate_output_consistency(self):
         if self.features[-1] != self.output_shape[-1]:
-            raise ValueError(f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}"
+            )
         logging.debug("Output consistency validation passed.")
 
     def _validate_layer_consistency(self):
         for i in range(len(self.features) - 1):
-            if self.features[i] != self.features[i+1]:
-                logging.debug(f"Layer {i} output ({self.features[i]}) matches Layer {i+1} input ({self.features[i+1]})")
+            if self.features[i] != self.features[i + 1]:
+                logging.debug(
+                    f"Layer {i} output ({self.features[i]}) matches Layer {i+1} input ({self.features[i+1]})"
+                )
             else:
-                raise ValueError(f"Layer size mismatch between layer {i} ({self.features[i]}) and layer {i+1} ({self.features[i+1]})")
+                raise ValueError(
+                    f"Layer size mismatch between layer {i} ({self.features[i]}) and layer {i+1} ({self.features[i+1]})"
+                )
         logging.debug("Layer consistency validation passed.")
 
     def _validate_batch_size_consistency(self):
         if self.input_shape[0] != self.output_shape[0]:
-            raise ValueError(f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}")
+            raise ValueError(
+                f"Batch size mismatch. Input shape: {self.input_shape[0]}, Output shape: {self.output_shape[0]}"
+            )
         logging.debug("Batch size consistency validation passed.")
 
     def _validate_feature_dimensions(self):
         for i in range(len(self.features) - 1):
-            if self.features[i] > self.features[i+1]:
-                logging.warning(f"Feature dimension decreases from layer {i} ({self.features[i]}) to layer {i+1} ({self.features[i+1]})")
+            if self.features[i] > self.features[i + 1]:
+                logging.warning(
+                    f"Feature dimension decreases from layer {i} ({self.features[i]}) to layer {i+1} ({self.features[i+1]})"
+                )
         logging.debug("Feature dimensions validation passed.")
 
     def _validate_total_params(self):
@@ -728,10 +970,12 @@ class AdvancedNN(nn.Module):
         total = 0
         for i in range(len(self.features) - 1):
             if self.use_cnn and i < len(self.features) - 2:
-                total += (3 ** self.conv_dim) * self.features[i] * self.features[i+1]  # Conv layers
+                total += (
+                    (3**self.conv_dim) * self.features[i] * self.features[i + 1]
+                )  # Conv layers
             else:
-                total += self.features[i] * self.features[i+1]  # Dense layers
-            total += self.features[i+1]  # Bias terms
+                total += self.features[i] * self.features[i + 1]  # Dense layers
+            total += self.features[i + 1]  # Bias terms
         return total
 
     def _validate_cnn_shapes(self):
@@ -739,16 +983,24 @@ class AdvancedNN(nn.Module):
         if not isinstance(self.conv_dim, int) or self.conv_dim not in [2, 3]:
             raise ValueError(f"conv_dim must be 2 or 3, got {self.conv_dim}")
         if len(self.input_shape) != self.conv_dim + 2:
-            raise ValueError(f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}")
+            raise ValueError(
+                f"For CNN with conv_dim={self.conv_dim}, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}"
+            )
         if self.input_shape[-1] != self.features[0]:
-            raise ValueError(f"For CNN, input channels {self.input_shape[-1]} must match first feature dimension {self.features[0]}")
+            raise ValueError(
+                f"For CNN, input channels {self.input_shape[-1]} must match first feature dimension {self.features[0]}"
+            )
 
         # Validate CNN output shape
         expected_output_size = self._calculate_cnn_output_size()
         if expected_output_size != self.features[-1]:
-            raise ValueError(f"CNN output size mismatch. Expected {expected_output_size}, got {self.features[-1]}")
+            raise ValueError(
+                f"CNN output size mismatch. Expected {expected_output_size}, got {self.features[-1]}"
+            )
 
-        logging.debug(f"CNN-specific validations passed. conv_dim: {self.conv_dim}, input_shape: {self.input_shape}")
+        logging.debug(
+            f"CNN-specific validations passed. conv_dim: {self.conv_dim}, input_shape: {self.input_shape}"
+        )
 
     def _log_shape_error_details(self):
         """Log detailed information about the current shape configuration."""
@@ -766,42 +1018,62 @@ class AdvancedNN(nn.Module):
     def _validate_dnn_shapes(self):
         logging.debug("Validating DNN-specific parameters...")
         if len(self.input_shape) != 2:
-            raise ValueError(f"For DNN, input shape must have 2 dimensions, got {self.input_shape}")
+            raise ValueError(
+                f"For DNN, input shape must have 2 dimensions, got {self.input_shape}"
+            )
         if self.input_shape[-1] != self.features[0]:
-            raise ValueError(f"For DNN, input features {self.input_shape[-1]} must match first feature dimension {self.features[0]}")
-        logging.debug(f"DNN-specific validations passed. input_shape: {self.input_shape}")
+            raise ValueError(
+                f"For DNN, input features {self.input_shape[-1]} must match first feature dimension {self.features[0]}"
+            )
+        logging.debug(
+            f"DNN-specific validations passed. input_shape: {self.input_shape}"
+        )
 
     def _validate_rl_shapes(self):
         logging.debug("Validating RL-specific parameters...")
         if self.action_dim is None:
             raise ValueError("action_dim must be provided when use_rl is True")
         if not isinstance(self.action_dim, int) or self.action_dim <= 0:
-            raise ValueError(f"action_dim must be a positive integer, got {self.action_dim}")
+            raise ValueError(
+                f"action_dim must be a positive integer, got {self.action_dim}"
+            )
         if self.action_dim != self.output_shape[-1]:
-            raise ValueError(f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"action_dim {self.action_dim} must match last dimension of output_shape {self.output_shape[-1]}"
+            )
         logging.debug(f"RL-specific validations passed. action_dim: {self.action_dim}")
 
     def _validate_output_consistency(self):
         if self.features[-1] != self.output_shape[-1]:
-            raise ValueError(f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}"
+            )
 
         if self.use_cnn:
             expected_output_size = self._calculate_cnn_output_size()
             if expected_output_size != self.output_shape[-1]:
-                raise ValueError(f"CNN output size mismatch. Expected {expected_output_size}, got {self.output_shape[-1]}")
+                raise ValueError(
+                    f"CNN output size mismatch. Expected {expected_output_size}, got {self.output_shape[-1]}"
+                )
         else:
             if self.features[-1] != self.output_shape[-1]:
-                raise ValueError(f"DNN output size mismatch. Expected {self.features[-1]}, got {self.output_shape[-1]}")
+                raise ValueError(
+                    f"DNN output size mismatch. Expected {self.features[-1]}, got {self.output_shape[-1]}"
+                )
 
         logging.debug("Output consistency validation passed.")
 
     def _validate_layer_consistency(self):
         logging.debug("Validating layer consistency...")
         for i in range(len(self.features) - 1):
-            if self.features[i] != self.features[i+1]:
-                logging.debug(f"Layer {i} output ({self.features[i]}) matches Layer {i+1} input ({self.features[i+1]})")
+            if self.features[i] != self.features[i + 1]:
+                logging.debug(
+                    f"Layer {i} output ({self.features[i]}) matches Layer {i+1} input ({self.features[i+1]})"
+                )
             else:
-                raise ValueError(f"Layer size mismatch between layer {i} ({self.features[i]}) and layer {i+1} ({self.features[i+1]})")
+                raise ValueError(
+                    f"Layer size mismatch between layer {i} ({self.features[i]}) and layer {i+1} ({self.features[i+1]})"
+                )
         logging.debug("Layer consistency validation passed.")
 
     def _calculate_cnn_output_size(self):
@@ -812,15 +1084,15 @@ class AdvancedNN(nn.Module):
         return int(jnp.prod(jnp.array(size)) * self.features[-1])
 
     def _setup_cnn_layers(self):
-        if self.backend == 'jax':
+        if self.backend == "jax":
             self.conv_layers = [
                 nn.Conv(
                     features=feat,
                     kernel_size=(3,) * self.conv_dim,
                     dtype=self.dtype,
-                    padding='SAME',
+                    padding="SAME",
                     name=f"conv_{i}",
-                    kernel_init=nn.initializers.kaiming_normal()
+                    kernel_init=nn.initializers.kaiming_normal(),
                 )
                 for i, feat in enumerate(self.features[:-1])
             ]
@@ -830,15 +1102,15 @@ class AdvancedNN(nn.Module):
                     name=f"bn_{i}",
                     use_running_average=True,
                     momentum=0.9,
-                    epsilon=1e-5
+                    epsilon=1e-5,
                 )
                 for i in range(len(self.features) - 1)
             ]
-        elif self.backend == 'tensorflow':
+        elif self.backend == "tensorflow":
             self.tf_conv = TensorFlowConvolutions(
                 features=self.features,
                 input_shape=self.input_shape,
-                conv_dim=self.conv_dim
+                conv_dim=self.conv_dim,
             )
             self.tf_model = self.tf_conv.create_model()
         else:
@@ -846,24 +1118,28 @@ class AdvancedNN(nn.Module):
 
     def _forward(self, x: jnp.ndarray, train: bool, variables: Dict) -> jnp.ndarray:
         """Internal forward pass implementation."""
-        params = variables['params']
+        params = variables["params"]
 
         if self.use_cnn:
-            x = self.cnn_block(x, train, variables={'params': params['cnn_block']})
+            x = self.cnn_block(x, train, variables={"params": params["cnn_block"]})
 
         for i, layer in enumerate(self.dense_layers):
-            x = layer(x, variables={'params': params[f'dense_layers_{i}']})
+            x = layer(x, variables={"params": params[f"dense_layers_{i}"]})
             x = self.activation(x)
 
         if self.use_rl:
             if self.use_dueling:
-                value = self.value_stream(x, variables={'params': params['value_stream']})
-                advantage = self.advantage_stream(x, variables={'params': params['advantage_stream']})
+                value = self.value_stream(
+                    x, variables={"params": params["value_stream"]}
+                )
+                advantage = self.advantage_stream(
+                    x, variables={"params": params["advantage_stream"]}
+                )
                 x = value + (advantage - jnp.mean(advantage, axis=-1, keepdims=True))
             else:
-                x = self.rl_layer(x, variables={'params': params['rl_layer']})
+                x = self.rl_layer(x, variables={"params": params["rl_layer"]})
         else:
-            x = self.final_dense(x, variables={'params': params['final_dense']})
+            x = self.final_dense(x, variables={"params": params["final_dense"]})
 
         return x
 
@@ -878,7 +1154,9 @@ class AdvancedNN(nn.Module):
     def _validate_input_shape(self, x: jnp.ndarray) -> None:
         """Validate the shape of the input tensor."""
         if x.shape[1:] != self.input_shape[1:]:
-            raise ValueError(f"Input shape mismatch. Expected {self.input_shape}, got {x.shape}")
+            raise ValueError(
+                f"Input shape mismatch. Expected {self.input_shape}, got {x.shape}"
+            )
 
     def _attempt_recovery(self, x: jnp.ndarray, error: Exception) -> jnp.ndarray:
         """Attempt to recover from errors during forward pass."""
@@ -893,7 +1171,9 @@ class AdvancedNN(nn.Module):
                 return jnp.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
 
         if isinstance(error, jax.errors.JAXTypeError):
-            logging.info("JAX type error encountered. Attempting to cast input to float32.")
+            logging.info(
+                "JAX type error encountered. Attempting to cast input to float32."
+            )
             return x.astype(jnp.float32)
 
         if isinstance(error, flax.errors.ScopeCollectionNotFound):
@@ -914,7 +1194,7 @@ class AdvancedNN(nn.Module):
                 feat,
                 dtype=self.dtype,
                 name=f"dense_{i}",
-                kernel_init=nn.initializers.he_normal()
+                kernel_init=nn.initializers.he_normal(),
             )
             dense_layers.append(dense_layer)
             dense_layers.append(nn.BatchNorm(dtype=self.dtype, name=f"bn_dense_{i}"))
@@ -926,7 +1206,9 @@ class AdvancedNN(nn.Module):
 
         dense_layers.append(nn.Dropout(0.5))
         self.dense_layers = nn.Sequential(dense_layers)
-        logging.debug(f"Dense layers setup completed successfully. Total layers: {len(dense_layers)}")
+        logging.debug(
+            f"Dense layers setup completed successfully. Total layers: {len(dense_layers)}"
+        )
 
     def _create_target_network(self):
         """Create a target network for double Q-learning."""
@@ -942,7 +1224,7 @@ class AdvancedNN(nn.Module):
             use_dueling=self.use_dueling,
             use_double=False,  # Prevent infinite recursion
             dtype=self.dtype,
-            activation=self.activation
+            activation=self.activation,
         )
 
     def _forward(self, x: jnp.ndarray, train: bool, variables: Dict) -> jnp.ndarray:
@@ -970,7 +1252,9 @@ class AdvancedNN(nn.Module):
             if self.use_dueling:
                 value = self.value_stream(x, variables=variables)
                 advantages = self.advantage_stream(x, variables=variables)
-                q_values = value + (advantages - jnp.mean(advantages, axis=-1, keepdims=True))
+                q_values = value + (
+                    advantages - jnp.mean(advantages, axis=-1, keepdims=True)
+                )
             else:
                 q_values = self.rl_layer(x, variables=variables)
 
@@ -979,14 +1263,17 @@ class AdvancedNN(nn.Module):
             if not train:
                 x = jnp.argmax(q_values, axis=-1)
             else:
-                epsilon = self.rl_epsilon_end + (self.rl_epsilon_start - self.rl_epsilon_end) * \
-                          jnp.exp(-self.rl_epsilon_decay * self.step_count.value)
-                self.sow('intermediates', 'epsilon', epsilon)
+                epsilon = self.rl_epsilon_end + (
+                    self.rl_epsilon_start - self.rl_epsilon_end
+                ) * jnp.exp(-self.rl_epsilon_decay * self.step_count.value)
+                self.sow("intermediates", "epsilon", epsilon)
                 self.rng, subkey = jax.random.split(self.rng)
                 x = jax.lax.cond(
                     jax.random.uniform(subkey) < epsilon,
-                    lambda: jax.random.randint(subkey, (x.shape[0],), 0, self.action_dim),
-                    lambda: jnp.argmax(q_values, axis=-1)
+                    lambda: jax.random.randint(
+                        subkey, (x.shape[0],), 0, self.action_dim
+                    ),
+                    lambda: jnp.argmax(q_values, axis=-1),
                 )
             self.step_count.value += 1
             logging.debug(f"RL action shape: {x.shape}, Epsilon: {epsilon:.4f}")
@@ -995,7 +1282,9 @@ class AdvancedNN(nn.Module):
             logging.debug(f"Final dense output shape: {x.shape}")
 
         if x.shape != self.output_shape:
-            logging.warning(f"Output shape mismatch. Expected {self.output_shape}, got {x.shape}")
+            logging.warning(
+                f"Output shape mismatch. Expected {self.output_shape}, got {x.shape}"
+            )
             x = jnp.reshape(x, self.output_shape)
             logging.debug(f"Reshaped output to: {x.shape}")
 
@@ -1007,6 +1296,7 @@ class AdvancedNN(nn.Module):
         logging.debug(f"Final output shape: {x.shape}")
         return x
 
+
 class ResidualBlock(nn.Module):
     layer: nn.Module
 
@@ -1017,15 +1307,23 @@ class ResidualBlock(nn.Module):
     def _validate_shapes(self):
         """Validate the input and output shapes of the network."""
         if len(self.input_shape) < 2:
-            raise ValueError(f"Input shape must have at least 2 dimensions, got {self.input_shape}")
+            raise ValueError(
+                f"Input shape must have at least 2 dimensions, got {self.input_shape}"
+            )
         if len(self.output_shape) < 2:
-            raise ValueError(f"Output shape must have at least 2 dimensions, got {self.output_shape}")
+            raise ValueError(
+                f"Output shape must have at least 2 dimensions, got {self.output_shape}"
+            )
         if self.use_cnn and len(self.input_shape) != self.conv_dim + 2:
-            raise ValueError(f"For CNN, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}")
+            raise ValueError(
+                f"For CNN, input shape must have {self.conv_dim + 2} dimensions, got {len(self.input_shape)}"
+            )
         if self.use_rl and self.action_dim is None:
             raise ValueError("action_dim must be provided when use_rl is True")
         if self.features[-1] != self.output_shape[-1]:
-            raise ValueError(f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}")
+            raise ValueError(
+                f"Last feature dimension {self.features[-1]} must match output shape {self.output_shape[-1]}"
+            )
 
     def __call__(self, x: jnp.ndarray, deterministic: bool = False) -> jnp.ndarray:
         """
@@ -1042,7 +1340,9 @@ class ResidualBlock(nn.Module):
             try:
                 return self._forward(x, deterministic)
             except Exception as e:
-                logging.warning(f"Error during forward pass (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                logging.warning(
+                    f"Error during forward pass (attempt {attempt + 1}/{self.max_retries}): {str(e)}"
+                )
                 x = self._attempt_recovery(x, e)
                 if attempt == self.max_retries - 1:
                     logging.error("Max retries reached. Returning fallback output.")
@@ -1077,13 +1377,16 @@ class ResidualBlock(nn.Module):
             if deterministic:
                 x = jnp.argmax(q_values, axis=-1)
             else:
-                epsilon = self.rl_epsilon_end + (self.rl_epsilon_start - self.rl_epsilon_end) * \
-                          jnp.exp(-self.rl_epsilon_decay * self.step_count)
+                epsilon = self.rl_epsilon_end + (
+                    self.rl_epsilon_start - self.rl_epsilon_end
+                ) * jnp.exp(-self.rl_epsilon_decay * self.step_count)
                 self.rng, subkey = jax.random.split(self.rng)
                 x = jax.lax.cond(
                     jax.random.uniform(subkey) < epsilon,
-                    lambda: jax.random.randint(subkey, (x.shape[0],), 0, self.action_dim),
-                    lambda: jnp.argmax(q_values, axis=-1)
+                    lambda: jax.random.randint(
+                        subkey, (x.shape[0],), 0, self.action_dim
+                    ),
+                    lambda: jnp.argmax(q_values, axis=-1),
                 )
             self.step_count += 1
             logging.debug(f"RL action shape: {x.shape}, Epsilon: {epsilon:.4f}")
@@ -1092,7 +1395,9 @@ class ResidualBlock(nn.Module):
             logging.debug(f"Final dense output shape: {x.shape}")
 
         if x.shape != self.output_shape:
-            logging.warning(f"Output shape mismatch. Expected {self.output_shape}, got {x.shape}")
+            logging.warning(
+                f"Output shape mismatch. Expected {self.output_shape}, got {x.shape}"
+            )
             x = jnp.reshape(x, self.output_shape)
             logging.debug(f"Reshaped output to: {x.shape}")
 
@@ -1117,7 +1422,9 @@ class ResidualBlock(nn.Module):
                 return jnp.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
 
         if isinstance(error, jax.errors.JAXTypeError):
-            logging.info("JAX type error encountered. Attempting to cast input to float32.")
+            logging.info(
+                "JAX type error encountered. Attempting to cast input to float32."
+            )
             return x.astype(jnp.float32)
 
         if isinstance(error, flax.errors.ScopeCollectionNotFound):
@@ -1149,7 +1456,9 @@ class ResidualBlock(nn.Module):
             x = conv(x)
             x = bn(x, use_running_average=deterministic)
             x = self.activation(x)
-            x = nn.max_pool(x, window_shape=(2,) * self.conv_dim, strides=(2,) * self.conv_dim)
+            x = nn.max_pool(
+                x, window_shape=(2,) * self.conv_dim, strides=(2,) * self.conv_dim
+            )
         return x.reshape((x.shape[0], -1))  # Flatten
 
     def dnn_block(self, x: jnp.ndarray, deterministic: bool) -> jnp.ndarray:
@@ -1163,7 +1472,9 @@ class ResidualBlock(nn.Module):
     def _validate_input_shape(self, x: jnp.ndarray) -> None:
         """Validate the shape of the input tensor."""
         if x.shape[1:] != self.input_shape[1:]:
-            raise ValueError(f"Input shape mismatch. Expected {self.input_shape}, got {x.shape}")
+            raise ValueError(
+                f"Input shape mismatch. Expected {self.input_shape}, got {x.shape}"
+            )
 
     def get_cnn_output_shape(self, input_shape: Sequence[int]) -> Tuple[int, ...]:
         """Calculate the output shape of the CNN layers."""
@@ -1180,7 +1491,18 @@ class ResidualBlock(nn.Module):
         else:
             return int(jnp.prod(jnp.array(self.input_shape[1:])))
 
-def create_neuroflex_nn(features: Sequence[int], input_shape: Tuple[int, ...], output_shape: Tuple[int, ...], use_cnn: bool = False, conv_dim: int = 2, use_rl: bool = False, action_dim: Optional[int] = None, dtype: Union[jnp.dtype, str] = jnp.float32, backend: str = 'jax') -> NeuroFlexNN:
+
+def create_neuroflex_nn(
+    features: Sequence[int],
+    input_shape: Tuple[int, ...],
+    output_shape: Tuple[int, ...],
+    use_cnn: bool = False,
+    conv_dim: int = 2,
+    use_rl: bool = False,
+    action_dim: Optional[int] = None,
+    dtype: Union[jnp.dtype, str] = jnp.float32,
+    backend: str = "jax",
+) -> NeuroFlexNN:
     """
     Create a NeuroFlexNN instance with the specified features, input shape, and output shape.
 
@@ -1201,9 +1523,18 @@ def create_neuroflex_nn(features: Sequence[int], input_shape: Tuple[int, ...], o
     Example:
         >>> model = create_neuroflex_nn([64, 32, 10], input_shape=(1, 28, 28, 1), output_shape=(1, 10), use_cnn=True, backend='tensorflow')
     """
-    return NeuroFlexNN(features=features, input_shape=input_shape, output_shape=output_shape,
-                       use_cnn=use_cnn, conv_dim=conv_dim, use_rl=use_rl, action_dim=action_dim,
-                       dtype=dtype, backend=backend)
+    return NeuroFlexNN(
+        features=features,
+        input_shape=input_shape,
+        output_shape=output_shape,
+        use_cnn=use_cnn,
+        conv_dim=conv_dim,
+        use_rl=use_rl,
+        action_dim=action_dim,
+        dtype=dtype,
+        backend=backend,
+    )
+
 
 # Advanced neural network components including RL
 class AdvancedNNComponents:
@@ -1212,17 +1543,28 @@ class AdvancedNNComponents:
         self.optimizer = None
         self.epsilon = None
 
-    def initialize_rl_components(self, buffer_size: int, learning_rate: float, epsilon_start: float):
+    def initialize_rl_components(
+        self, buffer_size: int, learning_rate: float, epsilon_start: float
+    ):
         self.replay_buffer = PrioritizedReplayBuffer(buffer_size)
         self.optimizer = optax.adam(learning_rate)
         self.epsilon = epsilon_start
 
     def update_rl_model(self, state, target_state, batch):
         def loss_fn(params):
-            q_values = state.apply_fn({'params': params}, batch['observations'])
-            next_q_values = target_state.apply_fn({'params': target_state.params}, batch['next_observations'])
-            targets = batch['rewards'] + self.gamma * jnp.max(next_q_values, axis=-1) * (1 - batch['dones'])
-            loss = jnp.mean(optax.huber_loss(q_values[jnp.arange(len(batch['actions'])), batch['actions']], targets))
+            q_values = state.apply_fn({"params": params}, batch["observations"])
+            next_q_values = target_state.apply_fn(
+                {"params": target_state.params}, batch["next_observations"]
+            )
+            targets = batch["rewards"] + self.gamma * jnp.max(
+                next_q_values, axis=-1
+            ) * (1 - batch["dones"])
+            loss = jnp.mean(
+                optax.huber_loss(
+                    q_values[jnp.arange(len(batch["actions"])), batch["actions"]],
+                    targets,
+                )
+            )
             return loss
 
         grad_fn = jax.value_and_grad(loss_fn)
@@ -1234,14 +1576,19 @@ class AdvancedNNComponents:
         if jax.random.uniform(jax.random.PRNGKey(0)) < epsilon:
             return jax.random.randint(jax.random.PRNGKey(0), (), 0, state.output_dim)
         else:
-            q_values = state.apply_fn({'params': state.params}, observation[None, ...])
+            q_values = state.apply_fn({"params": state.params}, observation[None, ...])
             return jnp.argmax(q_values[0])
+
 
 from flax.training import train_state
 
+
 def create_rl_train_state(rng, model, dummy_input, optimizer):
-    params = model.init(rng, dummy_input)['params']
-    return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=optimizer)
+    params = model.init(rng, dummy_input)["params"]
+    return train_state.TrainState.create(
+        apply_fn=model.apply, params=params, tx=optimizer
+    )
+
 
 def adversarial_training(model, params, input_data, epsilon, step_size):
     """
@@ -1257,12 +1604,13 @@ def adversarial_training(model, params, input_data, epsilon, step_size):
     Returns:
         dict: A dictionary containing the perturbed 'image' and original 'label'.
     """
+
     def loss_fn(params, image, label):
-        logits = model.apply({'params': params}, image)
+        logits = model.apply({"params": params}, image)
         return optax.softmax_cross_entropy(logits, label).mean()
 
     grad_fn = jax.grad(loss_fn, argnums=1)
-    image, label = input_data['image'], input_data['label']
+    image, label = input_data["image"], input_data["label"]
 
     grad = grad_fn(params, image, label)
     perturbation = jnp.sign(grad) * step_size
@@ -1273,4 +1621,4 @@ def adversarial_training(model, params, input_data, epsilon, step_size):
     total_perturbation = jnp.clip(total_perturbation, -epsilon, epsilon)
     perturbed_image = image + total_perturbation
 
-    return {'image': perturbed_image, 'label': label}
+    return {"image": perturbed_image, "label": label}

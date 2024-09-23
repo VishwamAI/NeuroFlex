@@ -184,12 +184,12 @@ setup(
         "aif360",
         "men",
         "PyWavelets",
-        "filterpy"
+        "filterpy",
     ],
     extras_require={
-        'dev': [
-            'pytest',
-            'flake8',
+        "dev": [
+            "pytest",
+            "flake8",
         ],
     },
 )

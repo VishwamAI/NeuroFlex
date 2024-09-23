@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VQModelInterface(nn.Module):
     def __init__(self):
         super().__init__()
@@ -20,6 +21,7 @@ class VQModelInterface(nn.Module):
         # Placeholder for quantization method
         return z, None, [None, None, None]
 
+
 class IdentityFirstStage(nn.Module):
     def __init__(self):
         super().__init__()
@@ -29,6 +31,7 @@ class IdentityFirstStage(nn.Module):
 
     def decode(self, x):
         return x
+
 
 class AutoencoderKL(nn.Module):
     def __init__(self):

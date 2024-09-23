@@ -5,8 +5,14 @@ from jax import jit
 from flax import linen as nn
 from typing import Callable
 
+
 class RealTimeFeedback:
-    def __init__(self, signal_processor: Callable, decoder: nn.Module, feedback_generator: Callable):
+    def __init__(
+        self,
+        signal_processor: Callable,
+        decoder: nn.Module,
+        feedback_generator: Callable,
+    ):
         self.signal_processor = signal_processor
         self.decoder = decoder
         self.feedback_generator = feedback_generator
@@ -33,8 +39,11 @@ class RealTimeFeedback:
     def get_feedback_history(self):
         return self.feedback_history
 
+
 class NeurofeedbackApplication:
-    def __init__(self, real_time_feedback: RealTimeFeedback, adaptation_rate: float = 0.1):
+    def __init__(
+        self, real_time_feedback: RealTimeFeedback, adaptation_rate: float = 0.1
+    ):
         self.real_time_feedback = real_time_feedback
         self.adaptation_rate = adaptation_rate
         self.user_performance = []
@@ -45,7 +54,7 @@ class NeurofeedbackApplication:
     def adapt_feedback(self):
         if len(self.user_performance) > 1:
             performance_change = self.user_performance[-1] - self.user_performance[-2]
-            self.adaptation_rate *= (1 + performance_change)
+            self.adaptation_rate *= 1 + performance_change
 
     def run_session(self, raw_signal_stream, session_duration):
         for t in range(session_duration):
@@ -66,15 +75,21 @@ class NeurofeedbackApplication:
         # This could be based on task completion, accuracy, or other metrics
         return np.random.random()  # Placeholder for actual performance measurement
 
+
 # Example usage:
 def example_signal_processor(raw_signal):
     # Implement signal processing logic
     processed_signal = jnp.array(raw_signal)  # Convert to JAX array
     # Apply a simple bandpass filter (example)
-    filtered_signal = jnp.where((processed_signal > 0.2) & (processed_signal < 0.8), processed_signal, 0)
+    filtered_signal = jnp.where(
+        (processed_signal > 0.2) & (processed_signal < 0.8), processed_signal, 0
+    )
     # Normalize the signal
-    normalized_signal = (filtered_signal - jnp.mean(filtered_signal)) / jnp.std(filtered_signal)
+    normalized_signal = (filtered_signal - jnp.mean(filtered_signal)) / jnp.std(
+        filtered_signal
+    )
     return normalized_signal
+
 
 class ExampleDecoder(nn.Module):
     @nn.compact
@@ -86,15 +101,19 @@ class ExampleDecoder(nn.Module):
         x = nn.Dense(features=1)(x)
         return x
 
+
 def example_feedback_generator(decoded_signal):
     # Implement feedback generation logic
     return float(decoded_signal[0])  # Placeholder for actual feedback generation
+
 
 if __name__ == "__main__":
     # Initialize components
     signal_processor = example_signal_processor
     decoder = ExampleDecoder()
-    decoder_params = decoder.init(jax.random.PRNGKey(0), jnp.ones((1, 64)))  # Initialize with dummy input
+    decoder_params = decoder.init(
+        jax.random.PRNGKey(0), jnp.ones((1, 64))
+    )  # Initialize with dummy input
     decoder = decoder.bind(decoder_params)
     feedback_generator = example_feedback_generator
 

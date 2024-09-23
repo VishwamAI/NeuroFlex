@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
+
 class CognitiveArchitecture:
     def __init__(self, config):
         self.config = config
@@ -18,5 +19,6 @@ class CognitiveArchitecture:
     def update_state(self, current_state, input_data):
         # Placeholder for state update logic
         return current_state + self.process_input(input_data)
+
 
 # Additional cognitive functions can be added here as needed

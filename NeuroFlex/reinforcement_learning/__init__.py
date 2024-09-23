@@ -22,40 +22,52 @@ Recent updates:
 """
 
 from .rl_module import RLAgent, RLEnvironment, PrioritizedReplayBuffer, train_rl_agent
-from .advanced_rl_algorithms import SACAgent, TD3Agent, create_sac_agent, create_td3_agent
+from .advanced_rl_algorithms import (
+    SACAgent,
+    TD3Agent,
+    create_sac_agent,
+    create_td3_agent,
+)
 
 __all__ = [
-    'RLAgent',
-    'RLEnvironment',
-    'PrioritizedReplayBuffer',
-    'train_rl_agent',
-    'SACAgent',
-    'TD3Agent',
-    'create_sac_agent',
-    'create_td3_agent',
-    'get_rl_version',
-    'SUPPORTED_RL_ALGORITHMS',
-    'create_epsilon_greedy_policy',
-    'initialize_rl_module'
+    "RLAgent",
+    "RLEnvironment",
+    "PrioritizedReplayBuffer",
+    "train_rl_agent",
+    "SACAgent",
+    "TD3Agent",
+    "create_sac_agent",
+    "create_td3_agent",
+    "get_rl_version",
+    "SUPPORTED_RL_ALGORITHMS",
+    "create_epsilon_greedy_policy",
+    "initialize_rl_module",
 ]
+
 
 def get_rl_version():
     return "1.1.0"
 
-SUPPORTED_RL_ALGORITHMS = ['DQN', 'PPO', 'A2C', 'DDPG', 'SAC', 'TD3']
+
+SUPPORTED_RL_ALGORITHMS = ["DQN", "PPO", "A2C", "DDPG", "SAC", "TD3"]
+
 
 def create_epsilon_greedy_policy(Q, epsilon, num_actions):
     def policy_fn(state):
         import numpy as np
+
         A = np.ones(num_actions, dtype=float) * epsilon / num_actions
         best_action = np.argmax(Q[state])
-        A[best_action] += (1.0 - epsilon)
+        A[best_action] += 1.0 - epsilon
         return A
+
     return policy_fn
+
 
 def initialize_rl_module():
     print("Initializing Reinforcement Learning Module...")
     # Add any necessary initialization code here
+
 
 # Multi-agent reinforcement learning support
 def create_multi_agent_environment(num_agents, env_config):
@@ -70,6 +82,7 @@ def create_multi_agent_environment(num_agents, env_config):
     # This should be implemented based on specific multi-agent RL framework
     pass
 
+
 def train_multi_agent(agents, env, num_episodes):
     """
     Train multiple agents in a multi-agent reinforcement learning setting.
@@ -81,5 +94,6 @@ def train_multi_agent(agents, env, num_episodes):
     # Placeholder for multi-agent training logic
     # This should be implemented based on specific multi-agent RL algorithms
     pass
+
 
 # Add any other Reinforcement Learning-specific utility functions or constants as needed

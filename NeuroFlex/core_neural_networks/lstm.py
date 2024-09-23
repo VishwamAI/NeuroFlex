@@ -9,8 +9,16 @@ from NeuroFlex.utils.descriptive_statistics import preprocess_data
 
 logging.basicConfig(level=logging.INFO)
 
+
 class LSTMModule(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1, dropout: float = 0.0, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        dropout: float = 0.0,
+        learning_rate: float = 0.001,
+    ):
         super(LSTMModule, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -30,7 +38,9 @@ class LSTMModule(nn.Module):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
+        self.lstm = nn.LSTM(
+            input_size, hidden_size, num_layers, batch_first=True, dropout=dropout
+        )
         self.to(self.device)
 
     def forward(self, inputs, initial_state=None):
@@ -41,8 +51,14 @@ class LSTMModule(nn.Module):
         return outputs, (final_h, final_c)
 
     def initialize_state(self, batch_size):
-        return (torch.zeros(self.num_layers, batch_size, self.hidden_size, device=self.device),
-                torch.zeros(self.num_layers, batch_size, self.hidden_size, device=self.device))
+        return (
+            torch.zeros(
+                self.num_layers, batch_size, self.hidden_size, device=self.device
+            ),
+            torch.zeros(
+                self.num_layers, batch_size, self.hidden_size, device=self.device
+            ),
+        )
 
     def diagnose(self):
         issues = []
@@ -54,7 +70,9 @@ class LSTMModule(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -110,32 +128,44 @@ class LSTMModule(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-def create_lstm_model(input_size: int, hidden_size: int, num_layers: int = 1, dropout: float = 0.0, learning_rate: float = 0.001) -> LSTMModule:
+
+def create_lstm_model(
+    input_size: int,
+    hidden_size: int,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    learning_rate: float = 0.001,
+) -> LSTMModule:
     return LSTMModule(input_size, hidden_size, num_layers, dropout, learning_rate)
 
-def train_lstm_model(model: LSTMModule,
-                     x_train: torch.Tensor,
-                     y_train: torch.Tensor,
-                     epochs: int = 10,
-                     batch_size: int = 32,
-                     validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-                     callback: Optional[Callable[[float], None]] = None) -> dict:
+
+def train_lstm_model(
+    model: LSTMModule,
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+    epochs: int = 10,
+    batch_size: int = 32,
+    validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    callback: Optional[Callable[[float], None]] = None,
+) -> dict:
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=model.learning_rate)
 
-    history = {'train_loss': [], 'val_loss': []}
+    history = {"train_loss": [], "val_loss": []}
 
     num_samples = x_train.shape[0]
     num_batches = max(1, num_samples // batch_size)
 
-    logging.info(f"LSTM model initial parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"LSTM model initial parameters: {sum(p.numel() for p in model.parameters())}"
+    )
 
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         for i in range(0, num_samples, batch_size):
-            batch_x = x_train[i:i+batch_size].to(model.device)
-            batch_y = y_train[i:i+batch_size].to(model.device)
+            batch_x = x_train[i : i + batch_size].to(model.device)
+            batch_y = y_train[i : i + batch_size].to(model.device)
 
             optimizer.zero_grad()
             outputs, _ = model(batch_x)
@@ -151,7 +181,9 @@ def train_lstm_model(model: LSTMModule,
         if callback:
             callback(avg_loss)
 
-        model.gradient_norm = sum(p.grad.norm().item() for p in model.parameters() if p.grad is not None)
+        model.gradient_norm = sum(
+            p.grad.norm().item() for p in model.parameters() if p.grad is not None
+        )
         model.performance = 1.0 - avg_loss  # Simple performance metric
         model.update_performance()
         model.adjust_learning_rate()
@@ -166,19 +198,22 @@ def train_lstm_model(model: LSTMModule,
         with torch.no_grad():
             train_outputs, _ = model(x_train)
             train_loss = criterion(train_outputs, y_train).item()
-            history['train_loss'].append(train_loss)
+            history["train_loss"].append(train_loss)
 
             if validation_data:
                 val_x, val_y = validation_data
                 val_outputs, _ = model(val_x)
                 val_loss = criterion(val_outputs, val_y).item()
-                history['val_loss'].append(val_loss)
+                history["val_loss"].append(val_loss)
 
     model.is_trained = True
     model.last_update = time.time()
-    logging.info(f"LSTM model final parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"LSTM model final parameters: {sum(p.numel() for p in model.parameters())}"
+    )
 
     return history
+
 
 def lstm_predict(model: LSTMModule, x: torch.Tensor) -> torch.Tensor:
     model.eval()

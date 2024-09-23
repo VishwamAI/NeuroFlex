@@ -3,22 +3,36 @@ import jax.numpy as jnp
 import flax.linen as nn
 from typing import Tuple, Callable, Dict, Any
 import optax
-from transformers import FlaxCLIPTextModel, CLIPTokenizer, FlaxCLIPModel, FlaxCLIPVisionModel
+from transformers import (
+    FlaxCLIPTextModel,
+    CLIPTokenizer,
+    FlaxCLIPModel,
+    FlaxCLIPVisionModel,
+)
+
 
 def sinusoidal_embedding(x):
-    frequencies = jnp.exp(
-        jnp.linspace(jnp.log(1.0), jnp.log(1000.0), 64)
-    )
+    frequencies = jnp.exp(jnp.linspace(jnp.log(1.0), jnp.log(1000.0), 64))
     angular_speeds = 2.0 * jnp.pi * frequencies
     embeddings = jnp.concatenate(
         [jnp.sin(angular_speeds * x), jnp.cos(angular_speeds * x)], axis=-1
     )
     return embeddings
 
-def process_text(text: str, tokenizer: CLIPTokenizer, text_encoder: FlaxCLIPTextModel) -> jnp.ndarray:
-    tokens = tokenizer(text, padding="max_length", max_length=tokenizer.model_max_length, truncation=True, return_tensors="jax").input_ids
+
+def process_text(
+    text: str, tokenizer: CLIPTokenizer, text_encoder: FlaxCLIPTextModel
+) -> jnp.ndarray:
+    tokens = tokenizer(
+        text,
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="jax",
+    ).input_ids
     text_embeddings = text_encoder(tokens)[0]
     return text_embeddings
+
 
 class UNet(nn.Module):
     ch: int
@@ -31,9 +45,9 @@ class UNet(nn.Module):
     @nn.compact
     def __call__(self, x, t, train):
         temb = sinusoidal_embedding(t)
-        temb = nn.Dense(features=self.ch*4)(temb)
+        temb = nn.Dense(features=self.ch * 4)(temb)
         temb = nn.relu(temb)
-        temb = nn.Dense(features=self.ch*4)(temb)
+        temb = nn.Dense(features=self.ch * 4)(temb)
 
         h = nn.Conv(features=self.ch, kernel_size=(3, 3), padding="SAME")(x)
 
@@ -41,7 +55,9 @@ class UNet(nn.Module):
         hs = [h]
         for i_level in range(len(self.ch_mult)):
             for i_block in range(self.num_res_blocks):
-                h = self.ResnetBlock(out_ch=self.ch*self.ch_mult[i_level])(hs[-1], temb, train)
+                h = self.ResnetBlock(out_ch=self.ch * self.ch_mult[i_level])(
+                    hs[-1], temb, train
+                )
                 if h.shape[1] in self.attn_resolutions:
                     h = self.AttnBlock()(h)
                 hs.append(h)
@@ -51,14 +67,14 @@ class UNet(nn.Module):
 
         # Middle
         h = hs[-1]
-        h = self.ResnetBlock(out_ch=self.ch*self.ch_mult[-1])(h, temb, train)
+        h = self.ResnetBlock(out_ch=self.ch * self.ch_mult[-1])(h, temb, train)
         h = self.AttnBlock()(h)
-        h = self.ResnetBlock(out_ch=self.ch*self.ch_mult[-1])(h, temb, train)
+        h = self.ResnetBlock(out_ch=self.ch * self.ch_mult[-1])(h, temb, train)
 
         # Upsampling
         for i_level in reversed(range(len(self.ch_mult))):
             for i_block in range(self.num_res_blocks + 1):
-                h = self.ResnetBlock(out_ch=self.ch*self.ch_mult[i_level])(
+                h = self.ResnetBlock(out_ch=self.ch * self.ch_mult[i_level])(
                     jnp.concatenate([h, hs.pop()], axis=-1), temb, train
                 )
                 if h.shape[1] in self.attn_resolutions:
@@ -67,7 +83,12 @@ class UNet(nn.Module):
                 h = self.Upsample()(h)
 
         h = nn.relu(nn.GroupNorm(num_groups=32)(h))
-        h = nn.Conv(features=x.shape[-1], kernel_size=(3, 3), padding="SAME", kernel_init=nn.initializers.zeros)(h)
+        h = nn.Conv(
+            features=x.shape[-1],
+            kernel_size=(3, 3),
+            padding="SAME",
+            kernel_init=nn.initializers.zeros,
+        )(h)
         return h
 
     class ResnetBlock(nn.Module):
@@ -79,7 +100,12 @@ class UNet(nn.Module):
             h = nn.Conv(features=self.out_ch, kernel_size=(3, 3), padding="SAME")(h)
             h += nn.Dense(features=self.out_ch)(nn.relu(temb))[:, None, None, :]
             h = nn.relu(nn.GroupNorm(num_groups=32)(h))
-            h = nn.Conv(features=self.out_ch, kernel_size=(3, 3), padding="SAME", kernel_init=nn.initializers.zeros)(h)
+            h = nn.Conv(
+                features=self.out_ch,
+                kernel_size=(3, 3),
+                padding="SAME",
+                kernel_init=nn.initializers.zeros,
+            )(h)
             if x.shape[-1] != self.out_ch:
                 x = nn.Conv(features=self.out_ch, kernel_size=(1, 1))(x)
             return x + h
@@ -92,26 +118,33 @@ class UNet(nn.Module):
             k = nn.Conv(features=x.shape[-1], kernel_size=(1, 1))(h)
             v = nn.Conv(features=x.shape[-1], kernel_size=(1, 1))(h)
 
-            w = jnp.einsum('bhwc,bHWc->bhwHW', q, k) * (int(x.shape[-1]) ** (-0.5))
+            w = jnp.einsum("bhwc,bHWc->bhwHW", q, k) * (int(x.shape[-1]) ** (-0.5))
             w = jnp.reshape(w, (*x.shape[:3], -1))
             w = jax.nn.softmax(w, axis=-1)
             w = jnp.reshape(w, (*x.shape[:3], *x.shape[1:3]))
 
-            h = jnp.einsum('bhwHW,bHWc->bhwc', w, v)
-            h = nn.Conv(features=x.shape[-1], kernel_size=(1, 1), kernel_init=nn.initializers.zeros)(h)
+            h = jnp.einsum("bhwHW,bHWc->bhwc", w, v)
+            h = nn.Conv(
+                features=x.shape[-1],
+                kernel_size=(1, 1),
+                kernel_init=nn.initializers.zeros,
+            )(h)
             return x + h
 
     class Downsample(nn.Module):
         @nn.compact
         def __call__(self, x):
-            return nn.Conv(features=x.shape[-1], kernel_size=(3, 3), strides=(2, 2), padding="SAME")(x)
+            return nn.Conv(
+                features=x.shape[-1], kernel_size=(3, 3), strides=(2, 2), padding="SAME"
+            )(x)
 
     class Upsample(nn.Module):
         @nn.compact
         def __call__(self, x):
             B, H, W, C = x.shape
-            x = jax.image.resize(x, (B, H * 2, W * 2, C), method='nearest')
+            x = jax.image.resize(x, (B, H * 2, W * 2, C), method="nearest")
             return nn.Conv(features=C, kernel_size=(3, 3), padding="SAME")(x)
+
 
 class VAE(nn.Module):
     latent_dim: int
@@ -132,21 +165,24 @@ class VAE(nn.Module):
         # Reparameterization trick
         if train:
             std = jnp.exp(0.5 * logvar)
-            eps = jax.random.normal(self.make_rng('latent'), std.shape)
+            eps = jax.random.normal(self.make_rng("latent"), std.shape)
             z = mean + eps * std
         else:
             z = mean
 
         # Decoder
-        h = nn.Dense(features=8*8*64)(z)
+        h = nn.Dense(features=8 * 8 * 64)(z)
         h = h.reshape((-1, 8, 8, 64))
         h = nn.ConvTranspose(features=64, kernel_size=(3, 3), strides=(2, 2))(h)
         h = nn.relu(h)
         h = nn.ConvTranspose(features=32, kernel_size=(3, 3), strides=(2, 2))(h)
         h = nn.relu(h)
-        h = nn.ConvTranspose(features=x.shape[-1], kernel_size=(3, 3), strides=(2, 2))(h)
+        h = nn.ConvTranspose(features=x.shape[-1], kernel_size=(3, 3), strides=(2, 2))(
+            h
+        )
 
         return h, mean, logvar
+
 
 class LatentDiffusionModel(nn.Module):
     latent_dim: int
@@ -158,12 +194,19 @@ class LatentDiffusionModel(nn.Module):
 
     def setup(self):
         self.vae = VAE(latent_dim=self.latent_dim)
-        self.unet = UNet(ch=128, ch_mult=(1, 2, 3, 4), num_res_blocks=2, attn_resolutions=(16,), dropout=0.1, resamp_with_conv=True)
+        self.unet = UNet(
+            ch=128,
+            ch_mult=(1, 2, 3, 4),
+            num_res_blocks=2,
+            attn_resolutions=(16,),
+            dropout=0.1,
+            resamp_with_conv=True,
+        )
         self.text_encoder = FlaxCLIPTextModel.from_pretrained(self.clip_model_name)
         self.tokenizer = CLIPTokenizer.from_pretrained(self.clip_model_name)
         self.image_encoder = FlaxCLIPVisionModel.from_pretrained(self.clip_model_name)
         self.betas = jnp.linspace(1e-4, 0.02, self.num_timesteps)
-        self.alphas = 1. - self.betas
+        self.alphas = 1.0 - self.betas
         self.alphas_cumprod = jnp.cumprod(self.alphas)
 
     def __call__(self, x, t, train=True, text=None, image=None):
@@ -185,30 +228,40 @@ class LatentDiffusionModel(nn.Module):
         text_embedding = self.text_to_latent(text)
 
         noise = jax.random.normal(rng, z.shape)
-        noisy_z = jnp.sqrt(self.alphas_cumprod[t])[:, None, None, None] * z + \
-                  jnp.sqrt(1 - self.alphas_cumprod[t])[:, None, None, None] * noise
+        noisy_z = (
+            jnp.sqrt(self.alphas_cumprod[t])[:, None, None, None] * z
+            + jnp.sqrt(1 - self.alphas_cumprod[t])[:, None, None, None] * noise
+        )
 
-        predicted_noise = self.unet(noisy_z, t / self.num_timesteps, text_embedding, True)
+        predicted_noise = self.unet(
+            noisy_z, t / self.num_timesteps, text_embedding, True
+        )
 
         noise_loss = jnp.mean((noise - predicted_noise) ** 2)
         kl_loss = -0.5 * jnp.sum(1 + logvar - mean**2 - jnp.exp(logvar), axis=-1)
 
         image_embedding = self.image_to_latent(self.vae.decode(z))
-        text_image_loss = optax.cosine_similarity(text_embedding, image_embedding).mean()
+        text_image_loss = optax.cosine_similarity(
+            text_embedding, image_embedding
+        ).mean()
 
         total_loss = noise_loss + jnp.mean(kl_loss) - text_image_loss
 
         return total_loss
 
-    def generate(self, rng, num_samples, input_type='random', input_data=None):
-        if input_type == 'random':
-            z = jax.random.normal(rng, (num_samples,) + self.image_size[:-1] + (self.latent_dim,))
-        elif input_type == 'text':
+    def generate(self, rng, num_samples, input_type="random", input_data=None):
+        if input_type == "random":
+            z = jax.random.normal(
+                rng, (num_samples,) + self.image_size[:-1] + (self.latent_dim,)
+            )
+        elif input_type == "text":
             z = self.text_to_latent(input_data)
-        elif input_type == 'image':
+        elif input_type == "image":
             z = self.image_to_latent(input_data)
         else:
-            raise ValueError("Invalid input_type. Must be 'random', 'text', or 'image'.")
+            raise ValueError(
+                "Invalid input_type. Must be 'random', 'text', or 'image'."
+            )
 
         def step(i, z):
             t = self.num_timesteps - i - 1
@@ -224,20 +277,28 @@ class LatentDiffusionModel(nn.Module):
         alpha_t = self.alphas[t]
         alpha_t_bar = self.alphas_cumprod[t]
 
-        mean = (1 / jnp.sqrt(alpha_t)) * (x - ((1 - alpha_t) / jnp.sqrt(1 - alpha_t_bar)) * noise_pred)
+        mean = (1 / jnp.sqrt(alpha_t)) * (
+            x - ((1 - alpha_t) / jnp.sqrt(1 - alpha_t_bar)) * noise_pred
+        )
         var = self.betas[t]
 
-        noise = jax.random.normal(self.make_rng('sample'), x.shape)
+        noise = jax.random.normal(self.make_rng("sample"), x.shape)
         return mean + jnp.sqrt(var) * noise
 
     def encode(self, x):
-        return self.vae.apply({'params': self.variables['params']['vae']}, x, False)[1]
+        return self.vae.apply({"params": self.variables["params"]["vae"]}, x, False)[1]
 
     def decode(self, z):
-        return self.vae.apply({'params': self.variables['params']['vae']}, z, False)[0]
+        return self.vae.apply({"params": self.variables["params"]["vae"]}, z, False)[0]
 
     def text_to_latent(self, text):
-        tokens = self.tokenizer(text, padding="max_length", max_length=self.tokenizer.model_max_length, truncation=True, return_tensors="jax").input_ids
+        tokens = self.tokenizer(
+            text,
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="jax",
+        ).input_ids
         text_embeddings = self.text_encoder(tokens, train=False)[0]
         return text_embeddings
 

@@ -1,5 +1,6 @@
 # alphafold_integration.py
 
+
 class AlphaFoldIntegration:
     def __init__(self):
         self.model = None
@@ -18,7 +19,9 @@ class AlphaFoldIntegration:
     def predict_structure(self):
         # Placeholder for structure prediction
         if self.model is None or self.features is None:
-            raise ValueError("Model or features not set. Call setup_model() and prepare_features() first.")
+            raise ValueError(
+                "Model or features not set. Call setup_model() and prepare_features() first."
+            )
         print("Predicting protein structure")
         return "Predicted Structure Placeholder"
 

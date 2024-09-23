@@ -8,9 +8,16 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+
 class JAXModel(nn.Module):
-    def __init__(self, input_dim: int, hidden_layers: List[int], output_dim: int,
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_layers: List[int],
+        output_dim: int,
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_layers = hidden_layers
@@ -54,7 +61,9 @@ class JAXModel(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -110,20 +119,26 @@ class JAXModel(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-def create_jax_model(input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int]) -> JAXModel:
+
+def create_jax_model(
+    input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int]
+) -> JAXModel:
     return JAXModel(input_shape[0], hidden_layers, output_dim)
 
-def train_jax_model(model: JAXModel,
-                    x_train: jnp.ndarray,
-                    y_train: jnp.ndarray,
-                    epochs: int = 10,
-                    batch_size: int = 32,
-                    validation_data: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
-                    callback: Optional[Callable[[float], None]] = None) -> dict:
+
+def train_jax_model(
+    model: JAXModel,
+    x_train: jnp.ndarray,
+    y_train: jnp.ndarray,
+    epochs: int = 10,
+    batch_size: int = 32,
+    validation_data: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+    callback: Optional[Callable[[float], None]] = None,
+) -> dict:
 
     @jax.jit
     def loss_fn(params, x, y):
-        predictions = model.apply({'params': params}, x)
+        predictions = model.apply({"params": params}, x)
         return jnp.mean((predictions - y) ** 2)
 
     @jax.jit
@@ -137,18 +152,20 @@ def train_jax_model(model: JAXModel,
     params = model.init(jax.random.PRNGKey(0), jnp.ones((1, model.input_dim)))
     opt_state = optimizer.init(params)
 
-    history = {'train_loss': [], 'val_loss': []}
+    history = {"train_loss": [], "val_loss": []}
 
     num_samples = x_train.shape[0]
     num_batches = max(1, num_samples // batch_size)
 
-    logging.info(f"JAX model initial parameters: {jax.tree_map(lambda x: x.shape, params)}")
+    logging.info(
+        f"JAX model initial parameters: {jax.tree_map(lambda x: x.shape, params)}"
+    )
 
     for epoch in range(epochs):
         epoch_loss = 0.0
         for i in range(0, num_samples, batch_size):
-            batch_x = x_train[i:i+batch_size]
-            batch_y = y_train[i:i+batch_size]
+            batch_x = x_train[i : i + batch_size]
+            batch_y = y_train[i : i + batch_size]
 
             params, opt_state, loss = update(params, batch_x, batch_y, opt_state)
             epoch_loss += loss
@@ -159,7 +176,9 @@ def train_jax_model(model: JAXModel,
         if callback:
             callback(avg_loss)
 
-        model.gradient_norm = jnp.sqrt(sum(jnp.sum(g**2) for g in jax.tree_leaves(params)))
+        model.gradient_norm = jnp.sqrt(
+            sum(jnp.sum(g**2) for g in jax.tree_leaves(params))
+        )
         model.performance = 1.0 - avg_loss  # Simple performance metric
         model.update_performance()
         model.adjust_learning_rate()
@@ -171,19 +190,22 @@ def train_jax_model(model: JAXModel,
 
         # Compute epoch loss
         train_loss = loss_fn(params, x_train, y_train)
-        history['train_loss'].append(train_loss)
+        history["train_loss"].append(train_loss)
 
         if validation_data:
             val_x, val_y = validation_data
             val_loss = loss_fn(params, val_x, val_y)
-            history['val_loss'].append(val_loss)
+            history["val_loss"].append(val_loss)
 
     model.is_trained = True
     model.last_update = time.time()
-    logging.info(f"JAX model final parameters: {jax.tree_map(lambda x: x.shape, params)}")
+    logging.info(
+        f"JAX model final parameters: {jax.tree_map(lambda x: x.shape, params)}"
+    )
 
     return history
 
+
 def jax_predict(model: JAXModel, x: jnp.ndarray) -> jnp.ndarray:
     params = model.params
-    return jax.jit(lambda x: model.apply({'params': params}, x))(x)
+    return jax.jit(lambda x: model.apply({"params": params}, x))(x)

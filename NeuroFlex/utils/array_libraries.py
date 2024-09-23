@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import torch
 
+
 class ArrayLibraries:
     @staticmethod
     def jax_operations(x):

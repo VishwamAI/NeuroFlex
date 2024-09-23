@@ -7,19 +7,32 @@ from typing import List, Dict, Any, Union, Optional
 import statsmodels.api as sm
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from statsmodels.tools.sm_exceptions import ValueWarning, EstimationWarning, MissingDataError, InfeasibleTestError
+from statsmodels.tools.sm_exceptions import (
+    ValueWarning,
+    EstimationWarning,
+    MissingDataError,
+    InfeasibleTestError,
+)
 from prophet import Prophet
-from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
+from ..constants import (
+    PERFORMANCE_THRESHOLD,
+    UPDATE_INTERVAL,
+    LEARNING_RATE_ADJUSTMENT,
+    MAX_HEALING_ATTEMPTS,
+)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class AdvancedTimeSeriesAnalysis:
     def __init__(self):
         self.available_methods = {
-            'arima': self.arima_forecast,
-            'sarima': self.sarima_forecast,
-            'prophet': self.prophet_forecast
+            "arima": self.arima_forecast,
+            "sarima": self.sarima_forecast,
+            "prophet": self.prophet_forecast,
         }
         self.performance = 0.0
         self.last_update = time.time()
@@ -44,23 +57,31 @@ class AdvancedTimeSeriesAnalysis:
         if method not in self.available_methods:
             raise ValueError(f"Unsupported method: {method}")
 
-        if method in ['arima', 'sarima']:
+        if method in ["arima", "sarima"]:
             if isinstance(data, pd.DataFrame):
-                if 'y' not in data.columns:
-                    raise ValueError(f"DataFrame must contain a 'y' column for {method.upper()} forecast")
-                data = data['y']
+                if "y" not in data.columns:
+                    raise ValueError(
+                        f"DataFrame must contain a 'y' column for {method.upper()} forecast"
+                    )
+                data = data["y"]
             if not pd.api.types.is_numeric_dtype(data):
-                raise ValueError(f"Input data must be numeric for {method.upper()} forecast")
+                raise ValueError(
+                    f"Input data must be numeric for {method.upper()} forecast"
+                )
 
-            order = kwargs.get('order', (1, 1, 1))
-            if method == 'sarima':
-                seasonal_order = kwargs.get('seasonal_order', (1, 1, 1, 12))
-                result = self.available_methods[method](data, order=order, seasonal_order=seasonal_order)
+            order = kwargs.get("order", (1, 1, 1))
+            if method == "sarima":
+                seasonal_order = kwargs.get("seasonal_order", (1, 1, 1, 12))
+                result = self.available_methods[method](
+                    data, order=order, seasonal_order=seasonal_order
+                )
             else:
                 result = self.available_methods[method](data, order=order)
-        elif method == 'prophet':
-            if not all(col in data.columns for col in ['ds', 'y']):
-                raise ValueError("Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively.")
+        elif method == "prophet":
+            if not all(col in data.columns for col in ["ds", "y"]):
+                raise ValueError(
+                    "Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively."
+                )
             result = self.available_methods[method](data, **kwargs)
         else:
             result = self.available_methods[method](data, **kwargs)
@@ -87,12 +108,14 @@ class AdvancedTimeSeriesAnalysis:
 
     def _calculate_performance(self, result: Dict[str, Any]) -> float:
         """Calculate performance metric based on analysis results using MAPE."""
-        if 'forecast' not in result or 'actual' not in result:
-            logger.warning("Missing forecast or actual values for performance calculation")
+        if "forecast" not in result or "actual" not in result:
+            logger.warning(
+                "Missing forecast or actual values for performance calculation"
+            )
             return 0.0
 
-        forecast = result['forecast']
-        actual = result['actual']
+        forecast = result["forecast"]
+        actual = result["actual"]
 
         if len(forecast) != len(actual):
             logger.warning("Forecast and actual data have different lengths")
@@ -121,7 +144,9 @@ class AdvancedTimeSeriesAnalysis:
                 return
 
         if best_performance > initial_performance:
-            logger.info(f"Self-healing improved performance. New performance: {best_performance:.4f}")
+            logger.info(
+                f"Self-healing improved performance. New performance: {best_performance:.4f}"
+            )
             self.performance = best_performance
         else:
             logger.warning("Self-healing not improving performance. Reverting changes.")
@@ -130,9 +155,9 @@ class AdvancedTimeSeriesAnalysis:
         """Adjust the learning rate based on recent performance."""
         if len(self.performance_history) >= 2:
             if self.performance_history[-1] > self.performance_history[-2]:
-                self.learning_rate *= (1 + LEARNING_RATE_ADJUSTMENT)
+                self.learning_rate *= 1 + LEARNING_RATE_ADJUSTMENT
             else:
-                self.learning_rate *= (1 - LEARNING_RATE_ADJUSTMENT)
+                self.learning_rate *= 1 - LEARNING_RATE_ADJUSTMENT
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         logger.info(f"Adjusted learning rate to {self.learning_rate:.6f}")
 
@@ -141,43 +166,71 @@ class AdvancedTimeSeriesAnalysis:
         # This is a placeholder. In a real scenario, you would re-evaluate the model's performance.
         return self.performance * (1 + np.random.uniform(-0.1, 0.1))
 
-    def arima_forecast(self, data: Union[pd.DataFrame, pd.Series], order: tuple = (1, 1, 1), forecast_steps: int = 10) -> Dict[str, Any]:
+    def arima_forecast(
+        self,
+        data: Union[pd.DataFrame, pd.Series],
+        order: tuple = (1, 1, 1),
+        forecast_steps: int = 10,
+    ) -> Dict[str, Any]:
         """Perform ARIMA forecast."""
         # Ensure data is a numeric Series
         if isinstance(data, pd.DataFrame):
-            if 'y' in data.columns:
-                data = data['y']
+            if "y" in data.columns:
+                data = data["y"]
             else:
-                raise ValueError("DataFrame must contain a 'y' column for ARIMA forecast")
+                raise ValueError(
+                    "DataFrame must contain a 'y' column for ARIMA forecast"
+                )
 
         if not pd.api.types.is_numeric_dtype(data):
             raise ValueError("Input data must be numeric for ARIMA forecast")
 
         if len(data) < sum(order):
-            warnings.warn("The number of observations is less than the number of parameters. This may result in poor estimates.", UserWarning)
+            warnings.warn(
+                "The number of observations is less than the number of parameters. This may result in poor estimates.",
+                UserWarning,
+            )
 
         model = ARIMA(data, order=order)
         try:
             results = model.fit()
         except np.linalg.LinAlgError:
-            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", UserWarning)
-            return {'forecast': None, 'actual': None, 'model_summary': None}
+            warnings.warn(
+                "The model could not be fit due to a linear algebra error. This may be due to non-stationary data.",
+                UserWarning,
+            )
+            return {"forecast": None, "actual": None, "model_summary": None}
 
         # Check for non-stationary starting autoregressive parameters
         if any(abs(param) >= 1 for param in results.arparams):
-            warnings.warn("Non-stationary starting autoregressive parameters found. Using zeros as starting parameters.", UserWarning)
+            warnings.warn(
+                "Non-stationary starting autoregressive parameters found. Using zeros as starting parameters.",
+                UserWarning,
+            )
 
         forecast = results.forecast(steps=forecast_steps)
         actual = data.iloc[-forecast_steps:]
-        return {'forecast': forecast, 'actual': actual, 'model_summary': results.summary()}
+        return {
+            "forecast": forecast,
+            "actual": actual,
+            "model_summary": results.summary(),
+        }
 
-    def sarima_forecast(self, data: Union[pd.DataFrame, pd.Series], order: tuple = (1, 1, 1), seasonal_order: tuple = (1, 1, 1, 12), forecast_steps: int = 10) -> Dict[str, Any]:
+    def sarima_forecast(
+        self,
+        data: Union[pd.DataFrame, pd.Series],
+        order: tuple = (1, 1, 1),
+        seasonal_order: tuple = (1, 1, 1, 12),
+        forecast_steps: int = 10,
+    ) -> Dict[str, Any]:
         """Perform SARIMA forecast."""
         if isinstance(data, pd.DataFrame):
-            if 'y' in data.columns:
-                data = data['y']
+            if "y" in data.columns:
+                data = data["y"]
             else:
-                raise ValueError("DataFrame must contain a 'y' column for SARIMA forecast")
+                raise ValueError(
+                    "DataFrame must contain a 'y' column for SARIMA forecast"
+                )
 
         if not pd.api.types.is_numeric_dtype(data):
             raise ValueError("Input data must be numeric for SARIMA forecast")
@@ -196,7 +249,11 @@ class AdvancedTimeSeriesAnalysis:
             logger.info(f"Initial start_params: {start_params}")
 
             # Fit the model with custom start_params
-            results = model.fit(start_params=start_params, enforce_stationarity=False, enforce_invertibility=False)
+            results = model.fit(
+                start_params=start_params,
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
 
             # Check for non-invertible MA parameters
             ma_params = results.maparams
@@ -210,10 +267,17 @@ class AdvancedTimeSeriesAnalysis:
                 logger.info(f"Non-invertible MA condition: {non_invertible_ma}")
 
             if non_invertible_ma:
-                warnings.warn("Non-invertible starting MA parameters found. Using zeros as starting parameters.", UserWarning)
+                warnings.warn(
+                    "Non-invertible starting MA parameters found. Using zeros as starting parameters.",
+                    UserWarning,
+                )
                 logger.info("Re-fitting model with zero start_params")
                 # Re-fit the model with zero start_params
-                results = model.fit(start_params=np.zeros(n_params), enforce_stationarity=False, enforce_invertibility=False)
+                results = model.fit(
+                    start_params=np.zeros(n_params),
+                    enforce_stationarity=False,
+                    enforce_invertibility=False,
+                )
 
                 # Log MA parameters after re-fitting
                 ma_params_refit = results.maparams
@@ -222,37 +286,53 @@ class AdvancedTimeSeriesAnalysis:
                 logger.info(f"Roots of MA polynomial after re-fit: {roots_refit}")
 
         except np.linalg.LinAlgError:
-            warnings.warn("The model could not be fit due to a linear algebra error. This may be due to non-stationary data.", UserWarning)
-            return {'forecast': None, 'actual': None, 'model_summary': None}
+            warnings.warn(
+                "The model could not be fit due to a linear algebra error. This may be due to non-stationary data.",
+                UserWarning,
+            )
+            return {"forecast": None, "actual": None, "model_summary": None}
 
         forecast = results.forecast(steps=forecast_steps)
         actual = data.iloc[-forecast_steps:]
-        return {'forecast': forecast, 'actual': actual, 'model_summary': results.summary()}
+        return {
+            "forecast": forecast,
+            "actual": actual,
+            "model_summary": results.summary(),
+        }
 
-    def prophet_forecast(self, data: pd.DataFrame, forecast_steps: int = 10) -> Dict[str, Any]:
+    def prophet_forecast(
+        self, data: pd.DataFrame, forecast_steps: int = 10
+    ) -> Dict[str, Any]:
         """Perform Prophet forecast."""
-        if not all(col in data.columns for col in ['ds', 'y']):
-            raise ValueError("Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively.")
+        if not all(col in data.columns for col in ["ds", "y"]):
+            raise ValueError(
+                "Invalid DataFrame for Prophet. It must have columns 'ds' and 'y' with the dates and values respectively."
+            )
         model = Prophet()
         model.fit(data)
         future = model.make_future_dataframe(periods=forecast_steps)
         forecast = model.predict(future)
         actual = data.iloc[-forecast_steps:]
-        return {'forecast': forecast['yhat'].iloc[-forecast_steps:], 'actual': actual['y'], 'model': model}
+        return {
+            "forecast": forecast["yhat"].iloc[-forecast_steps:],
+            "actual": actual["y"],
+            "model": model,
+        }
+
 
 # Example usage
 if __name__ == "__main__":
     # Create sample time series data
-    dates = pd.date_range(start='2020-01-01', end='2022-12-31', freq='D')
+    dates = pd.date_range(start="2020-01-01", end="2022-12-31", freq="D")
     values = np.random.randn(len(dates)).cumsum() + 100
-    df = pd.DataFrame({'ds': dates, 'y': values})
+    df = pd.DataFrame({"ds": dates, "y": values})
 
     analyzer = AdvancedTimeSeriesAnalysis()
-    
+
     # Example ARIMA forecast
-    arima_results = analyzer.analyze('arima', df['y'])
-    print("ARIMA Forecast:", arima_results['forecast'])
+    arima_results = analyzer.analyze("arima", df["y"])
+    print("ARIMA Forecast:", arima_results["forecast"])
 
     # Example Prophet forecast
-    prophet_results = analyzer.analyze('prophet', df)
-    print("Prophet Forecast:", prophet_results['forecast'].tail())
+    prophet_results = analyzer.analyze("prophet", df)
+    print("Prophet Forecast:", prophet_results["forecast"].tail())

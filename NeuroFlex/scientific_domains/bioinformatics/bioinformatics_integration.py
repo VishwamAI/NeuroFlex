@@ -3,11 +3,14 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from typing import List, Dict
 
+
 class BioinformaticsIntegration:
     def __init__(self):
         pass
 
-    def read_sequence_file(self, file_path: str, file_format: str = "fasta") -> List[SeqRecord]:
+    def read_sequence_file(
+        self, file_path: str, file_format: str = "fasta"
+    ) -> List[SeqRecord]:
         """
         Read sequence data from files.
 
@@ -36,7 +39,7 @@ class BioinformaticsIntegration:
                 "id": seq.id,
                 "length": len(seq),
                 "description": seq.description,
-                "gc_content": self._calculate_gc_content(seq.seq)
+                "gc_content": self._calculate_gc_content(seq.seq),
             }
             summaries.append(summary)
         return summaries
@@ -56,7 +59,11 @@ class BioinformaticsIntegration:
             # Example processing: Translate DNA to protein
             if self._is_dna(seq.seq):
                 translated_seq = seq.seq.translate()
-                processed_seq = SeqRecord(translated_seq, id=seq.id, description=f"Translated {seq.description}")
+                processed_seq = SeqRecord(
+                    translated_seq,
+                    id=seq.id,
+                    description=f"Translated {seq.description}",
+                )
                 processed_sequences.append(processed_seq)
             else:
                 processed_sequences.append(seq)
@@ -64,9 +71,9 @@ class BioinformaticsIntegration:
 
     def _calculate_gc_content(self, sequence: Seq) -> float:
         """Calculate GC content of a sequence."""
-        gc_count = sequence.count('G') + sequence.count('C')
+        gc_count = sequence.count("G") + sequence.count("C")
         return gc_count / len(sequence) * 100 if len(sequence) > 0 else 0
 
     def _is_dna(self, sequence: Seq) -> bool:
         """Check if a sequence is DNA."""
-        return set(sequence.upper()).issubset({'A', 'C', 'G', 'T', 'N'})
+        return set(sequence.upper()).issubset({"A", "C", "G", "T", "N"})

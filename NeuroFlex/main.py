@@ -3,6 +3,7 @@ import torch
 from NeuroFlex import NeuroFlex
 from NeuroFlex.utils import Config
 
+
 def main():
     """
     Main function to demonstrate the capabilities of the NeuroFlex framework.
@@ -23,8 +24,8 @@ def main():
     """
     # Initialize NeuroFlex
     config = Config.get_config()
-    config['USE_UNIFIED_TRANSFORMER'] = True
-    config['UNIFIED_TRANSFORMER_VOCAB_SIZE'] = 30000  # Adjust as needed
+    config["USE_UNIFIED_TRANSFORMER"] = True
+    config["UNIFIED_TRANSFORMER_VOCAB_SIZE"] = 30000  # Adjust as needed
     neuroflex = NeuroFlex(config)
     neuroflex.setup()
 
@@ -51,7 +52,7 @@ def main():
 
     # Example: BCI data processing
     if neuroflex.bci_processor:
-        bci_data = np.random.rand(neuroflex.config['BCI_NUM_CHANNELS'], 1000)
+        bci_data = np.random.rand(neuroflex.config["BCI_NUM_CHANNELS"], 1000)
         processed_bci_data = neuroflex.process_bci_data(bci_data)
         print("Processed BCI data shape:", processed_bci_data.shape)
 
@@ -84,11 +85,14 @@ def main():
         attention_mask = torch.ones_like(input_ids)
 
         # Fine-tune for classification task
-        neuroflex.unified_transformer.fine_tune(task='classification', num_labels=2)
+        neuroflex.unified_transformer.fine_tune(task="classification", num_labels=2)
 
         # Perform classification
-        output = neuroflex.unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
+        output = neuroflex.unified_transformer.task_specific_forward(
+            input_ids, attention_mask, task="classification"
+        )
         print("UnifiedTransformer classification output:", output)
+
 
 if __name__ == "__main__":
     main()

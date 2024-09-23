@@ -10,8 +10,9 @@ from NeuroFlex.reinforcement_learning.reinforcement_learning_advancements import
     create_ppo_agent,
     create_sac_agent,
     train_multi_agent_rl,
-    advanced_rl_training
+    advanced_rl_training,
 )
+
 
 class TestReinforcementLearningAdvancements(unittest.TestCase):
     def setUp(self):
@@ -68,20 +69,24 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         self.assertIsInstance(agent, AdvancedRLAgent)
         self.assertEqual(agent.action_dim, env.action_space.n)
 
-    @patch('NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.AdvancedRLAgent')
+    @patch(
+        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.AdvancedRLAgent"
+    )
     def test_train_multi_agent_rl(self, mock_agent_class):
         mock_agent = MagicMock()
         mock_agent.device = torch.device("cpu")
         mock_agent.select_action.return_value = 0
         mock_agent.replay_buffer = MagicMock()
         mock_agent.replay_buffer.batch_size = 32
-        mock_agent.replay_buffer.__len__.return_value = 100  # Ensure buffer appears to have enough samples
+        mock_agent.replay_buffer.__len__.return_value = (
+            100  # Ensure buffer appears to have enough samples
+        )
         mock_agent.replay_buffer.sample.return_value = {
-            'observations': torch.rand(32, self.observation_dim),
-            'actions': torch.randint(0, self.action_dim, (32, 1)),
-            'rewards': torch.rand(32),
-            'next_observations': torch.rand(32, self.observation_dim),
-            'dones': torch.randint(0, 2, (32,)).bool()
+            "observations": torch.rand(32, self.observation_dim),
+            "actions": torch.randint(0, self.action_dim, (32, 1)),
+            "rewards": torch.rand(32),
+            "next_observations": torch.rand(32, self.observation_dim),
+            "dones": torch.randint(0, 2, (32,)).bool(),
         }
         mock_agent.to.return_value = mock_agent
         mock_agent.performance = 0.0
@@ -102,10 +107,16 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
             self.assertGreater(agent.replay_buffer.__len__.call_count, 0)
             self.assertGreater(agent.update.call_count, 0)
 
-    @patch('NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.train_multi_agent_rl')
+    @patch(
+        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.train_multi_agent_rl"
+    )
     def test_advanced_rl_training(self, mock_train):
-        mock_train.return_value = [MagicMock(is_trained=True) for _ in range(self.num_agents)]
-        trained_agents = advanced_rl_training(self.env_id, self.num_agents, algorithm="PPO", total_timesteps=100)
+        mock_train.return_value = [
+            MagicMock(is_trained=True) for _ in range(self.num_agents)
+        ]
+        trained_agents = advanced_rl_training(
+            self.env_id, self.num_agents, algorithm="PPO", total_timesteps=100
+        )
         self.assertEqual(len(trained_agents), self.num_agents)
         for agent in trained_agents:
             self.assertTrue(agent.is_trained)
@@ -121,8 +132,11 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         self.assertIn("Model performance is below threshold", issues)
         self.assertIn("Model hasn't been updated in 24 hours", issues)
 
-        with patch.object(agent, 'train') as mock_train:
-            mock_train.return_value = {'final_reward': 0.9, 'episode_rewards': [0.5, 0.6, 0.7, 0.8, 0.9]}
+        with patch.object(agent, "train") as mock_train:
+            mock_train.return_value = {
+                "final_reward": 0.9,
+                "episode_rewards": [0.5, 0.6, 0.7, 0.8, 0.9],
+            }
             env = gym.make(self.env_id)
             agent.heal(env, num_episodes=10, max_steps=100)
 
@@ -134,36 +148,40 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         agent = AdvancedRLAgent(self.observation_dim, self.action_dim, self.features)
         env = gym.make(self.env_id)
 
-        with patch.object(agent, 'select_action', return_value=0), \
-             patch.object(agent, 'update', return_value=0.1):
+        with patch.object(agent, "select_action", return_value=0), patch.object(
+            agent, "update", return_value=0.1
+        ):
             result = agent.train(env, num_episodes=200, max_steps=100)
 
-        self.assertIn('final_reward', result)
-        self.assertIn('episode_rewards', result)
-        self.assertLessEqual(len(result['episode_rewards']), 200)  # May stop early due to performance threshold
+        self.assertIn("final_reward", result)
+        self.assertIn("episode_rewards", result)
+        self.assertLessEqual(
+            len(result["episode_rewards"]), 200
+        )  # May stop early due to performance threshold
         self.assertTrue(agent.is_trained)
         self.assertGreaterEqual(agent.performance, agent.performance_threshold)
         self.assertLess(agent.epsilon, agent.epsilon_start)
 
         # Check if moving average calculation is working
-        if len(result['episode_rewards']) >= 100:
-            moving_avg = sum(result['episode_rewards'][-100:]) / 100
+        if len(result["episode_rewards"]) >= 100:
+            moving_avg = sum(result["episode_rewards"][-100:]) / 100
             self.assertAlmostEqual(agent.performance, moving_avg, places=5)
         else:
-            moving_avg = sum(result['episode_rewards']) / len(result['episode_rewards'])
+            moving_avg = sum(result["episode_rewards"]) / len(result["episode_rewards"])
             self.assertAlmostEqual(agent.performance, moving_avg, places=5)
 
     def test_agent_update(self):
         agent = AdvancedRLAgent(self.observation_dim, self.action_dim, self.features)
         batch = {
-            'observations': torch.rand(32, self.observation_dim),
-            'actions': torch.randint(0, self.action_dim, (32, 1)),
-            'rewards': torch.rand(32),
-            'next_observations': torch.rand(32, self.observation_dim),
-            'dones': torch.randint(0, 2, (32,)).bool()
+            "observations": torch.rand(32, self.observation_dim),
+            "actions": torch.randint(0, self.action_dim, (32, 1)),
+            "rewards": torch.rand(32),
+            "next_observations": torch.rand(32, self.observation_dim),
+            "dones": torch.randint(0, 2, (32,)).bool(),
         }
         loss = agent.update(batch)
         self.assertIsInstance(loss, float)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

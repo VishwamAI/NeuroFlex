@@ -14,40 +14,45 @@ from .unified_transformer import (
     get_unified_transformer,
     JAXUnifiedTransformer,
     FlaxUnifiedTransformer,
-    SonnetUnifiedTransformer
+    SonnetUnifiedTransformer,
 )
 
 __all__ = [
-    'UnifiedTransformer',
-    'get_unified_transformer',
-    'JAXUnifiedTransformer',
-    'FlaxUnifiedTransformer',
-    'SonnetUnifiedTransformer',
-    'get_transformer_version',
-    'SUPPORTED_TRANSFORMER_TYPES',
-    'initialize_transformers',
-    'create_transformer'
+    "UnifiedTransformer",
+    "get_unified_transformer",
+    "JAXUnifiedTransformer",
+    "FlaxUnifiedTransformer",
+    "SonnetUnifiedTransformer",
+    "get_transformer_version",
+    "SUPPORTED_TRANSFORMER_TYPES",
+    "initialize_transformers",
+    "create_transformer",
 ]
+
 
 def get_transformer_version():
     return "1.0.0"
 
-SUPPORTED_TRANSFORMER_TYPES = ['Unified', 'JAX', 'Flax', 'Sonnet']
+
+SUPPORTED_TRANSFORMER_TYPES = ["Unified", "JAX", "Flax", "Sonnet"]
+
 
 def initialize_transformers():
     print("Initializing Transformers Module...")
     # Add any necessary initialization code here
 
+
 def create_transformer(transformer_type, *args, **kwargs):
-    if transformer_type == 'Unified':
+    if transformer_type == "Unified":
         return UnifiedTransformer(*args, **kwargs)
-    elif transformer_type == 'JAX':
+    elif transformer_type == "JAX":
         return JAXUnifiedTransformer(*args, **kwargs)
-    elif transformer_type == 'Flax':
+    elif transformer_type == "Flax":
         return FlaxUnifiedTransformer(*args, **kwargs)
-    elif transformer_type == 'Sonnet':
+    elif transformer_type == "Sonnet":
         return SonnetUnifiedTransformer(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported transformer type: {transformer_type}")
+
 
 # Add any other Transformer-specific utility functions or constants as needed

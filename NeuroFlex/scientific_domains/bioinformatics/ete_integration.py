@@ -3,6 +3,7 @@ from ete3 import Tree
 from ete3.treeview import TreeStyle
 import logging
 
+
 class ETEIntegration:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -26,10 +27,10 @@ class ETEIntegration:
         root = tree.get_tree_root()
         farthest_leaf = tree.get_farthest_leaf()
         analysis = {
-            'num_leaves': len(tree.get_leaf_names()),
-            'total_branch_length': tree.get_distance(root, farthest_leaf[0]),
-            'root': root,
-            'farthest_leaf': farthest_leaf
+            "num_leaves": len(tree.get_leaf_names()),
+            "total_branch_length": tree.get_distance(root, farthest_leaf[0]),
+            "root": root,
+            "farthest_leaf": farthest_leaf,
         }
         return analysis
 
@@ -52,12 +53,17 @@ class ETEIntegration:
             raise TypeError("Input must be an ete3 Tree object")
         try:
             stats = {
-                'num_leaves': len(tree.get_leaves()),
-                'num_internal_nodes': len(tree.get_descendants()) - len(tree.get_leaves()),
-                'tree_depth': tree.get_farthest_node()[1],
-                'total_branch_length': tree.get_distance(tree.get_tree_root(), tree.get_farthest_leaf()[0]),
-                'root_children': len(tree.get_children()),
-                'is_binary': all(len(node.children) in (0, 2) for node in tree.traverse()),
+                "num_leaves": len(tree.get_leaves()),
+                "num_internal_nodes": len(tree.get_descendants())
+                - len(tree.get_leaves()),
+                "tree_depth": tree.get_farthest_node()[1],
+                "total_branch_length": tree.get_distance(
+                    tree.get_tree_root(), tree.get_farthest_leaf()[0]
+                ),
+                "root_children": len(tree.get_children()),
+                "is_binary": all(
+                    len(node.children) in (0, 2) for node in tree.traverse()
+                ),
                 # 'is_ultrametric' check removed as it's not available for TreeNode objects
             }
             self.logger.info("Tree statistics calculated successfully")

@@ -9,12 +9,23 @@ from ..utils import utils
 from ..core_neural_networks import PyTorchModel, CNN, LSTMModule, LRNN, MachineLearning
 from .rl_module import PrioritizedReplayBuffer, RLAgent, RLEnvironment, train_rl_agent
 
+
 class AdvancedRLAgent(RLAgent):
-    def __init__(self, observation_dim: int, action_dim: int, features: List[int] = [64, 64],
-                 learning_rate: float = 1e-4, gamma: float = 0.99, epsilon_start: float = 1.0,
-                 epsilon_end: float = 0.01, epsilon_decay: float = 0.995,
-                 performance_threshold: float = 0.8, update_interval: int = 86400,
-                 buffer_size: int = 100000, batch_size: int = 32):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        features: List[int] = [64, 64],
+        learning_rate: float = 1e-4,
+        gamma: float = 0.99,
+        epsilon_start: float = 1.0,
+        epsilon_end: float = 0.01,
+        epsilon_decay: float = 0.995,
+        performance_threshold: float = 0.8,
+        update_interval: int = 86400,
+        buffer_size: int = 100000,
+        batch_size: int = 32,
+    ):
         super(AdvancedRLAgent, self).__init__(observation_dim, action_dim)
         self.features = features
         self.learning_rate = learning_rate
@@ -28,7 +39,9 @@ class AdvancedRLAgent(RLAgent):
 
         self.q_network = self._build_network()
         self.optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        self.replay_buffer = PrioritizedReplayBuffer(buffer_size, (observation_dim,), (action_dim,), batch_size)
+        self.replay_buffer = PrioritizedReplayBuffer(
+            buffer_size, (observation_dim,), (action_dim,), batch_size
+        )
         self.epsilon = self.epsilon_start
         self.is_trained = False
         self.performance = 0.0
@@ -58,11 +71,11 @@ class AdvancedRLAgent(RLAgent):
             return q_values.argmax().item()
 
     def update(self, batch: Dict[str, torch.Tensor]) -> float:
-        states = batch['observations'].to(self.device)
-        actions = batch['actions'].to(self.device)
-        rewards = batch['rewards'].to(self.device)
-        next_states = batch['next_observations'].to(self.device)
-        dones = batch['dones'].to(self.device)
+        states = batch["observations"].to(self.device)
+        actions = batch["actions"].to(self.device)
+        rewards = batch["rewards"].to(self.device)
+        next_states = batch["next_observations"].to(self.device)
+        dones = batch["dones"].to(self.device)
 
         # Compute Q-values for current states and actions
         q_values = self(states).gather(1, actions)
@@ -72,7 +85,9 @@ class AdvancedRLAgent(RLAgent):
             next_q_values = self(next_states).max(1, keepdim=True)[0]
 
         # Compute targets
-        targets = rewards.unsqueeze(1) + self.gamma * next_q_values * (~dones.unsqueeze(1))
+        targets = rewards.unsqueeze(1) + self.gamma * next_q_values * (
+            ~dones.unsqueeze(1)
+        )
 
         # Compute loss
         loss = nn.functional.smooth_l1_loss(q_values, targets)
@@ -87,7 +102,7 @@ class AdvancedRLAgent(RLAgent):
     def train(self, env, num_episodes: int, max_steps: int) -> Dict[str, Any]:
         episode_rewards = []
         moving_avg_reward = 0
-        best_performance = float('-inf')
+        best_performance = float("-inf")
         window_size = 100  # Size of the moving average window
         no_improvement_count = 0
         max_no_improvement = 50  # Maximum number of episodes without improvement
@@ -129,19 +144,27 @@ class AdvancedRLAgent(RLAgent):
                 no_improvement_count += 1
 
             if (episode + 1) % 10 == 0:
-                logging.info(f"Episode {episode + 1}, Avg Reward: {moving_avg_reward:.2f}, Epsilon: {self.epsilon:.2f}")
+                logging.info(
+                    f"Episode {episode + 1}, Avg Reward: {moving_avg_reward:.2f}, Epsilon: {self.epsilon:.2f}"
+                )
 
             # Check for early stopping based on performance threshold and improvement
             if moving_avg_reward >= self.performance_threshold:
                 if no_improvement_count >= max_no_improvement:
-                    logging.info(f"Performance threshold reached and no improvement for {max_no_improvement} episodes. Stopping at episode {episode + 1}")
+                    logging.info(
+                        f"Performance threshold reached and no improvement for {max_no_improvement} episodes. Stopping at episode {episode + 1}"
+                    )
                     break
             elif no_improvement_count >= max_no_improvement * 2:
-                logging.info(f"No significant improvement for {max_no_improvement * 2} episodes. Stopping at episode {episode + 1}")
+                logging.info(
+                    f"No significant improvement for {max_no_improvement * 2} episodes. Stopping at episode {episode + 1}"
+                )
                 break
 
         self.is_trained = True
-        self.performance = moving_avg_reward  # Use the final moving average as performance
+        self.performance = (
+            moving_avg_reward  # Use the final moving average as performance
+        )
         self.last_update = time.time()
 
         return {"final_reward": self.performance, "episode_rewards": episode_rewards}
@@ -163,20 +186,27 @@ class AdvancedRLAgent(RLAgent):
             initial_performance = self.performance
             for attempt in range(max_attempts):
                 training_info = self.train(env, num_episodes, max_steps)
-                new_performance = training_info['final_reward']
+                new_performance = training_info["final_reward"]
                 if new_performance > self.performance:
                     self.performance = new_performance
                     self.last_update = time.time()
-                    logging.info(f"Healing successful after {attempt + 1} attempts. New performance: {self.performance}")
+                    logging.info(
+                        f"Healing successful after {attempt + 1} attempts. New performance: {self.performance}"
+                    )
                     return
-                logging.info(f"Healing attempt {attempt + 1} failed. Current performance: {new_performance}")
-            logging.warning(f"Failed to improve performance after {max_attempts} attempts. Best performance: {self.performance}")
+                logging.info(
+                    f"Healing attempt {attempt + 1} failed. Current performance: {new_performance}"
+                )
+            logging.warning(
+                f"Failed to improve performance after {max_attempts} attempts. Best performance: {self.performance}"
+            )
 
     def update_model(self, env, num_episodes: int, max_steps: int):
         num_episodes = max(1, num_episodes)
         training_info = self.train(env, num_episodes, max_steps)
-        self.performance = training_info['final_reward']
+        self.performance = training_info["final_reward"]
         self.last_update = time.time()
+
 
 class MultiAgentEnvironment:
     def __init__(self, num_agents: int, env_id: str):
@@ -192,23 +222,30 @@ class MultiAgentEnvironment:
                 return action.item() if action.numel() == 1 else action.tolist()
             return action
 
-        results = [env.step(process_action(action)) for env, action in zip(self.envs, actions)]
+        results = [
+            env.step(process_action(action)) for env, action in zip(self.envs, actions)
+        ]
         obs, rewards, dones, truncated, infos = zip(*results)
         return (
             torch.stack([torch.tensor(o, dtype=torch.float32) for o in obs]),
             torch.tensor(rewards, dtype=torch.float32),
             torch.tensor(dones, dtype=torch.bool),
             torch.tensor(truncated, dtype=torch.bool),
-            infos
+            infos,
         )
+
 
 def create_ppo_agent(env):
     return AdvancedRLAgent(env.observation_space.shape[0], env.action_space.n)
 
+
 def create_sac_agent(env):
     return AdvancedRLAgent(env.observation_space.shape[0], env.action_space.n)
 
-def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgent], total_timesteps: int):
+
+def train_multi_agent_rl(
+    env: MultiAgentEnvironment, agents: List[AdvancedRLAgent], total_timesteps: int
+):
     # Initialize episode_rewards and performance history for each agent
     for agent in agents:
         agent.episode_rewards = []
@@ -218,15 +255,35 @@ def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgen
         observations = env.reset()
         actions = []
         for agent, obs in zip(agents, observations):
-            obs_tensor = obs.to(agent.device) if isinstance(obs, torch.Tensor) else torch.tensor(obs, dtype=torch.float32).to(agent.device)
+            obs_tensor = (
+                obs.to(agent.device)
+                if isinstance(obs, torch.Tensor)
+                else torch.tensor(obs, dtype=torch.float32).to(agent.device)
+            )
             actions.append(agent.select_action(obs_tensor, training=True))
         next_observations, rewards, dones, truncated, infos = env.step(actions)
 
         all_agents_trained = True
-        for i, (agent, obs, action, next_obs, reward, done) in enumerate(zip(agents, observations, actions, next_observations, rewards, dones)):
-            obs_tensor = obs.to(agent.device) if isinstance(obs, torch.Tensor) else torch.tensor(obs, dtype=torch.float32).to(agent.device)
-            next_obs_tensor = next_obs.to(agent.device) if isinstance(next_obs, torch.Tensor) else torch.tensor(next_obs, dtype=torch.float32).to(agent.device)
-            agent.replay_buffer.add(obs_tensor.cpu().numpy(), action, reward, next_obs_tensor.cpu().numpy(), done)
+        for i, (agent, obs, action, next_obs, reward, done) in enumerate(
+            zip(agents, observations, actions, next_observations, rewards, dones)
+        ):
+            obs_tensor = (
+                obs.to(agent.device)
+                if isinstance(obs, torch.Tensor)
+                else torch.tensor(obs, dtype=torch.float32).to(agent.device)
+            )
+            next_obs_tensor = (
+                next_obs.to(agent.device)
+                if isinstance(next_obs, torch.Tensor)
+                else torch.tensor(next_obs, dtype=torch.float32).to(agent.device)
+            )
+            agent.replay_buffer.add(
+                obs_tensor.cpu().numpy(),
+                action,
+                reward,
+                next_obs_tensor.cpu().numpy(),
+                done,
+            )
 
             # Update the agent if the replay buffer has enough samples
             if len(agent.replay_buffer) > agent.replay_buffer.batch_size:
@@ -238,7 +295,9 @@ def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgen
             agent.episode_rewards.append(reward)
             if len(agent.episode_rewards) > 100:
                 agent.episode_rewards.pop(0)
-            agent.performance = sum(agent.episode_rewards) / max(len(agent.episode_rewards), 1)
+            agent.performance = sum(agent.episode_rewards) / max(
+                len(agent.episode_rewards), 1
+            )
             agent.performance_history.append(agent.performance)
 
             # Check if the agent has reached the performance threshold
@@ -247,7 +306,9 @@ def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgen
 
             # Log agent performance
             if step % 100 == 0:
-                logging.info(f"Agent {i} - Step: {step}, Performance: {agent.performance:.4f}, Epsilon: {agent.epsilon:.4f}")
+                logging.info(
+                    f"Agent {i} - Step: {step}, Performance: {agent.performance:.4f}, Epsilon: {agent.epsilon:.4f}"
+                )
 
         # Break the loop if all agents have reached the performance threshold
         if all_agents_trained:
@@ -264,7 +325,10 @@ def train_multi_agent_rl(env: MultiAgentEnvironment, agents: List[AdvancedRLAgen
 
     return agents
 
-def advanced_rl_training(env_id: str, num_agents: int, algorithm: str = "PPO", total_timesteps: int = 100000):
+
+def advanced_rl_training(
+    env_id: str, num_agents: int, algorithm: str = "PPO", total_timesteps: int = 100000
+):
     env = MultiAgentEnvironment(num_agents, env_id)
 
     if algorithm in ["PPO", "SAC"]:
@@ -275,10 +339,13 @@ def advanced_rl_training(env_id: str, num_agents: int, algorithm: str = "PPO", t
     trained_agents = train_multi_agent_rl(env, agents, total_timesteps)
     return trained_agents
 
+
 # Example usage
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    trained_agents = advanced_rl_training("CartPole-v1", num_agents=3, algorithm="PPO", total_timesteps=50000)
+    trained_agents = advanced_rl_training(
+        "CartPole-v1", num_agents=3, algorithm="PPO", total_timesteps=50000
+    )
     logging.info(f"Trained {len(trained_agents)} agents using PPO")
 
     # Demonstrate self-healing

@@ -16,25 +16,27 @@ from .agentic_behavior import (
     MetaPromptingAgent,
     BaseAgent,
     SelfConsistencyAgent,
-    GenerateKnowledgePromptingAgent
+    GenerateKnowledgePromptingAgent,
 )
 
 __all__ = [
-    'ZeroShotAgent',
-    'FewShotAgent',
-    'ChainOfThoughtAgent',
-    'MetaPromptingAgent',
-    'BaseAgent',
-    'SelfConsistencyAgent',
-    'GenerateKnowledgePromptingAgent',
-    'get_prompt_agent_version',
-    'SUPPORTED_AGENT_TYPES',
-    'initialize_prompt_agent',
-    'create_agent'
+    "ZeroShotAgent",
+    "FewShotAgent",
+    "ChainOfThoughtAgent",
+    "MetaPromptingAgent",
+    "BaseAgent",
+    "SelfConsistencyAgent",
+    "GenerateKnowledgePromptingAgent",
+    "get_prompt_agent_version",
+    "SUPPORTED_AGENT_TYPES",
+    "initialize_prompt_agent",
+    "create_agent",
 ]
+
 
 def get_prompt_agent_version():
     return "1.0.0"
+
 
 SUPPORTED_AGENT_TYPES = [
     "ZeroShot",
@@ -43,12 +45,14 @@ SUPPORTED_AGENT_TYPES = [
     "MetaPrompting",
     "Base",
     "SelfConsistency",
-    "GenerateKnowledgePrompting"
+    "GenerateKnowledgePrompting",
 ]
+
 
 def initialize_prompt_agent():
     print("Initializing Prompt Agent Module...")
     # Add any necessary initialization code here
+
 
 def create_agent(agent_type, *args, **kwargs):
     if agent_type == "ZeroShot":
@@ -67,5 +71,6 @@ def create_agent(agent_type, *args, **kwargs):
         return GenerateKnowledgePromptingAgent(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported agent type: {agent_type}")
+
 
 # Add any other Prompt Agent-specific utility functions or constants as needed

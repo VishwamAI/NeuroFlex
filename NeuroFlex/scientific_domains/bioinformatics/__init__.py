@@ -6,8 +6,8 @@ from .ete_integration import ETEIntegration
 from .alphafold_integration import AlphaFoldIntegration
 
 __all__ = [
-    'BioinformaticsIntegration',
-    'ScikitBioIntegration',
-    'ETEIntegration',
-    'AlphaFoldIntegration'
+    "BioinformaticsIntegration",
+    "ScikitBioIntegration",
+    "ETEIntegration",
+    "AlphaFoldIntegration",
 ]

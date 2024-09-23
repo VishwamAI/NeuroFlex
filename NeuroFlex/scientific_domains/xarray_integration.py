@@ -1,6 +1,7 @@
 import xarray as xr
 import numpy as np
 
+
 class XarrayIntegration:
     def __init__(self):
         self.datasets = {}
@@ -51,7 +52,9 @@ class XarrayIntegration:
         Returns:
             xarray.Dataset: The merged dataset.
         """
-        datasets_to_merge = [self.datasets[name] for name in dataset_names if name in self.datasets]
+        datasets_to_merge = [
+            self.datasets[name] for name in dataset_names if name in self.datasets
+        ]
         if not datasets_to_merge:
             raise ValueError("No valid datasets to merge.")
         return xr.merge(datasets_to_merge)
@@ -88,7 +91,7 @@ class XarrayIntegration:
         try:
             dataset = xr.open_dataset(file_path)
             if dataset_name is None:
-                dataset_name = file_path.split('/')[-1].split('.')[0]
+                dataset_name = file_path.split("/")[-1].split(".")[0]
             self.datasets[dataset_name] = dataset
             print(f"Dataset loaded from {file_path} and registered as '{dataset_name}'")
             return dataset

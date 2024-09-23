@@ -8,8 +8,11 @@ import numpy as np
 from tqdm import tqdm
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
 
+
 class MachineLearning(nn.Module):
-    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001):
+    def __init__(
+        self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001
+    ):
         super().__init__()
         self.features = features
         self.activation_class = activation
@@ -30,7 +33,7 @@ class MachineLearning(nn.Module):
 
         self.layers = nn.ModuleList()
         for i in range(len(features) - 1):
-            self.layers.append(nn.Linear(features[i], features[i+1]))
+            self.layers.append(nn.Linear(features[i], features[i + 1]))
             if i < len(features) - 2:
                 self.layers.append(self.activation_class())
                 self.layers.append(nn.Dropout(self.dropout_rate))
@@ -59,7 +62,9 @@ class MachineLearning(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -98,7 +103,9 @@ class MachineLearning(nn.Module):
 
     def escape_local_minimum(self):
         print("Attempting to escape local minimum...")
-        self.learning_rate = min(self.learning_rate * 2.5, 0.1)  # Increase more aggressively, but cap at 0.1
+        self.learning_rate = min(
+            self.learning_rate * 2.5, 0.1
+        )  # Increase more aggressively, but cap at 0.1
         print(f"New learning rate: {self.learning_rate}")
 
     def update_performance(self):
@@ -126,8 +133,11 @@ class MachineLearning(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
+
 class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001):
+    def __init__(
+        self, features, activation=nn.ReLU, dropout_rate=0.5, learning_rate=0.001
+    ):
         self.features = features
         self.activation_class = activation
         self.dropout_rate = dropout_rate
@@ -139,7 +149,7 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
             features=self.features,
             activation=self.activation_class,
             dropout_rate=self.dropout_rate,
-            learning_rate=self.learning_rate
+            learning_rate=self.learning_rate,
         )
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -156,7 +166,7 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
         criterion = nn.CrossEntropyLoss()
 
-        best_loss = float('inf')
+        best_loss = float("inf")
         no_improve = 0
 
         for epoch in tqdm(range(epochs), desc="Training"):
@@ -243,8 +253,10 @@ class NeuroFlexClassifier(BaseEstimator, ClassifierMixin):
         print(f"Learning rate after adjustment: {self.model.learning_rate}")
         return self
 
+
 # This section has been removed as it contained redundant PyTorchModel class and train_pytorch_model function.
 # The functionality is now integrated into the MachineLearning and NeuroFlexClassifier classes.
+
 
 # Additional utility functions for machine learning can be added here
 def calculate_accuracy(model, X, y):
@@ -259,8 +271,10 @@ def calculate_accuracy(model, X, y):
         accuracy = correct / total
     return accuracy
 
+
 def save_model(model, path):
     torch.save(model.state_dict(), path)
+
 
 def load_model(model, path):
     model.load_state_dict(torch.load(path))

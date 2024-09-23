@@ -1,11 +1,15 @@
 import gymnasium as gym
 import numpy as np
 import torch
-from curiosity_driven_exploration import CuriosityDrivenAgent, train_curiosity_driven_agent
+from curiosity_driven_exploration import (
+    CuriosityDrivenAgent,
+    train_curiosity_driven_agent,
+)
+
 
 def test_curiosity_driven_exploration():
     # Create a simple environment
-    env = gym.make('MountainCar-v0')
+    env = gym.make("MountainCar-v0")
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     print(f"Environment action dimension: {action_dim}")
@@ -36,9 +40,13 @@ def test_curiosity_driven_exploration():
             next_state, reward, done, _ = env.step(np.argmax(action))
             print(f"Next state type: {type(next_state)}, shape: {np.shape(next_state)}")
             if isinstance(next_state, tuple):
-                next_state = next_state[0]  # Extract the state from the tuple if necessary
+                next_state = next_state[
+                    0
+                ]  # Extract the state from the tuple if necessary
             episode_reward += reward
-            state = np.array(next_state).flatten()  # Ensure next_state is a flat numpy array
+            state = np.array(
+                next_state
+            ).flatten()  # Ensure next_state is a flat numpy array
             print(f"Processed next state type: {type(state)}, shape: {state.shape}")
 
         total_rewards.append(episode_reward)
@@ -54,13 +62,15 @@ def test_curiosity_driven_exploration():
     next_state, _, _, _ = env.step(env.action_space.sample())
     if isinstance(next_state, tuple):
         next_state = next_state[0]  # Extract the state from the tuple if necessary
-    next_state = np.array(next_state).flatten()  # Ensure next_state is a flat numpy array
+    next_state = np.array(
+        next_state
+    ).flatten()  # Ensure next_state is a flat numpy array
     action = trained_agent.act(state)
 
     intrinsic_reward = trained_agent.icm.compute_intrinsic_reward(
         torch.FloatTensor(state).unsqueeze(0),
         torch.FloatTensor(next_state).unsqueeze(0),
-        torch.FloatTensor(action).unsqueeze(0)
+        torch.FloatTensor(action).unsqueeze(0),
     )
     print(f"Intrinsic reward: {intrinsic_reward:.4f}")
 
@@ -79,7 +89,10 @@ def test_curiosity_driven_exploration():
     if np.mean(final_rewards) > np.mean(initial_rewards):
         print("Agent shows improvement over time.")
     else:
-        print("Agent does not show significant improvement. Further tuning may be required.")
+        print(
+            "Agent does not show significant improvement. Further tuning may be required."
+        )
+
 
 if __name__ == "__main__":
     test_curiosity_driven_exploration()

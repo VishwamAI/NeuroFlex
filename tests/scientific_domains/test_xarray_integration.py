@@ -4,6 +4,7 @@ import numpy as np
 from unittest.mock import patch, MagicMock
 from NeuroFlex.scientific_domains.xarray_integration import XarrayIntegration
 
+
 class TestXarrayIntegration(unittest.TestCase):
     def setUp(self):
         self.xarray_integration = XarrayIntegration()
@@ -17,7 +18,9 @@ class TestXarrayIntegration(unittest.TestCase):
 
         self.assertIsInstance(dataset, xr.Dataset)
         self.assertIn(name, self.xarray_integration.datasets)
-        np.testing.assert_array_equal(dataset.temperature.values, np.array([[20, 25], [30, 35]]))
+        np.testing.assert_array_equal(
+            dataset.temperature.values, np.array([[20, 25], [30, 35]])
+        )
 
     def test_apply_operation(self):
         name = "test_dataset"
@@ -43,7 +46,9 @@ class TestXarrayIntegration(unittest.TestCase):
         coords2 = {"x": [0, 1], "y": [0, 1]}
         self.xarray_integration.create_dataset("dataset2", data2, coords2)
 
-        merged_dataset = self.xarray_integration.merge_datasets(["dataset1", "dataset2"])
+        merged_dataset = self.xarray_integration.merge_datasets(
+            ["dataset1", "dataset2"]
+        )
 
         self.assertIsInstance(merged_dataset, xr.Dataset)
         self.assertIn("temperature", merged_dataset.data_vars)
@@ -52,7 +57,7 @@ class TestXarrayIntegration(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.xarray_integration.merge_datasets(["non_existent_dataset"])
 
-    @patch('xarray.Dataset.to_netcdf')
+    @patch("xarray.Dataset.to_netcdf")
     def test_save_dataset(self, mock_to_netcdf):
         name = "test_dataset"
         data = {"temperature": (["x", "y"], [[20, 25], [30, 35]])}
@@ -67,5 +72,6 @@ class TestXarrayIntegration(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.xarray_integration.save_dataset("non_existent_dataset", file_path)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

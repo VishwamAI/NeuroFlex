@@ -7,9 +7,16 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+
 class PyTorchModel(nn.Module):
-    def __init__(self, input_dim: int, hidden_layers: List[int], output_dim: int,
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_layers: List[int],
+        output_dim: int,
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super(PyTorchModel, self).__init__()
         self.input_dim = input_dim
         self.hidden_layers = hidden_layers
@@ -44,32 +51,40 @@ class PyTorchModel(nn.Module):
             x = layer(x)
         return x
 
-def create_pytorch_model(input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int]) -> PyTorchModel:
+
+def create_pytorch_model(
+    input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int]
+) -> PyTorchModel:
     return PyTorchModel(input_shape[0], hidden_layers, output_dim)
 
-def train_pytorch_model(model: PyTorchModel,
-                        x_train: torch.Tensor,
-                        y_train: torch.Tensor,
-                        epochs: int = 10,
-                        batch_size: int = 32,
-                        validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-                        callback: Optional[Callable[[float], None]] = None) -> dict:
+
+def train_pytorch_model(
+    model: PyTorchModel,
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+    epochs: int = 10,
+    batch_size: int = 32,
+    validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    callback: Optional[Callable[[float], None]] = None,
+) -> dict:
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=model.learning_rate)
 
-    history = {'train_loss': [], 'val_loss': []}
+    history = {"train_loss": [], "val_loss": []}
 
     num_samples = x_train.shape[0]
     num_batches = max(1, num_samples // batch_size)
 
-    logging.info(f"PyTorch model initial parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"PyTorch model initial parameters: {sum(p.numel() for p in model.parameters())}"
+    )
 
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         for i in range(0, num_samples, batch_size):
-            batch_x = x_train[i:i+batch_size].to(model.device)
-            batch_y = y_train[i:i+batch_size].to(model.device)
+            batch_x = x_train[i : i + batch_size].to(model.device)
+            batch_y = y_train[i : i + batch_size].to(model.device)
 
             optimizer.zero_grad()
             outputs = model(batch_x)
@@ -85,7 +100,9 @@ def train_pytorch_model(model: PyTorchModel,
         if callback:
             callback(avg_loss)
 
-        model.gradient_norm = sum(p.grad.norm().item() for p in model.parameters() if p.grad is not None)
+        model.gradient_norm = sum(
+            p.grad.norm().item() for p in model.parameters() if p.grad is not None
+        )
         model.performance = 1.0 - avg_loss  # Simple performance metric
         model.update_performance()
         model.adjust_learning_rate()
@@ -99,18 +116,21 @@ def train_pytorch_model(model: PyTorchModel,
         model.eval()
         with torch.no_grad():
             train_loss = criterion(model(x_train), y_train).item()
-            history['train_loss'].append(train_loss)
+            history["train_loss"].append(train_loss)
 
             if validation_data:
                 val_x, val_y = validation_data
                 val_loss = criterion(model(val_x), val_y).item()
-                history['val_loss'].append(val_loss)
+                history["val_loss"].append(val_loss)
 
     model.is_trained = True
     model.last_update = time.time()
-    logging.info(f"PyTorch model final parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"PyTorch model final parameters: {sum(p.numel() for p in model.parameters())}"
+    )
 
     return history
+
 
 def pytorch_predict(model: PyTorchModel, x: torch.Tensor) -> torch.Tensor:
     model.eval()

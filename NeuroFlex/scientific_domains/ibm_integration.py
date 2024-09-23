@@ -11,6 +11,7 @@ from qiskit_algorithms.optimizers import COBYLA
 from qiskit.circuit.library import TwoLocal
 from qiskit.primitives import Sampler
 
+
 class IBMIntegration:
     def __init__(self):
         pass
@@ -27,6 +28,7 @@ class IBMIntegration:
         # Placeholder for IBM Cloud Services integration
         pass
 
+
 def ibm_quantum_inspired_optimization(problem_matrix, num_qubits):
     """
     Perform quantum-inspired optimization using IBM's Qiskit library.
@@ -42,11 +44,11 @@ def ibm_quantum_inspired_optimization(problem_matrix, num_qubits):
     problem_matrix_np = jnp.asarray(problem_matrix)
 
     # Set up the quantum sampler
-    backend = Aer.get_backend('statevector_simulator')
+    backend = Aer.get_backend("statevector_simulator")
     sampler = Sampler(backend)
 
     # Create a simple ansatz
-    ansatz = TwoLocal(num_qubits, 'ry', 'cz', reps=3, entanglement='linear')
+    ansatz = TwoLocal(num_qubits, "ry", "cz", reps=3, entanglement="linear")
 
     # Set up the VQE algorithm
     optimizer = COBYLA(maxiter=100)
@@ -59,6 +61,7 @@ def ibm_quantum_inspired_optimization(problem_matrix, num_qubits):
     optimized_solution = jnp.array(result.optimal_point)
 
     return optimized_solution
+
 
 def integrate_ibm_quantum(input_data):
     """

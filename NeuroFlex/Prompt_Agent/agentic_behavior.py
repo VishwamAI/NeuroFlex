@@ -6,6 +6,7 @@ import tensorflow as tf
 from abc import ABC, abstractmethod
 from NeuroFlex.utils.utils import tokenize_text, get_activation_function
 
+
 class AgenticBehavior(ABC):
     @abstractmethod
     def zero_shot(self, prompt: str) -> str:
@@ -31,6 +32,7 @@ class AgenticBehavior(ABC):
     def self_update(self, feedback: str) -> None:
         pass
 
+
 class BaseAgent(AgenticBehavior):
     def __init__(self, model: nn.Module):
         self.model = model
@@ -50,7 +52,9 @@ class BaseAgent(AgenticBehavior):
         correction_prompt = f"The previous output was:\n{output}\n\nPlease review and correct any errors in the above output:"
         tokens = tokenize_text(correction_prompt)
         encoded_input = self._encode_input(tokens)
-        corrected_output = self.model.apply({'params': self.model.params}, encoded_input)
+        corrected_output = self.model.apply(
+            {"params": self.model.params}, encoded_input
+        )
         return self._decode_output(corrected_output)
 
     def self_update(self, feedback: str) -> None:
@@ -59,6 +63,7 @@ class BaseAgent(AgenticBehavior):
         print(f"Received feedback for self-update: {feedback}")
         # TODO: Implement actual model update logic using JAX/Flax optimization
 
+
 class NeuroFlexAgenticBehavior(BaseAgent):
     pass
 
@@ -66,7 +71,7 @@ class NeuroFlexAgenticBehavior(BaseAgent):
         # Implement zero-shot learning using the NeuroFlex model
         tokens = tokenize_text(prompt)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
@@ -74,7 +79,7 @@ class NeuroFlexAgenticBehavior(BaseAgent):
         context = self._format_examples(examples) + "\n" + prompt
         tokens = tokenize_text(context)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def chain_of_thought(self, prompt: str) -> str:
@@ -85,10 +90,12 @@ class NeuroFlexAgenticBehavior(BaseAgent):
 
         thoughts = []
         for _ in range(5):  # Generate up to 5 steps
-            output = self.model.apply({'params': self.model.params}, encoded_input)
+            output = self.model.apply({"params": self.model.params}, encoded_input)
             step = self._decode_output(output)
             thoughts.append(step)
-            encoded_input = jnp.concatenate([encoded_input, self._encode_input(tokenize_text(step))])
+            encoded_input = jnp.concatenate(
+                [encoded_input, self._encode_input(tokenize_text(step))]
+            )
 
         return "\n".join(thoughts)
 
@@ -97,7 +104,7 @@ class NeuroFlexAgenticBehavior(BaseAgent):
         full_prompt = f"{meta_prompt}\n\nTask: {prompt}"
         tokens = tokenize_text(full_prompt)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def self_correct(self, output: str) -> str:
@@ -105,7 +112,9 @@ class NeuroFlexAgenticBehavior(BaseAgent):
         correction_prompt = f"The previous output was:\n{output}\n\nPlease review and correct any errors in the above output:"
         tokens = tokenize_text(correction_prompt)
         encoded_input = self._encode_input(tokens)
-        corrected_output = self.model.apply({'params': self.model.params}, encoded_input)
+        corrected_output = self.model.apply(
+            {"params": self.model.params}, encoded_input
+        )
         return self._decode_output(corrected_output)
 
     def self_update(self, feedback: str) -> None:
@@ -137,9 +146,11 @@ class NeuroFlexAgenticBehavior(BaseAgent):
             formatted += f"Input: {example['input']}\nOutput: {example['output']}\n\n"
         return formatted.strip()
 
+
 # Helper function to create a NeuroFlexAgenticBehavior instance
 def create_neuroflex_agentic_behavior(model: nn.Module) -> NeuroFlexAgenticBehavior:
     return NeuroFlexAgenticBehavior(model)
+
 
 class BaseAgent(AgenticBehavior):
     def __init__(self, model: nn.Module):
@@ -155,28 +166,34 @@ class BaseAgent(AgenticBehavior):
         correction_prompt = f"The previous output was:\n{output}\n\nPlease review and correct any errors in the above output:"
         tokens = tokenize_text(correction_prompt)
         encoded_input = self._encode_input(tokens)
-        corrected_output = self.model.apply({'params': self.model.params}, encoded_input)
+        corrected_output = self.model.apply(
+            {"params": self.model.params}, encoded_input
+        )
         return self._decode_output(corrected_output)
 
     def self_update(self, feedback: str) -> None:
         print(f"Received feedback for self-update: {feedback}")
         # TODO: Implement actual model update logic using JAX/Flax optimization
 
+
 class ZeroShotAgent(BaseAgent):
     def zero_shot(self, prompt: str) -> str:
         tokens = tokenize_text(prompt)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
         raise NotImplementedError("ZeroShotAgent does not support few-shot learning")
 
     def chain_of_thought(self, prompt: str) -> str:
-        raise NotImplementedError("ZeroShotAgent does not support chain-of-thought reasoning")
+        raise NotImplementedError(
+            "ZeroShotAgent does not support chain-of-thought reasoning"
+        )
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
         raise NotImplementedError("ZeroShotAgent does not support meta-prompting")
+
 
 class FewShotAgent(BaseAgent):
     def zero_shot(self, prompt: str) -> str:
@@ -186,11 +203,13 @@ class FewShotAgent(BaseAgent):
         context = self._format_examples(examples) + "\n" + prompt
         tokens = tokenize_text(context)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def chain_of_thought(self, prompt: str) -> str:
-        raise NotImplementedError("FewShotAgent does not support chain-of-thought reasoning")
+        raise NotImplementedError(
+            "FewShotAgent does not support chain-of-thought reasoning"
+        )
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
         raise NotImplementedError("FewShotAgent does not support meta-prompting")
@@ -201,12 +220,17 @@ class FewShotAgent(BaseAgent):
             formatted += f"Input: {example['input']}\nOutput: {example['output']}\n\n"
         return formatted.strip()
 
+
 class ChainOfThoughtAgent(BaseAgent):
     def zero_shot(self, prompt: str) -> str:
-        raise NotImplementedError("ChainOfThoughtAgent does not support zero-shot learning")
+        raise NotImplementedError(
+            "ChainOfThoughtAgent does not support zero-shot learning"
+        )
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
-        raise NotImplementedError("ChainOfThoughtAgent does not support few-shot learning")
+        raise NotImplementedError(
+            "ChainOfThoughtAgent does not support few-shot learning"
+        )
 
     def chain_of_thought(self, prompt: str) -> str:
         cot_prompt = f"Let's approach this step-by-step:\n1) {prompt}\n2) "
@@ -215,32 +239,42 @@ class ChainOfThoughtAgent(BaseAgent):
 
         thoughts = []
         for _ in range(5):  # Generate up to 5 steps
-            output = self.model.apply({'params': self.model.params}, encoded_input)
+            output = self.model.apply({"params": self.model.params}, encoded_input)
             step = self._decode_output(output)
             thoughts.append(step)
-            encoded_input = jnp.concatenate([encoded_input, self._encode_input(tokenize_text(step))])
+            encoded_input = jnp.concatenate(
+                [encoded_input, self._encode_input(tokenize_text(step))]
+            )
 
         return "\n".join(thoughts)
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
         raise NotImplementedError("ChainOfThoughtAgent does not support meta-prompting")
 
+
 class MetaPromptingAgent(BaseAgent):
     def zero_shot(self, prompt: str) -> str:
-        raise NotImplementedError("MetaPromptingAgent does not support zero-shot learning")
+        raise NotImplementedError(
+            "MetaPromptingAgent does not support zero-shot learning"
+        )
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
-        raise NotImplementedError("MetaPromptingAgent does not support few-shot learning")
+        raise NotImplementedError(
+            "MetaPromptingAgent does not support few-shot learning"
+        )
 
     def chain_of_thought(self, prompt: str) -> str:
-        raise NotImplementedError("MetaPromptingAgent does not support chain-of-thought reasoning")
+        raise NotImplementedError(
+            "MetaPromptingAgent does not support chain-of-thought reasoning"
+        )
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
         full_prompt = f"{meta_prompt}\n\nTask: {prompt}"
         tokens = tokenize_text(full_prompt)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
+
 
 class SelfConsistencyAgent(BaseAgent):
     def __init__(self, model: nn.Module, num_samples: int = 5):
@@ -252,13 +286,14 @@ class SelfConsistencyAgent(BaseAgent):
         for _ in range(self.num_samples):
             tokens = tokenize_text(prompt)
             encoded_input = self._encode_input(tokens)
-            output = self.model.apply({'params': self.model.params}, encoded_input)
+            output = self.model.apply({"params": self.model.params}, encoded_input)
             samples.append(self._decode_output(output))
         return samples
 
     def select_most_consistent(self, samples: List[str]) -> str:
         # Simple implementation: return the most common sample
         from collections import Counter
+
         return Counter(samples).most_common(1)[0][0]
 
     def zero_shot(self, prompt: str) -> str:
@@ -266,13 +301,20 @@ class SelfConsistencyAgent(BaseAgent):
         return self.select_most_consistent(samples)
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
-        raise NotImplementedError("SelfConsistencyAgent does not support few-shot learning")
+        raise NotImplementedError(
+            "SelfConsistencyAgent does not support few-shot learning"
+        )
 
     def chain_of_thought(self, prompt: str) -> str:
-        raise NotImplementedError("SelfConsistencyAgent does not support chain-of-thought reasoning")
+        raise NotImplementedError(
+            "SelfConsistencyAgent does not support chain-of-thought reasoning"
+        )
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
-        raise NotImplementedError("SelfConsistencyAgent does not support meta-prompting")
+        raise NotImplementedError(
+            "SelfConsistencyAgent does not support meta-prompting"
+        )
+
 
 class GenerateKnowledgePromptingAgent(BaseAgent):
     def __init__(self, model: nn.Module, knowledge_base: Dict[str, str]):
@@ -295,14 +337,20 @@ class GenerateKnowledgePromptingAgent(BaseAgent):
         integrated_prompt = self.integrate_knowledge(prompt, knowledge)
         tokens = tokenize_text(integrated_prompt)
         encoded_input = self._encode_input(tokens)
-        output = self.model.apply({'params': self.model.params}, encoded_input)
+        output = self.model.apply({"params": self.model.params}, encoded_input)
         return self._decode_output(output)
 
     def few_shot(self, prompt: str, examples: List[Dict[str, str]]) -> str:
-        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support few-shot learning")
+        raise NotImplementedError(
+            "GenerateKnowledgePromptingAgent does not support few-shot learning"
+        )
 
     def chain_of_thought(self, prompt: str) -> str:
-        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support chain-of-thought reasoning")
+        raise NotImplementedError(
+            "GenerateKnowledgePromptingAgent does not support chain-of-thought reasoning"
+        )
 
     def meta_prompting(self, prompt: str, meta_prompt: str) -> str:
-        raise NotImplementedError("GenerateKnowledgePromptingAgent does not support meta-prompting")
+        raise NotImplementedError(
+            "GenerateKnowledgePromptingAgent does not support meta-prompting"
+        )

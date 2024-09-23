@@ -10,8 +10,11 @@ import time
 
 logging.basicConfig(level=logging.INFO)
 
+
 class PyTorchModel(nn.Module):
-    def __init__(self, features: int, dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(
+        self, features: int, dropout_rate: float = 0.5, learning_rate: float = 0.001
+    ):
         super().__init__()
         self.features = features
         self.dropout_rate = dropout_rate
@@ -33,7 +36,7 @@ class PyTorchModel(nn.Module):
             nn.Linear(features, features),
             nn.ReLU(),
             nn.Dropout(self.dropout_rate),
-            nn.Linear(features, features)
+            nn.Linear(features, features),
         )
         self.to(self.device)
 
@@ -41,7 +44,9 @@ class PyTorchModel(nn.Module):
         if x.dim() != 2:
             raise ValueError(f"Expected 2D input, got {x.dim()}D")
         if x.shape[1] != self.features:
-            raise ValueError(f"Input shape {x.shape} does not match expected shape (batch_size, {self.features})")
+            raise ValueError(
+                f"Input shape {x.shape} does not match expected shape (batch_size, {self.features})"
+            )
         x = self.layer(x)
         return torch.log_softmax(x, dim=-1)
 
@@ -59,7 +64,9 @@ class PyTorchModel(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -115,13 +122,14 @@ class PyTorchModel(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
+
 def train_pytorch_model(
     model: PyTorchModel,
     X: torch.Tensor,
     y: torch.Tensor,
     epochs: int = 10,
     batch_size: int = 32,
-    callback: Optional[Callable[[float], None]] = None
+    callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=model.learning_rate)
@@ -129,7 +137,9 @@ def train_pytorch_model(
     num_samples = X.shape[0]
     num_batches = max(1, num_samples // batch_size)
 
-    logging.info(f"PyTorch model initial parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"PyTorch model initial parameters: {sum(p.numel() for p in model.parameters())}"
+    )
 
     for epoch in range(epochs):
         perm = torch.randperm(num_samples)
@@ -157,7 +167,9 @@ def train_pytorch_model(
         if callback:
             callback(avg_loss)
 
-        model.gradient_norm = sum(p.grad.norm().item() for p in model.parameters() if p.grad is not None)
+        model.gradient_norm = sum(
+            p.grad.norm().item() for p in model.parameters() if p.grad is not None
+        )
         model.performance = 1.0 - avg_loss  # Simple performance metric
         model.update_performance()
         model.adjust_learning_rate()
@@ -169,7 +181,10 @@ def train_pytorch_model(
 
     model.is_trained = True
     model.last_update = time.time()
-    logging.info(f"PyTorch model final parameters: {sum(p.numel() for p in model.parameters())}")
+    logging.info(
+        f"PyTorch model final parameters: {sum(p.numel() for p in model.parameters())}"
+    )
+
 
 def batch_predict(model: PyTorchModel, x: torch.Tensor) -> torch.Tensor:
     try:
@@ -186,18 +201,23 @@ def batch_predict(model: PyTorchModel, x: torch.Tensor) -> torch.Tensor:
         elif x.dim() == 0:
             x = x.view(1, 1)
         elif x.dim() != 2:
-            raise ValueError(f"Invalid input shape. Expected 2 dimensions, got {x.dim()}. Input shape: {x.shape}")
+            raise ValueError(
+                f"Invalid input shape. Expected 2 dimensions, got {x.dim()}. Input shape: {x.shape}"
+            )
 
         # Apply the model
         model.eval()
         with torch.no_grad():
             output = model(x)
 
-        logging.info(f"Batch prediction successful. Input shape: {x.shape}, Output shape: {output.shape}")
+        logging.info(
+            f"Batch prediction successful. Input shape: {x.shape}, Output shape: {output.shape}"
+        )
         return output
     except Exception as e:
         logging.error(f"Error in batch_predict: {str(e)}")
         raise
+
 
 def parallel_train(model: PyTorchModel, X: torch.Tensor, y: torch.Tensor) -> None:
     if torch.cuda.device_count() > 1:

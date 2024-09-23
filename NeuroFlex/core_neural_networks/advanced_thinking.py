@@ -11,9 +11,16 @@ from NeuroFlex.utils import normalize_data, preprocess_data
 
 logging.basicConfig(level=logging.INFO)
 
+
 class CDSTDP(nn.Module):
-    def __init__(self, input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int],
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        input_shape: Tuple[int, ...],
+        output_dim: int,
+        hidden_layers: List[int],
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super(CDSTDP, self).__init__()
         self.input_shape = input_shape
         self.output_dim = output_dim
@@ -39,10 +46,12 @@ class CDSTDP(nn.Module):
         self.tau_plus = 20.0
         self.tau_minus = 20.0
 
-        self.layers = nn.ModuleList([
-            nn.Linear(input_shape[0] if i == 0 else hidden_layers[i-1], units)
-            for i, units in enumerate(hidden_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                nn.Linear(input_shape[0] if i == 0 else hidden_layers[i - 1], units)
+                for i, units in enumerate(hidden_layers)
+            ]
+        )
         self.dropout = nn.Dropout(self.dropout_rate)
         self.output_layer = nn.Linear(hidden_layers[-1], output_dim)
         self.to(self.device)
@@ -66,7 +75,9 @@ class CDSTDP(nn.Module):
 
             # Ensure pre_synaptic and post_synaptic have compatible shapes for matmul
             if pre_synaptic.shape[0] != post_synaptic.shape[0]:
-                raise ValueError(f"Incompatible batch sizes: pre_synaptic {pre_synaptic.shape[0]}, post_synaptic {post_synaptic.shape[0]}")
+                raise ValueError(
+                    f"Incompatible batch sizes: pre_synaptic {pre_synaptic.shape[0]}, post_synaptic {post_synaptic.shape[0]}"
+                )
 
             # Convert layer.weight to JAX array before calculations
             layer_weight_jax = jnp.array(layer.weight.detach().numpy())
@@ -74,43 +85,61 @@ class CDSTDP(nn.Module):
             # Calculate weight_update with the correct shape
             # Ensure dw has the same shape as layer_weight_jax (out_features, in_features)
             dw = jnp.matmul(post_synaptic.T, pre_synaptic)
-            dw = dw[:layer_weight_jax.shape[0], :layer_weight_jax.shape[1]]
+            dw = dw[: layer_weight_jax.shape[0], : layer_weight_jax.shape[1]]
 
             # Adjust stdp calculation to match dw shape
             delta_t = jnp.arange(-self.time_window, self.time_window + 1)
             stdp = jnp.where(
                 delta_t > 0,
                 self.a_plus * jnp.exp(-delta_t / self.tau_plus),
-                -self.a_minus * jnp.exp(delta_t / self.tau_minus)
+                -self.a_minus * jnp.exp(delta_t / self.tau_minus),
             )
-            stdp = jnp.tile(stdp.reshape(-1, 1, 1), (1,) + dw.shape)  # Tile to match dw dimensions
+            stdp = jnp.tile(
+                stdp.reshape(-1, 1, 1), (1,) + dw.shape
+            )  # Tile to match dw dimensions
             stdp = jnp.sum(stdp, axis=0)  # Sum over time window
 
             weight_update = self.learning_rate * dw * stdp
 
             # Apply feedback
-            feedback_mean = jnp.mean(feedback, axis=0)  # Average feedback across batch dimension
-            feedback_reshaped = feedback_mean.reshape(-1, 1)  # Reshape to (feature_size, 1)
-            feedback_tiled = jnp.tile(feedback_reshaped, (1, dw.shape[1]))  # Tile to match dw shape
+            feedback_mean = jnp.mean(
+                feedback, axis=0
+            )  # Average feedback across batch dimension
+            feedback_reshaped = feedback_mean.reshape(
+                -1, 1
+            )  # Reshape to (feature_size, 1)
+            feedback_tiled = jnp.tile(
+                feedback_reshaped, (1, dw.shape[1])
+            )  # Tile to match dw shape
 
             # Ensure feedback_tiled has the same shape as weight_update
-            feedback_tiled = feedback_tiled[:dw.shape[0], :dw.shape[1]]
+            feedback_tiled = feedback_tiled[: dw.shape[0], : dw.shape[1]]
             weight_update = weight_update * feedback_tiled
 
             # Ensure weight_update has the same shape as layer_weight_jax
             if weight_update.shape != layer_weight_jax.shape:
-                weight_update = jnp.pad(weight_update, ((0, layer_weight_jax.shape[0] - weight_update.shape[0]), (0, 0)))
+                weight_update = jnp.pad(
+                    weight_update,
+                    ((0, layer_weight_jax.shape[0] - weight_update.shape[0]), (0, 0)),
+                )
 
             # Ensure shapes are compatible for addition
             if layer_weight_jax.shape != weight_update.shape:
-                raise ValueError(f"Incompatible shapes: layer_weight_jax {layer_weight_jax.shape}, weight_update {weight_update.shape}")
+                raise ValueError(
+                    f"Incompatible shapes: layer_weight_jax {layer_weight_jax.shape}, weight_update {weight_update.shape}"
+                )
 
             # Update the layer weights
             updated_weights = layer_weight_jax + weight_update
-            layer.weight = torch.nn.Parameter(torch.from_numpy(np.array(updated_weights)))
-            updated_params[f'layer_{i}'] = {'kernel': updated_weights, 'bias': jnp.zeros(updated_weights.shape[0])}
+            layer.weight = torch.nn.Parameter(
+                torch.from_numpy(np.array(updated_weights))
+            )
+            updated_params[f"layer_{i}"] = {
+                "kernel": updated_weights,
+                "bias": jnp.zeros(updated_weights.shape[0]),
+            }
 
-        return {'params': updated_params}  # Return updated parameters with 'params' key
+        return {"params": updated_params}  # Return updated parameters with 'params' key
 
     def diagnose(self):
         issues = []
@@ -122,7 +151,9 @@ class CDSTDP(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -178,25 +209,33 @@ class CDSTDP(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-    def train(self, x_train: torch.Tensor, y_train: torch.Tensor, epochs: int = 10,
-              batch_size: int = 32, validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-              callback: Optional[Callable[[float], None]] = None) -> dict:
+    def train(
+        self,
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        epochs: int = 10,
+        batch_size: int = 32,
+        validation_data: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        callback: Optional[Callable[[float], None]] = None,
+    ) -> dict:
         criterion = nn.MSELoss()
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
 
-        history = {'train_loss': [], 'val_loss': []}
+        history = {"train_loss": [], "val_loss": []}
 
         num_samples = x_train.shape[0]
         num_batches = max(1, num_samples // batch_size)
 
-        logging.info(f"CDSTDP model initial parameters: {sum(p.numel() for p in self.parameters())}")
+        logging.info(
+            f"CDSTDP model initial parameters: {sum(p.numel() for p in self.parameters())}"
+        )
 
         for epoch in range(epochs):
             self.train()
             epoch_loss = 0.0
             for i in range(0, num_samples, batch_size):
-                batch_x = x_train[i:i+batch_size].to(self.device)
-                batch_y = y_train[i:i+batch_size].to(self.device)
+                batch_x = x_train[i : i + batch_size].to(self.device)
+                batch_y = y_train[i : i + batch_size].to(self.device)
 
                 optimizer.zero_grad()
                 outputs = self(batch_x)
@@ -212,7 +251,9 @@ class CDSTDP(nn.Module):
             if callback:
                 callback(avg_loss)
 
-            self.gradient_norm = sum(p.grad.norm().item() for p in self.parameters() if p.grad is not None)
+            self.gradient_norm = sum(
+                p.grad.norm().item() for p in self.parameters() if p.grad is not None
+            )
             self.performance = 1.0 - avg_loss  # Simple performance metric
             self.update_performance()
             self.adjust_learning_rate()
@@ -226,19 +267,27 @@ class CDSTDP(nn.Module):
             self.eval()
             with torch.no_grad():
                 train_loss = criterion(self(x_train), y_train).item()
-                history['train_loss'].append(train_loss)
+                history["train_loss"].append(train_loss)
 
                 if validation_data:
                     val_x, val_y = validation_data
                     val_loss = criterion(self(val_x), val_y).item()
-                    history['val_loss'].append(val_loss)
+                    history["val_loss"].append(val_loss)
 
         self.is_trained = True
         self.last_update = time.time()
-        logging.info(f"CDSTDP model final parameters: {sum(p.numel() for p in self.parameters())}")
+        logging.info(
+            f"CDSTDP model final parameters: {sum(p.numel() for p in self.parameters())}"
+        )
 
         return history
 
-def create_cdstdp(input_shape: Tuple[int, ...], output_dim: int, hidden_layers: List[int],
-                  dropout_rate: float = 0.5, learning_rate: float = 0.001) -> CDSTDP:
+
+def create_cdstdp(
+    input_shape: Tuple[int, ...],
+    output_dim: int,
+    hidden_layers: List[int],
+    dropout_rate: float = 0.5,
+    learning_rate: float = 0.001,
+) -> CDSTDP:
     return CDSTDP(input_shape, output_dim, hidden_layers, dropout_rate, learning_rate)

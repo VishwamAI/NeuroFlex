@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+
 class EnvironmentModel(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=64):
         super().__init__()
@@ -17,7 +18,7 @@ class EnvironmentModel(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, state_dim)
+            nn.Linear(hidden_dim, state_dim),
         )
         self.optimizer = optim.Adam(self.parameters(), lr=1e-3)
 
@@ -32,6 +33,7 @@ class EnvironmentModel(nn.Module):
         self.optimizer.step()
         return loss.item()
 
+
 class MBPOAgent:
     def __init__(self, state_dim, action_dim, hidden_dim=64):
         self.actor = nn.Sequential(
@@ -40,14 +42,14 @@ class MBPOAgent:
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim),
-            nn.Tanh()
+            nn.Tanh(),
         )
         self.critic = nn.Sequential(
             nn.Linear(state_dim + action_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(hidden_dim, 1),
         )
         self.env_model = EnvironmentModel(state_dim, action_dim)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
@@ -87,9 +89,10 @@ class MBPOAgent:
 
         return critic_loss.item(), actor_loss.item(), model_loss
 
+
 def model_based_planning(agent, initial_state, planning_horizon=5, num_simulations=10):
     best_action_sequence = None
-    best_reward = float('-inf')
+    best_reward = float("-inf")
 
     for _ in range(num_simulations):
         state = torch.FloatTensor(initial_state)
@@ -100,8 +103,12 @@ def model_based_planning(agent, initial_state, planning_horizon=5, num_simulatio
             action = agent.act(state)
             action_sequence.append(action)
 
-            next_state = agent.env_model(state.unsqueeze(0), torch.FloatTensor(action).unsqueeze(0)).squeeze(0)
-            reward = agent.critic(torch.cat([state, torch.FloatTensor(action)], dim=0)).item()
+            next_state = agent.env_model(
+                state.unsqueeze(0), torch.FloatTensor(action).unsqueeze(0)
+            ).squeeze(0)
+            reward = agent.critic(
+                torch.cat([state, torch.FloatTensor(action)], dim=0)
+            ).item()
 
             total_reward += reward
             state = next_state
@@ -112,13 +119,16 @@ def model_based_planning(agent, initial_state, planning_horizon=5, num_simulatio
 
     return best_action_sequence[0]  # Return the first action of the best sequence
 
+
 def train_mbpo(env, agent, num_episodes=1000, planning_horizon=5, num_simulations=10):
     for episode in range(num_episodes):
         state = env.reset()
         episode_reward = 0
 
         while True:
-            action = model_based_planning(agent, state, planning_horizon, num_simulations)
+            action = model_based_planning(
+                agent, state, planning_horizon, num_simulations
+            )
             next_state, reward, done, _ = env.step(action)
             episode_reward += reward
 
@@ -134,10 +144,12 @@ def train_mbpo(env, agent, num_episodes=1000, planning_horizon=5, num_simulation
 
     return agent
 
+
 def main():
     # Example usage
     import gym
-    env = gym.make('Pendulum-v1')
+
+    env = gym.make("Pendulum-v1")
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
 
@@ -156,6 +168,7 @@ def main():
         state = next_state
 
     print(f"Test episode reward: {total_reward:.2f}")
+
 
 if __name__ == "__main__":
     main()

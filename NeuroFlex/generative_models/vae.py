@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 
+
 class VAE(nn.Module):
     latent_dim: int  # Dimension of the latent space (z)
     hidden_dim: int  # Dimension of the hidden layers in encoder/decoder
@@ -16,22 +17,32 @@ class VAE(nn.Module):
         are used for reparameterization, while the decoder reconstructs the
         input data from the latent representation.
         """
-        self.encoder = nn.Sequential([
-            nn.Dense(self.hidden_dim),  # First hidden layer
-            nn.relu,                    # ReLU activation
-            nn.Dense(self.hidden_dim),  # Second hidden layer
-            nn.relu,                    # ReLU activation
-            nn.Dense(self.latent_dim * 2)  # Output layer for mean and log variance (2 * latent_dim)
-        ])
+        self.encoder = nn.Sequential(
+            [
+                nn.Dense(self.hidden_dim),  # First hidden layer
+                nn.relu,  # ReLU activation
+                nn.Dense(self.hidden_dim),  # Second hidden layer
+                nn.relu,  # ReLU activation
+                nn.Dense(
+                    self.latent_dim * 2
+                ),  # Output layer for mean and log variance (2 * latent_dim)
+            ]
+        )
 
-        self.decoder = nn.Sequential([
-            nn.Dense(self.hidden_dim),  # First hidden layer
-            nn.relu,                    # ReLU activation
-            nn.Dense(self.hidden_dim),  # Second hidden layer
-            nn.relu,                    # ReLU activation
-            nn.Dense(jnp.prod(self.input_shape)),  # Output layer to match input size
-            lambda x: x.reshape((-1,) + self.input_shape)  # Reshape to the original input shape
-        ])
+        self.decoder = nn.Sequential(
+            [
+                nn.Dense(self.hidden_dim),  # First hidden layer
+                nn.relu,  # ReLU activation
+                nn.Dense(self.hidden_dim),  # Second hidden layer
+                nn.relu,  # ReLU activation
+                nn.Dense(
+                    jnp.prod(self.input_shape)
+                ),  # Output layer to match input size
+                lambda x: x.reshape(
+                    (-1,) + self.input_shape
+                ),  # Reshape to the original input shape
+            ]
+        )
 
     def __call__(self, x, rng):
         """

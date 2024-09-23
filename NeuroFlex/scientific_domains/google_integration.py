@@ -6,11 +6,12 @@ import tensorflow as tf
 from typing import Callable, Tuple
 
 
-
 class GoogleIntegration:
     def __init__(self, input_shape, num_classes):
         if len(input_shape) != 3:
-            raise ValueError("Input shape must be 3-dimensional (height, width, channels)")
+            raise ValueError(
+                "Input shape must be 3-dimensional (height, width, channels)"
+            )
         if num_classes <= 0:
             raise ValueError("Number of classes must be positive")
         self.input_shape = input_shape
@@ -36,10 +37,6 @@ class GoogleIntegration:
 
         return CNN(num_classes=self.num_classes)
 
-
-
-
-
     def xla_compilation(self, model: nn.Module, input_shape: tuple) -> Callable:
         @jax.jit
         def forward(variables, inputs):
@@ -59,6 +56,7 @@ class GoogleIntegration:
                 return jnp.array(y_tf)
 
         return TFWrapper()
+
 
 # Example usage:
 # google_integration = GoogleIntegration((28, 28, 1), 10)

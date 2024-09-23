@@ -10,31 +10,36 @@ Recent updates:
 """
 
 from .math_solvers import MathSolver
-from .bioinformatics.bioinformatics_integration import BioinformaticsIntegration as BioinformaticsTools
+from .bioinformatics.bioinformatics_integration import (
+    BioinformaticsIntegration as BioinformaticsTools,
+)
 from .art_integration import ARTIntegration
 from .biology.synthetic_biology_insights import SyntheticBiologyInsights
 from .google_integration import GoogleIntegration
 from .ibm_integration import IBMIntegration
+
 # from .alphafold_integration import AlphaFoldIntegration  # Temporarily commented out
 from .xarray_integration import XarrayIntegration
 
 __all__ = [
-    'MathSolver',
-    'BioinformaticsTools',
-    'ARTIntegration',
-    'SyntheticBiologyInsights',
-    'GoogleIntegration',
-    'IBMIntegration',
+    "MathSolver",
+    "BioinformaticsTools",
+    "ARTIntegration",
+    "SyntheticBiologyInsights",
+    "GoogleIntegration",
+    "IBMIntegration",
     # 'AlphaFoldIntegration',  # Temporarily removed
-    'XarrayIntegration',
-    'get_scientific_domains_version',
-    'SUPPORTED_SCIENTIFIC_DOMAINS',
-    'initialize_scientific_domains',
-    'create_scientific_domain_model'
+    "XarrayIntegration",
+    "get_scientific_domains_version",
+    "SUPPORTED_SCIENTIFIC_DOMAINS",
+    "initialize_scientific_domains",
+    "create_scientific_domain_model",
 ]
+
 
 def get_scientific_domains_version():
     return "1.0.0"
+
 
 SUPPORTED_SCIENTIFIC_DOMAINS = [
     "Mathematics",
@@ -43,12 +48,14 @@ SUPPORTED_SCIENTIFIC_DOMAINS = [
     "Synthetic Biology",
     "Google AI",
     "IBM AI",
-    "Xarray"
+    "Xarray",
 ]
+
 
 def initialize_scientific_domains():
     print("Initializing Scientific Domains Module...")
     # Add any necessary initialization code here
+
 
 def create_scientific_domain_model(domain, *args, **kwargs):
     if domain == "Mathematics":
@@ -67,5 +74,6 @@ def create_scientific_domain_model(domain, *args, **kwargs):
         return XarrayIntegration(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported scientific domain: {domain}")
+
 
 # Add any other Scientific Domains-specific utility functions or constants as needed

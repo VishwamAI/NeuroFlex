@@ -21,6 +21,7 @@ LEARNING_RATE_ADJUSTMENT = 0.1
 MAX_HEALING_ATTEMPTS = 5
 CONSCIOUSNESS_BROADCAST_INTERVAL = 100  # milliseconds
 
+
 class ConsciousnessSimulation(nn.Module):
     """
     An advanced module for simulating consciousness in the NeuroFlex framework.
@@ -43,17 +44,35 @@ class ConsciousnessSimulation(nn.Module):
     learning_rate: float = 0.001  # Initial learning rate
 
     def setup(self):
-        self.variable('model_state', 'is_trained', jnp.bool_, False)
-        self.variable('model_state', 'performance', jnp.float32, jnp.array(0.0))
-        self.variable('model_state', 'previous_performance', jnp.float32, jnp.array(0.0))
-        self.variable('model_state', 'last_update', jnp.float32, jnp.array(0.0))
-        self.variable('working_memory', 'initial_memory', jnp.float32, jnp.zeros((1, self.working_memory_size)))
-        self.variable('working_memory', 'current_state', jnp.float32, jnp.zeros((1, self.working_memory_size)))
-        self.variable('model_state', 'training_performance', jnp.float32, jnp.array(0.0))
-        self.variable('model_state', 'validation_performance', jnp.float32, jnp.array(0.0))
-        self.variable('model_state', 'learning_rate', jnp.float32, jnp.array(self.learning_rate))
-        self.variable('model_state', 'healing_attempts', jnp.int32, jnp.array(0))
-        self.variable('model_state', 'performance_history', jnp.float32, jnp.zeros(100))
+        self.variable("model_state", "is_trained", jnp.bool_, False)
+        self.variable("model_state", "performance", jnp.float32, jnp.array(0.0))
+        self.variable(
+            "model_state", "previous_performance", jnp.float32, jnp.array(0.0)
+        )
+        self.variable("model_state", "last_update", jnp.float32, jnp.array(0.0))
+        self.variable(
+            "working_memory",
+            "initial_memory",
+            jnp.float32,
+            jnp.zeros((1, self.working_memory_size)),
+        )
+        self.variable(
+            "working_memory",
+            "current_state",
+            jnp.float32,
+            jnp.zeros((1, self.working_memory_size)),
+        )
+        self.variable(
+            "model_state", "training_performance", jnp.float32, jnp.array(0.0)
+        )
+        self.variable(
+            "model_state", "validation_performance", jnp.float32, jnp.array(0.0)
+        )
+        self.variable(
+            "model_state", "learning_rate", jnp.float32, jnp.array(self.learning_rate)
+        )
+        self.variable("model_state", "healing_attempts", jnp.int32, jnp.array(0))
+        self.variable("model_state", "performance_history", jnp.float32, jnp.zeros(100))
 
         # Check for NaN values in initialized variables
         for var_name, var in self.__dict__.items():
@@ -64,11 +83,18 @@ class ConsciousnessSimulation(nn.Module):
         # Initialize neurolib's ALNModel
         Cmat = np.random.rand(self.num_brain_areas, self.num_brain_areas)
         transmission_speed = 100.0  # m/s
-        Dmat = np.random.rand(self.num_brain_areas, self.num_brain_areas) * 0.1  # Random delays between 0 and 0.1 seconds
+        Dmat = (
+            np.random.rand(self.num_brain_areas, self.num_brain_areas) * 0.1
+        )  # Random delays between 0 and 0.1 seconds
         self.aln_model = ALNModel(Cmat=Cmat, Dmat=Dmat)
-        self.aln_model.params['duration'] = self.simulation_length * 1000  # Convert to milliseconds
+        self.aln_model.params["duration"] = (
+            self.simulation_length * 1000
+        )  # Convert to milliseconds
+
     @nn.compact
-    def __call__(self, x, deterministic: bool = True, rngs: Dict[str, jax.random.PRNGKey] = None):
+    def __call__(
+        self, x, deterministic: bool = True, rngs: Dict[str, jax.random.PRNGKey] = None
+    ):
         logging.debug(f"ConsciousnessSimulation called with input shape: {x.shape}")
         logging.debug(f"Input type: {type(x)}")
         logging.debug(f"Input: min={jnp.min(x)}, max={jnp.max(x)}, mean={jnp.mean(x)}")
@@ -78,14 +104,28 @@ class ConsciousnessSimulation(nn.Module):
             x = jnp.expand_dims(x, axis=0)
 
         for i, feat in enumerate(self.features):
-            x = nn.Dense(feat, kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))(x)
+            x = nn.Dense(
+                feat,
+                kernel_init=nn.initializers.variance_scaling(
+                    2.0, "fan_in", "truncated_normal"
+                ),
+            )(x)
             x = nn.relu(x)
             logging.debug(f"After dense layer {i}, shape: {x.shape}")
-            logging.debug(f"Layer {i} output: min={jnp.min(x)}, max={jnp.max(x)}, mean={jnp.mean(x)}")
+            logging.debug(
+                f"Layer {i} output: min={jnp.min(x)}, max={jnp.max(x)}, mean={jnp.mean(x)}"
+            )
 
-        cognitive_state = nn.Dense(self.output_dim, kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))(x)
+        cognitive_state = nn.Dense(
+            self.output_dim,
+            kernel_init=nn.initializers.variance_scaling(
+                2.0, "fan_in", "truncated_normal"
+            ),
+        )(x)
         logging.debug(f"Cognitive state shape: {cognitive_state.shape}")
-        logging.debug(f"Cognitive state: min={jnp.min(cognitive_state)}, max={jnp.max(cognitive_state)}, mean={jnp.mean(cognitive_state)}")
+        logging.debug(
+            f"Cognitive state: min={jnp.min(cognitive_state)}, max={jnp.max(cognitive_state)}, mean={jnp.mean(cognitive_state)}"
+        )
 
         # Reshape cognitive_state to (batch_size, 1, output_dim) for attention
         cognitive_state_reshaped = jnp.expand_dims(cognitive_state, axis=1)
@@ -94,9 +134,11 @@ class ConsciousnessSimulation(nn.Module):
         if rngs is None:
             rngs = {}
 
-        dropout_rng = rngs.get('dropout')
+        dropout_rng = rngs.get("dropout")
         if dropout_rng is None:
-            logging.warning("No 'dropout' RNG key provided. Using default RNG for dropout.")
+            logging.warning(
+                "No 'dropout' RNG key provided. Using default RNG for dropout."
+            )
             dropout_rng = jax.random.PRNGKey(0)
 
         # Adjust attention mechanism to match expected output shape
@@ -105,13 +147,29 @@ class ConsciousnessSimulation(nn.Module):
             qkv_features=self.working_memory_size,  # Adjust to match working memory size
             out_features=self.working_memory_size,  # Match the working memory size
             dropout_rate=self.dropout_rate,
-            kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal')
-        )(cognitive_state_reshaped, cognitive_state_reshaped, cognitive_state_reshaped, deterministic=deterministic)
+            kernel_init=nn.initializers.variance_scaling(
+                2.0, "fan_in", "truncated_normal"
+            ),
+        )(
+            cognitive_state_reshaped,
+            cognitive_state_reshaped,
+            cognitive_state_reshaped,
+            deterministic=deterministic,
+        )
         # Reshape attention output to match expected dimensions
-        attention_output = jnp.reshape(attention_output, (x.shape[0], self.attention_heads, -1))
-        attention_output = jnp.mean(attention_output, axis=1)  # Average over attention heads
-        attention_output = jnp.pad(attention_output, ((0, 0), (0, max(0, self.working_memory_size - attention_output.shape[1]))))[:, :self.working_memory_size]
-        logging.debug(f"Attention output before layer norm: min={jnp.min(attention_output)}, max={jnp.max(attention_output)}, mean={jnp.mean(attention_output)}")
+        attention_output = jnp.reshape(
+            attention_output, (x.shape[0], self.attention_heads, -1)
+        )
+        attention_output = jnp.mean(
+            attention_output, axis=1
+        )  # Average over attention heads
+        attention_output = jnp.pad(
+            attention_output,
+            ((0, 0), (0, max(0, self.working_memory_size - attention_output.shape[1]))),
+        )[:, : self.working_memory_size]
+        logging.debug(
+            f"Attention output before layer norm: min={jnp.min(attention_output)}, max={jnp.max(attention_output)}, mean={jnp.mean(attention_output)}"
+        )
 
         # Apply layer normalization with a small epsilon to prevent division by zero
         attention_output = nn.LayerNorm(epsilon=1e-5)(attention_output)
@@ -119,16 +177,52 @@ class ConsciousnessSimulation(nn.Module):
         # Ensure the attention output matches the working memory size
         attention_output_flattened = attention_output
         if attention_output_flattened.shape[1] != self.working_memory_size:
-            logging.warning(f"Attention output shape {attention_output_flattened.shape} doesn't match working_memory_size {self.working_memory_size}")
-            attention_output_flattened = jnp.pad(attention_output_flattened, ((0, 0), (0, max(0, self.working_memory_size - attention_output_flattened.shape[1]))))
-            attention_output_flattened = attention_output_flattened[:, :self.working_memory_size]
+            logging.warning(
+                f"Attention output shape {attention_output_flattened.shape} doesn't match working_memory_size {self.working_memory_size}"
+            )
+            attention_output_flattened = jnp.pad(
+                attention_output_flattened,
+                (
+                    (0, 0),
+                    (
+                        0,
+                        max(
+                            0,
+                            self.working_memory_size
+                            - attention_output_flattened.shape[1],
+                        ),
+                    ),
+                ),
+            )
+            attention_output_flattened = attention_output_flattened[
+                :, : self.working_memory_size
+            ]
         if attention_output_flattened.shape[1] != self.working_memory_size:
-            logging.warning(f"Attention output shape {attention_output_flattened.shape} doesn't match working_memory_size {self.working_memory_size}")
-            attention_output_flattened = jnp.pad(attention_output_flattened, ((0, 0), (0, max(0, self.working_memory_size - attention_output_flattened.shape[1]))))
-            attention_output_flattened = attention_output_flattened[:, :self.working_memory_size]
+            logging.warning(
+                f"Attention output shape {attention_output_flattened.shape} doesn't match working_memory_size {self.working_memory_size}"
+            )
+            attention_output_flattened = jnp.pad(
+                attention_output_flattened,
+                (
+                    (0, 0),
+                    (
+                        0,
+                        max(
+                            0,
+                            self.working_memory_size
+                            - attention_output_flattened.shape[1],
+                        ),
+                    ),
+                ),
+            )
+            attention_output_flattened = attention_output_flattened[
+                :, : self.working_memory_size
+            ]
         consciousness_state = attention_output_flattened
         logging.debug(f"Consciousness state shape: {consciousness_state.shape}")
-        logging.debug(f"Attention output after reshape: min={jnp.min(consciousness_state)}, max={jnp.max(consciousness_state)}, mean={jnp.mean(consciousness_state)}")
+        logging.debug(
+            f"Attention output after reshape: min={jnp.min(consciousness_state)}, max={jnp.max(consciousness_state)}, mean={jnp.mean(consciousness_state)}"
+        )
 
         # Enhanced GRU cell with layer normalization and shape adjustment
         class EnhancedGRUCell(nn.Module):
@@ -136,9 +230,15 @@ class ConsciousnessSimulation(nn.Module):
 
             @nn.compact
             def __call__(self, inputs, state):
-                logging.debug(f"EnhancedGRUCell input shapes - inputs: {inputs.shape}, state: {state.shape}")
-                logging.debug(f"Inputs: min={jnp.min(inputs)}, max={jnp.max(inputs)}, mean={jnp.mean(inputs)}")
-                logging.debug(f"State: min={jnp.min(state)}, max={jnp.max(state)}, mean={jnp.mean(state)}")
+                logging.debug(
+                    f"EnhancedGRUCell input shapes - inputs: {inputs.shape}, state: {state.shape}"
+                )
+                logging.debug(
+                    f"Inputs: min={jnp.min(inputs)}, max={jnp.max(inputs)}, mean={jnp.mean(inputs)}"
+                )
+                logging.debug(
+                    f"State: min={jnp.min(state)}, max={jnp.max(state)}, mean={jnp.mean(state)}"
+                )
 
                 # Ensure inputs and state have the correct shape
                 inputs = jnp.atleast_2d(inputs)
@@ -149,57 +249,118 @@ class ConsciousnessSimulation(nn.Module):
 
                 # Adjust input size if necessary
                 if input_size != self.memory_size:
-                    logging.debug(f"Adjusting input size from {input_size} to {self.memory_size}")
-                    inputs = nn.Dense(self.memory_size, name='input_adjustment', kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))(inputs)
+                    logging.debug(
+                        f"Adjusting input size from {input_size} to {self.memory_size}"
+                    )
+                    inputs = nn.Dense(
+                        self.memory_size,
+                        name="input_adjustment",
+                        kernel_init=nn.initializers.variance_scaling(
+                            2.0, "fan_in", "truncated_normal"
+                        ),
+                    )(inputs)
                     logging.debug(f"Adjusted input shape: {inputs.shape}")
-                    logging.debug(f"Adjusted inputs: min={jnp.min(inputs)}, max={jnp.max(inputs)}, mean={jnp.mean(inputs)}")
+                    logging.debug(
+                        f"Adjusted inputs: min={jnp.min(inputs)}, max={jnp.max(inputs)}, mean={jnp.mean(inputs)}"
+                    )
 
                 # Ensure state has the correct shape
                 if state.shape[-1] != self.memory_size:
-                    logging.debug(f"Adjusting state shape from {state.shape} to {(batch_size, self.memory_size)}")
+                    logging.debug(
+                        f"Adjusting state shape from {state.shape} to {(batch_size, self.memory_size)}"
+                    )
                     state = jnp.broadcast_to(state, (batch_size, self.memory_size))
                     logging.debug(f"Adjusted state shape: {state.shape}")
-                    logging.debug(f"Adjusted state: min={jnp.min(state)}, max={jnp.max(state)}, mean={jnp.mean(state)}")
+                    logging.debug(
+                        f"Adjusted state: min={jnp.min(state)}, max={jnp.max(state)}, mean={jnp.mean(state)}"
+                    )
 
-                assert inputs.shape == (batch_size, self.memory_size), f"Expected input shape ({batch_size}, {self.memory_size}), got {inputs.shape}"
-                assert state.shape == (batch_size, self.memory_size), f"Expected state shape ({batch_size}, {self.memory_size}), got {state.shape}"
+                assert inputs.shape == (
+                    batch_size,
+                    self.memory_size,
+                ), f"Expected input shape ({batch_size}, {self.memory_size}), got {inputs.shape}"
+                assert state.shape == (
+                    batch_size,
+                    self.memory_size,
+                ), f"Expected state shape ({batch_size}, {self.memory_size}), got {state.shape}"
 
-                i2h = nn.Dense(3 * self.memory_size, name='i2h', kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))
-                h2h = nn.Dense(3 * self.memory_size, name='h2h', kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))
+                i2h = nn.Dense(
+                    3 * self.memory_size,
+                    name="i2h",
+                    kernel_init=nn.initializers.variance_scaling(
+                        2.0, "fan_in", "truncated_normal"
+                    ),
+                )
+                h2h = nn.Dense(
+                    3 * self.memory_size,
+                    name="h2h",
+                    kernel_init=nn.initializers.variance_scaling(
+                        2.0, "fan_in", "truncated_normal"
+                    ),
+                )
                 ln = nn.LayerNorm(epsilon=1e-5)
 
                 i2h_out = i2h(inputs)
                 h2h_out = h2h(state)
-                logging.debug(f"i2h output shape: {i2h_out.shape}, h2h output shape: {h2h_out.shape}")
-                logging.debug(f"i2h output: min={jnp.min(i2h_out)}, max={jnp.max(i2h_out)}, mean={jnp.mean(i2h_out)}")
-                logging.debug(f"h2h output: min={jnp.min(h2h_out)}, max={jnp.max(h2h_out)}, mean={jnp.mean(h2h_out)}")
+                logging.debug(
+                    f"i2h output shape: {i2h_out.shape}, h2h output shape: {h2h_out.shape}"
+                )
+                logging.debug(
+                    f"i2h output: min={jnp.min(i2h_out)}, max={jnp.max(i2h_out)}, mean={jnp.mean(i2h_out)}"
+                )
+                logging.debug(
+                    f"h2h output: min={jnp.min(h2h_out)}, max={jnp.max(h2h_out)}, mean={jnp.mean(h2h_out)}"
+                )
 
                 gates = i2h_out + h2h_out
                 logging.debug(f"Gates shape before layer norm: {gates.shape}")
-                logging.debug(f"Gates before layer norm: min={jnp.min(gates)}, max={jnp.max(gates)}, mean={jnp.mean(gates)}")
+                logging.debug(
+                    f"Gates before layer norm: min={jnp.min(gates)}, max={jnp.max(gates)}, mean={jnp.mean(gates)}"
+                )
                 gates = ln(gates)
                 logging.debug(f"Gates shape after layer norm: {gates.shape}")
-                logging.debug(f"Gates after layer norm: min={jnp.min(gates)}, max={jnp.max(gates)}, mean={jnp.mean(gates)}")
+                logging.debug(
+                    f"Gates after layer norm: min={jnp.min(gates)}, max={jnp.max(gates)}, mean={jnp.mean(gates)}"
+                )
 
                 reset, update, new = jnp.split(gates, 3, axis=-1)
                 reset, update = jax.nn.sigmoid(reset), jax.nn.sigmoid(update)
 
                 # Modify the calculation of 'new' to ensure shape consistency
                 new_input = jnp.concatenate([inputs, state], axis=-1)
-                new = jnp.tanh(nn.Dense(self.memory_size, name='new_dense', kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))(new_input))
+                new = jnp.tanh(
+                    nn.Dense(
+                        self.memory_size,
+                        name="new_dense",
+                        kernel_init=nn.initializers.variance_scaling(
+                            2.0, "fan_in", "truncated_normal"
+                        ),
+                    )(new_input)
+                )
                 new_state = update * state + (1 - update) * new
 
                 # Ensure the output shape matches the expected working memory size
                 new_state = jnp.reshape(new_state, (batch_size, self.memory_size))
 
                 logging.debug(f"EnhancedGRUCell output shape: {new_state.shape}")
-                assert new_state.shape == (batch_size, self.memory_size), f"Expected output shape ({batch_size}, {self.memory_size}), got {new_state.shape}"
+                assert new_state.shape == (
+                    batch_size,
+                    self.memory_size,
+                ), f"Expected output shape ({batch_size}, {self.memory_size}), got {new_state.shape}"
 
                 # Add more detailed logging
-                logging.debug(f"Reset gate: min={jnp.min(reset)}, max={jnp.max(reset)}, mean={jnp.mean(reset)}")
-                logging.debug(f"Update gate: min={jnp.min(update)}, max={jnp.max(update)}, mean={jnp.mean(update)}")
-                logging.debug(f"New gate: min={jnp.min(new)}, max={jnp.max(new)}, mean={jnp.mean(new)}")
-                logging.debug(f"Final new_state: min={jnp.min(new_state)}, max={jnp.max(new_state)}, mean={jnp.mean(new_state)}")
+                logging.debug(
+                    f"Reset gate: min={jnp.min(reset)}, max={jnp.max(reset)}, mean={jnp.mean(reset)}"
+                )
+                logging.debug(
+                    f"Update gate: min={jnp.min(update)}, max={jnp.max(update)}, mean={jnp.mean(update)}"
+                )
+                logging.debug(
+                    f"New gate: min={jnp.min(new)}, max={jnp.max(new)}, mean={jnp.mean(new)}"
+                )
+                logging.debug(
+                    f"Final new_state: min={jnp.min(new_state)}, max={jnp.max(new_state)}, mean={jnp.mean(new_state)}"
+                )
 
                 # Add additional checks for NaN and Inf values
                 if jnp.any(jnp.isnan(new_state)) or jnp.any(jnp.isinf(new_state)):
@@ -218,56 +379,77 @@ class ConsciousnessSimulation(nn.Module):
         gru_cell = EnhancedGRUCell(memory_size=self.working_memory_size)
 
         # Use Flax's variable method to store and update working memory
-        current_working_memory = self.variable('working_memory', 'current', lambda: jnp.zeros((x.shape[0], self.working_memory_size)))
+        current_working_memory = self.variable(
+            "working_memory",
+            "current",
+            lambda: jnp.zeros((x.shape[0], self.working_memory_size)),
+        )
 
         # Ensure attention_output has the correct shape
         attention_output = jnp.reshape(attention_output, (-1, self.working_memory_size))
 
         # Log shapes before GRU cell processing
         logging.debug(f"Attention output shape before GRU: {attention_output.shape}")
-        logging.debug(f"Current working memory shape before GRU: {current_working_memory.value.shape}")
-        logging.debug(f"Attention output before GRU: min={jnp.min(attention_output)}, max={jnp.max(attention_output)}, mean={jnp.mean(attention_output)}")
-        logging.debug(f"Current working memory before GRU: min={jnp.min(current_working_memory.value)}, max={jnp.max(current_working_memory.value)}, mean={jnp.mean(current_working_memory.value)}")
+        logging.debug(
+            f"Current working memory shape before GRU: {current_working_memory.value.shape}"
+        )
+        logging.debug(
+            f"Attention output before GRU: min={jnp.min(attention_output)}, max={jnp.max(attention_output)}, mean={jnp.mean(attention_output)}"
+        )
+        logging.debug(
+            f"Current working memory before GRU: min={jnp.min(current_working_memory.value)}, max={jnp.max(current_working_memory.value)}, mean={jnp.mean(current_working_memory.value)}"
+        )
 
         # Process through GRU cell
         new_working_memory, _ = gru_cell(attention_output, current_working_memory.value)
 
         # Log shape after GRU cell processing
         logging.debug(f"New working memory shape after GRU: {new_working_memory.shape}")
-        logging.debug(f"New working memory after GRU: min={jnp.min(new_working_memory)}, max={jnp.max(new_working_memory)}, mean={jnp.mean(new_working_memory)}")
+        logging.debug(
+            f"New working memory after GRU: min={jnp.min(new_working_memory)}, max={jnp.max(new_working_memory)}, mean={jnp.mean(new_working_memory)}"
+        )
 
         # Update working memory
         current_working_memory.value = new_working_memory
 
         # Update working memory with residual connection
         current_working_memory.value = new_working_memory + current_working_memory.value
-        logging.debug(f"Working memory after residual connection: min={jnp.min(current_working_memory.value)}, max={jnp.max(current_working_memory.value)}, mean={jnp.mean(current_working_memory.value)}")
+        logging.debug(
+            f"Working memory after residual connection: min={jnp.min(current_working_memory.value)}, max={jnp.max(current_working_memory.value)}, mean={jnp.mean(current_working_memory.value)}"
+        )
 
         # Add a small perturbation to ensure working memory changes between forward passes
-        perturbation_rng = rngs.get('perturbation')
+        perturbation_rng = rngs.get("perturbation")
         if perturbation_rng is not None:
-            perturbation = jax.random.normal(perturbation_rng, new_working_memory.shape) * 1e-6
+            perturbation = (
+                jax.random.normal(perturbation_rng, new_working_memory.shape) * 1e-6
+            )
             new_working_memory = new_working_memory + perturbation
-            logging.debug(f"Working memory after perturbation: min={jnp.min(new_working_memory)}, max={jnp.max(new_working_memory)}, mean={jnp.mean(new_working_memory)}")
+            logging.debug(
+                f"Working memory after perturbation: min={jnp.min(new_working_memory)}, max={jnp.max(new_working_memory)}, mean={jnp.mean(new_working_memory)}"
+            )
         else:
-            logging.warning("No 'perturbation' RNG key provided. Working memory may not change between forward passes.")
+            logging.warning(
+                "No 'perturbation' RNG key provided. Working memory may not change between forward passes."
+            )
 
-        decision_input = jnp.concatenate([cognitive_state, attention_output, new_working_memory], axis=-1)
+        decision_input = jnp.concatenate(
+            [cognitive_state, attention_output, new_working_memory], axis=-1
+        )
         logging.debug(f"Decision input shape: {decision_input.shape}")
-        logging.debug(f"Decision input: min={jnp.min(decision_input)}, max={jnp.max(decision_input)}, mean={jnp.mean(decision_input)}")
+        logging.debug(
+            f"Decision input: min={jnp.min(decision_input)}, max={jnp.max(decision_input)}, mean={jnp.mean(decision_input)}"
+        )
 
         # Multi-layer perceptron for more sophisticated decision-making
-        mlp = nn.Sequential([
-            nn.Dense(64),
-            nn.relu,
-            nn.Dense(32),
-            nn.relu,
-            nn.Dense(16),
-            nn.relu
-        ])
+        mlp = nn.Sequential(
+            [nn.Dense(64), nn.relu, nn.Dense(32), nn.relu, nn.Dense(16), nn.relu]
+        )
         mlp_output = mlp(decision_input)
         logging.debug(f"MLP output shape: {mlp_output.shape}")
-        logging.debug(f"MLP output: min={jnp.min(mlp_output)}, max={jnp.max(mlp_output)}, mean={jnp.mean(mlp_output)}")
+        logging.debug(
+            f"MLP output: min={jnp.min(mlp_output)}, max={jnp.max(mlp_output)}, mean={jnp.mean(mlp_output)}"
+        )
 
         decision = nn.tanh(nn.Dense(1)(mlp_output))
         metacognition = nn.sigmoid(nn.Dense(1)(mlp_output))
@@ -277,7 +459,9 @@ class ConsciousnessSimulation(nn.Module):
         confidence = 1 - uncertainty
 
         # Simulate brain activity using neurolib's ALNModel
-        aln_input = jnp.concatenate([cognitive_state, attention_output, new_working_memory], axis=-1)
+        aln_input = jnp.concatenate(
+            [cognitive_state, attention_output, new_working_memory], axis=-1
+        )
         aln_input_size = aln_input.shape[-1]
         batch_size = aln_input.shape[0]
 
@@ -290,13 +474,17 @@ class ConsciousnessSimulation(nn.Module):
             if aln_input_size < required_size:
                 # Pad the input if necessary to match the required shape
                 padding_size = required_size - aln_input_size
-                aln_input = jnp.pad(aln_input, ((0, 0), (0, padding_size)), mode='constant')
+                aln_input = jnp.pad(
+                    aln_input, ((0, 0), (0, padding_size)), mode="constant"
+                )
             else:
                 # Truncate the input if it's larger than required
                 aln_input = aln_input[:, :required_size]
 
         # Reshape aln_input to match the expected shape for ALNModel
-        aln_input = jnp.reshape(aln_input, (batch_size, time_steps, self.num_brain_areas))
+        aln_input = jnp.reshape(
+            aln_input, (batch_size, time_steps, self.num_brain_areas)
+        )
 
         # Convert jax array to numpy array for neurolib compatibility
         aln_input_np = np.array(aln_input)
@@ -308,7 +496,9 @@ class ConsciousnessSimulation(nn.Module):
         aln_output = jnp.array(aln_output)
         aln_output = jnp.reshape(aln_output, (batch_size, -1))  # Flatten the output
 
-        logging.debug(f"ALN input shape: {aln_input.shape}, ALN output shape: {aln_output.shape}")
+        logging.debug(
+            f"ALN input shape: {aln_input.shape}, ALN output shape: {aln_output.shape}"
+        )
 
         # Process ALNModel output
         aln_processed = nn.Dense(self.working_memory_size)(aln_output)
@@ -317,39 +507,56 @@ class ConsciousnessSimulation(nn.Module):
         # Ensure all components have consistent shapes
         cognitive_state = jnp.reshape(cognitive_state, (-1, self.output_dim))
         attention_output = jnp.reshape(attention_output, (-1, self.working_memory_size))
-        new_working_memory = jnp.reshape(new_working_memory, (-1, self.working_memory_size))
+        new_working_memory = jnp.reshape(
+            new_working_memory, (-1, self.working_memory_size)
+        )
         decision = jnp.reshape(decision, (-1, 1))
         metacognition = jnp.reshape(metacognition, (-1, 1))
         uncertainty = jnp.reshape(uncertainty, (-1, 1))
         confidence = jnp.reshape(confidence, (-1, 1))
         aln_processed = jnp.reshape(aln_processed, (-1, self.working_memory_size))
 
-        consciousness = jnp.concatenate([
-            cognitive_state,
-            attention_output,
-            new_working_memory,
-            decision,
-            metacognition,
-            uncertainty,
-            confidence,
-            aln_processed
-        ], axis=-1)
+        consciousness = jnp.concatenate(
+            [
+                cognitive_state,
+                attention_output,
+                new_working_memory,
+                decision,
+                metacognition,
+                uncertainty,
+                confidence,
+                aln_processed,
+            ],
+            axis=-1,
+        )
 
-        logging.debug(f"Consciousness components shapes: cognitive_state={cognitive_state.shape}, "
-                      f"attention_output={attention_output.shape}, new_working_memory={new_working_memory.shape}, "
-                      f"decision={decision.shape}, metacognition={metacognition.shape}, "
-                      f"uncertainty={uncertainty.shape}, confidence={confidence.shape}, "
-                      f"aln_processed={aln_processed.shape}")
+        logging.debug(
+            f"Consciousness components shapes: cognitive_state={cognitive_state.shape}, "
+            f"attention_output={attention_output.shape}, new_working_memory={new_working_memory.shape}, "
+            f"decision={decision.shape}, metacognition={metacognition.shape}, "
+            f"uncertainty={uncertainty.shape}, confidence={confidence.shape}, "
+            f"aln_processed={aln_processed.shape}"
+        )
 
         logging.debug(f"Final consciousness state shape: {consciousness.shape}")
 
         # Update expected shape to include ALNModel output
-        expected_shape = (x.shape[0], self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
-        assert consciousness.shape == expected_shape, f"Expected shape {expected_shape}, got {consciousness.shape}"
+        expected_shape = (
+            x.shape[0],
+            self.output_dim
+            + 2 * self.working_memory_size
+            + 4
+            + self.working_memory_size,
+        )
+        assert (
+            consciousness.shape == expected_shape
+        ), f"Expected shape {expected_shape}, got {consciousness.shape}"
 
         return consciousness, new_working_memory
 
-    def simulate_consciousness(self, x, rngs: Dict[str, Any] = None, deterministic: bool = True) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def simulate_consciousness(
+        self, x, rngs: Dict[str, Any] = None, deterministic: bool = True
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate consciousness based on input x.
 
@@ -365,7 +572,9 @@ class ConsciousnessSimulation(nn.Module):
                 - new_working_memory (jnp.ndarray): Updated working memory
                   (shape: (batch_size, working_memory_size))
         """
-        logging.info(f"Starting simulate_consciousness with input shape: {x.shape}, deterministic: {deterministic}")
+        logging.info(
+            f"Starting simulate_consciousness with input shape: {x.shape}, deterministic: {deterministic}"
+        )
         try:
             # Perform self-diagnosis
             issues = self.diagnose()
@@ -380,51 +589,76 @@ class ConsciousnessSimulation(nn.Module):
             if not isinstance(x, jnp.ndarray):
                 raise ValueError(f"Input x must be a jax.numpy array, got {type(x)}")
             if len(x.shape) != 2:
-                raise ValueError(f"Input x must have shape (batch_size, input_dim), got {x.shape}")
+                raise ValueError(
+                    f"Input x must have shape (batch_size, input_dim), got {x.shape}"
+                )
 
             result = self.__call__(x, deterministic=deterministic, rngs=rngs)
 
             if not isinstance(result, tuple) or len(result) != 2:
-                raise ValueError(f"__call__ method returned {len(result)} values instead of 2")
+                raise ValueError(
+                    f"__call__ method returned {len(result)} values instead of 2"
+                )
 
             consciousness, new_working_memory = result
             self._validate_outputs(consciousness, new_working_memory)
 
             # Apply perturbation to working memory
-            new_working_memory = self._apply_perturbation(new_working_memory, rngs['perturbation'])
+            new_working_memory = self._apply_perturbation(
+                new_working_memory, rngs["perturbation"]
+            )
 
             # Update model state
             self._update_model_state(consciousness)
 
-            logging.info(f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}")
+            logging.info(
+                f"Finished simulate_consciousness successfully. Returning: consciousness shape: {consciousness.shape}, new_working_memory shape: {new_working_memory.shape}"
+            )
             return consciousness, new_working_memory
         except Exception as e:
             logging.error(f"Error in simulate_consciousness: {str(e)}")
             return self._handle_error(x)
 
-    def _handle_error(self, x: jnp.ndarray, error: Exception) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
+    def _handle_error(
+        self, x: jnp.ndarray, error: Exception
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
         batch_size = x.shape[0] if len(x.shape) > 1 else 1
-        empty_consciousness = jnp.zeros((batch_size, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size))
+        empty_consciousness = jnp.zeros(
+            (
+                batch_size,
+                self.output_dim
+                + 2 * self.working_memory_size
+                + 4
+                + self.working_memory_size,
+            )
+        )
         empty_working_memory = jnp.zeros((batch_size, self.working_memory_size))
         error_working_memory = {
-            'working_memory': {'current_state': empty_working_memory},
-            'error': str(error)
+            "working_memory": {"current_state": empty_working_memory},
+            "error": str(error),
         }
-        logging.error(f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}")
+        logging.error(
+            f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}"
+        )
         return empty_consciousness, empty_working_memory, error_working_memory
 
     def _prepare_rngs(self, rngs: Dict[str, Any] = None) -> Dict[str, jnp.ndarray]:
         if rngs is None:
             logging.warning("No rngs provided. Using default PRNGKeys.")
-            return {'dropout': jax.random.PRNGKey(0), 'perturbation': jax.random.PRNGKey(1)}
+            return {
+                "dropout": jax.random.PRNGKey(0),
+                "perturbation": jax.random.PRNGKey(1),
+            }
 
         if not isinstance(rngs, dict):
             raise ValueError("rngs must be a dictionary")
 
-        required_keys = {'dropout', 'perturbation'}
+        required_keys = {"dropout", "perturbation"}
         for key in required_keys:
             if key not in rngs or not self._is_valid_prng_key(rngs[key]):
-                logging.warning(f"Invalid or missing PRNG key for {key}. Using a new PRNGKey.")
+                logging.warning(
+                    f"Invalid or missing PRNG key for {key}. Using a new PRNGKey."
+                )
                 rngs[key] = jax.random.PRNGKey(hash(key))
 
         return rngs
@@ -432,27 +666,60 @@ class ConsciousnessSimulation(nn.Module):
     def _is_valid_prng_key(self, x: Any) -> bool:
         return isinstance(x, jnp.ndarray) and x.shape == (2,) and x.dtype == jnp.uint32
 
-    def _validate_outputs(self, consciousness: jnp.ndarray, new_working_memory: jnp.ndarray, working_memory_dict: Dict[str, Any]):
-        if not isinstance(consciousness, jnp.ndarray) or not isinstance(new_working_memory, jnp.ndarray) or not isinstance(working_memory_dict, dict):
+    def _validate_outputs(
+        self,
+        consciousness: jnp.ndarray,
+        new_working_memory: jnp.ndarray,
+        working_memory_dict: Dict[str, Any],
+    ):
+        if (
+            not isinstance(consciousness, jnp.ndarray)
+            or not isinstance(new_working_memory, jnp.ndarray)
+            or not isinstance(working_memory_dict, dict)
+        ):
             raise ValueError("Invalid return types from __call__ method")
 
-        expected_consciousness_shape = (consciousness.shape[0], self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size)
+        expected_consciousness_shape = (
+            consciousness.shape[0],
+            self.output_dim
+            + 2 * self.working_memory_size
+            + 4
+            + self.working_memory_size,
+        )
         if consciousness.shape != expected_consciousness_shape:
-            raise ValueError(f"Invalid consciousness shape. Expected {expected_consciousness_shape}, got {consciousness.shape}")
+            raise ValueError(
+                f"Invalid consciousness shape. Expected {expected_consciousness_shape}, got {consciousness.shape}"
+            )
 
-        if new_working_memory.shape != (consciousness.shape[0], self.working_memory_size):
-            raise ValueError(f"Invalid new_working_memory shape. Expected {(consciousness.shape[0], self.working_memory_size)}, got {new_working_memory.shape}")
+        if new_working_memory.shape != (
+            consciousness.shape[0],
+            self.working_memory_size,
+        ):
+            raise ValueError(
+                f"Invalid new_working_memory shape. Expected {(consciousness.shape[0], self.working_memory_size)}, got {new_working_memory.shape}"
+            )
 
-        if 'working_memory' not in working_memory_dict or 'current_state' not in working_memory_dict['working_memory']:
+        if (
+            "working_memory" not in working_memory_dict
+            or "current_state" not in working_memory_dict["working_memory"]
+        ):
             raise ValueError("Invalid working_memory_dict structure")
 
-        logging.debug(f"Outputs validated. Consciousness shape: {consciousness.shape}, New working memory shape: {new_working_memory.shape}")
+        logging.debug(
+            f"Outputs validated. Consciousness shape: {consciousness.shape}, New working memory shape: {new_working_memory.shape}"
+        )
 
-    def _apply_perturbation(self, new_working_memory: jnp.ndarray, perturbation_key: jnp.ndarray) -> jnp.ndarray:
-        perturbation = jax.random.normal(perturbation_key, new_working_memory.shape) * 1e-6
+    def _apply_perturbation(
+        self, new_working_memory: jnp.ndarray, perturbation_key: jnp.ndarray
+    ) -> jnp.ndarray:
+        perturbation = (
+            jax.random.normal(perturbation_key, new_working_memory.shape) * 1e-6
+        )
         perturbed_memory = new_working_memory + perturbation
         perturbation_magnitude = jnp.linalg.norm(perturbation)
-        logging.debug(f"Applied perturbation to working memory. Magnitude: {perturbation_magnitude:.6e}")
+        logging.debug(
+            f"Applied perturbation to working memory. Magnitude: {perturbation_magnitude:.6e}"
+        )
         return perturbed_memory
 
     def _update_model_state(self, consciousness: jnp.ndarray):
@@ -461,36 +728,57 @@ class ConsciousnessSimulation(nn.Module):
         self.is_trained.value = jnp.array(True)
         self.training_performance.value = self.performance.value
         self.validation_performance.value = self.performance.value * 0.9
-        logging.debug(f"Updated model state. Performance: {self.performance.value:.4f}, Training performance: {self.training_performance.value:.4f}, Validation performance: {self.validation_performance.value:.4f}")
+        logging.debug(
+            f"Updated model state. Performance: {self.performance.value:.4f}, Training performance: {self.training_performance.value:.4f}, Validation performance: {self.validation_performance.value:.4f}"
+        )
 
-    def _handle_error(self, x: jnp.ndarray, error: Exception) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
+    def _handle_error(
+        self, x: jnp.ndarray, error: Exception
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Dict[str, Any]]:
         batch_size = x.shape[0] if len(x.shape) > 1 else 1
-        empty_consciousness = jnp.zeros((batch_size, self.output_dim + 2*self.working_memory_size + 4 + self.working_memory_size))
+        empty_consciousness = jnp.zeros(
+            (
+                batch_size,
+                self.output_dim
+                + 2 * self.working_memory_size
+                + 4
+                + self.working_memory_size,
+            )
+        )
         empty_working_memory = jnp.zeros((batch_size, self.working_memory_size))
         error_working_memory = {
-            'working_memory': {'current_state': empty_working_memory},
-            'error': str(error)
+            "working_memory": {"current_state": empty_working_memory},
+            "error": str(error),
         }
-        logging.error(f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}")
+        logging.error(
+            f"Returning error case: empty_consciousness shape: {empty_consciousness.shape}, empty_working_memory shape: {empty_working_memory.shape}, error: {str(error)}"
+        )
         return empty_consciousness, empty_working_memory, error_working_memory
 
     def generate_thought(self, consciousness_state):
         # Simulate thought generation based on current consciousness state
         logging.debug(f"Generate thought input shape: {consciousness_state.shape}")
         # Ensure the input shape is correct (batch_size, 146)
-        assert consciousness_state.shape[1] == 146, \
-            f"Expected input shape (batch_size, 146), got {consciousness_state.shape}"
+        assert (
+            consciousness_state.shape[1] == 146
+        ), f"Expected input shape (batch_size, 146), got {consciousness_state.shape}"
 
         # Use two Dense layers to transform the consciousness state to the output dimension
-        hidden = nn.Dense(64, kernel_init=nn.initializers.xavier_uniform())(consciousness_state)
+        hidden = nn.Dense(64, kernel_init=nn.initializers.xavier_uniform())(
+            consciousness_state
+        )
         hidden = nn.relu(hidden)
-        thought = nn.Dense(self.output_dim, kernel_init=nn.initializers.xavier_uniform())(hidden)
+        thought = nn.Dense(
+            self.output_dim, kernel_init=nn.initializers.xavier_uniform()
+        )(hidden)
         logging.debug(f"Generated thought shape before softmax: {thought.shape}")
         thought = nn.softmax(thought, axis=-1)
         logging.debug(f"Final generated thought shape: {thought.shape}")
 
         # Ensure the output shape is correct (batch_size, output_dim)
-        assert thought.shape[1] == self.output_dim, f"Expected output shape (batch_size, {self.output_dim}), got {thought.shape}"
+        assert (
+            thought.shape[1] == self.output_dim
+        ), f"Expected output shape (batch_size, {self.output_dim}), got {thought.shape}"
         return thought
 
     def diagnose(self) -> List[str]:
@@ -503,12 +791,19 @@ class ConsciousnessSimulation(nn.Module):
         if not is_trained:
             issues.append("Model is not trained")
         if performance < self.performance_threshold:
-            issues.append(f"Model performance ({performance:.4f}) is below threshold ({self.performance_threshold:.4f})")
+            issues.append(
+                f"Model performance ({performance:.4f}) is below threshold ({self.performance_threshold:.4f})"
+            )
         if time.time() - last_update > self.update_interval:
-            issues.append(f"Model hasn't been updated in {(time.time() - last_update) / 3600:.2f} hours")
+            issues.append(
+                f"Model hasn't been updated in {(time.time() - last_update) / 3600:.2f} hours"
+            )
 
         # Check for working memory stability
-        if jnp.isnan(working_memory_state).any() or jnp.isinf(working_memory_state).any():
+        if (
+            jnp.isnan(working_memory_state).any()
+            or jnp.isinf(working_memory_state).any()
+        ):
             issues.append("Working memory contains NaN or Inf values")
 
         # Check for model convergence
@@ -518,12 +813,20 @@ class ConsciousnessSimulation(nn.Module):
                 issues.append("Model performance has stagnated")
 
         # Check for overfitting
-        if self.training_performance.value is not None and self.validation_performance.value is not None:
-            if self.training_performance.value - self.validation_performance.value > 0.2:
+        if (
+            self.training_performance.value is not None
+            and self.validation_performance.value is not None
+        ):
+            if (
+                self.training_performance.value - self.validation_performance.value
+                > 0.2
+            ):
                 issues.append("Potential overfitting detected")
 
         # Check for consistent underperformance
-        if len(self.performance_history) > 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < self.performance_threshold for p in self.performance_history[-5:]
+        ):
             issues.append("Consistently low performance")
 
         # Check for sudden performance drops
@@ -538,7 +841,10 @@ class ConsciousnessSimulation(nn.Module):
         issues = self.diagnose()
         for issue in issues:
             logging.info(f"Healing issue: {issue}")
-            if issue == "Model is not trained" or issue == "Model performance is below threshold":
+            if (
+                issue == "Model is not trained"
+                or issue == "Model performance is below threshold"
+            ):
                 self.update_model(x, full_update=True)
             elif issue == "Model hasn't been updated in 24 hours":
                 self.update_model(x, full_update=False)
@@ -568,9 +874,13 @@ class ConsciousnessSimulation(nn.Module):
                     self.learning_rate.value *= 1.05  # Increase learning rate
                 else:
                     self.learning_rate.value *= 0.95  # Decrease learning rate
-                self.learning_rate.value = jnp.clip(self.learning_rate.value, 1e-5, 0.1)  # Clip learning rate
+                self.learning_rate.value = jnp.clip(
+                    self.learning_rate.value, 1e-5, 0.1
+                )  # Clip learning rate
 
-            logging.info(f"Gradual healing: Attempt {attempt + 1}, Performance: {current_performance:.4f}, Target: {target_performance:.4f}, Learning rate: {self.learning_rate.value:.6f}")
+            logging.info(
+                f"Gradual healing: Attempt {attempt + 1}, Performance: {current_performance:.4f}, Target: {target_performance:.4f}, Learning rate: {self.learning_rate.value:.6f}"
+            )
 
             if current_performance >= target_performance:
                 break
@@ -583,7 +893,9 @@ class ConsciousnessSimulation(nn.Module):
         # Reset learning rate if healing was unsuccessful
         if current_performance < self.performance_threshold:
             self.learning_rate.value = initial_learning_rate
-            logging.info(f"Healing unsuccessful. Reset learning rate to {initial_learning_rate:.6f}")
+            logging.info(
+                f"Healing unsuccessful. Reset learning rate to {initial_learning_rate:.6f}"
+            )
 
         logging.info(f"Healing complete. Final performance: {current_performance:.4f}")
 
@@ -594,10 +906,21 @@ class ConsciousnessSimulation(nn.Module):
         last_update = jnp.array(time.time())
 
         # Use Flax's variable method to store performance metrics and update times
-        performance_var = self.variable('model_state', 'performance', jnp.float32, lambda: 0.0)
-        last_update_var = self.variable('model_state', 'last_update', jnp.float32, lambda: 0.0)
-        is_trained_var = self.variable('model_state', 'is_trained', jnp.bool_, lambda: False)
-        working_memory_var = self.variable('working_memory', 'current_state', jnp.float32, lambda: jnp.zeros_like(new_working_memory))
+        performance_var = self.variable(
+            "model_state", "performance", jnp.float32, lambda: 0.0
+        )
+        last_update_var = self.variable(
+            "model_state", "last_update", jnp.float32, lambda: 0.0
+        )
+        is_trained_var = self.variable(
+            "model_state", "is_trained", jnp.bool_, lambda: False
+        )
+        working_memory_var = self.variable(
+            "working_memory",
+            "current_state",
+            jnp.float32,
+            lambda: jnp.zeros_like(new_working_memory),
+        )
 
         if full_update:
             # Perform a more comprehensive update
@@ -610,12 +933,26 @@ class ConsciousnessSimulation(nn.Module):
             # Perform a lighter update
             performance_var.value = 0.9 * performance_var.value + 0.1 * performance
             last_update_var.value = last_update
-            working_memory_var.value = 0.9 * working_memory_var.value + 0.1 * new_working_memory
-            logging.info(f"Light model update completed. New performance: {performance_var.value}")
+            working_memory_var.value = (
+                0.9 * working_memory_var.value + 0.1 * new_working_memory
+            )
+            logging.info(
+                f"Light model update completed. New performance: {performance_var.value}"
+            )
 
         return consciousness_state, working_memory_var.value, performance_var.value
 
-def create_consciousness_simulation(features: List[int], output_dim: int, working_memory_size: int = 192, attention_heads: int = 4, qkv_features: int = 64, dropout_rate: float = 0.1, num_brain_areas: int = 90, simulation_length: float = 1.0) -> ConsciousnessSimulation:
+
+def create_consciousness_simulation(
+    features: List[int],
+    output_dim: int,
+    working_memory_size: int = 192,
+    attention_heads: int = 4,
+    qkv_features: int = 64,
+    dropout_rate: float = 0.1,
+    num_brain_areas: int = 90,
+    simulation_length: float = 1.0,
+) -> ConsciousnessSimulation:
     """
     Create an instance of the advanced ConsciousnessSimulation module.
 
@@ -640,8 +977,9 @@ def create_consciousness_simulation(features: List[int], output_dim: int, workin
         qkv_features=qkv_features,
         dropout_rate=dropout_rate,
         num_brain_areas=num_brain_areas,
-        simulation_length=simulation_length
+        simulation_length=simulation_length,
     )
+
 
 # Example usage
 if __name__ == "__main__":
@@ -651,25 +989,24 @@ if __name__ == "__main__":
     params = model.init(rng, x)
 
     # Create separate RNG keys for different operations
-    rng_keys = {
-        'dropout': jax.random.PRNGKey(1),
-        'perturbation': jax.random.PRNGKey(2)
-    }
+    rng_keys = {"dropout": jax.random.PRNGKey(1), "perturbation": jax.random.PRNGKey(2)}
 
     # Simulate consciousness
     consciousness_state, working_memory, _ = model.apply(
-        {'params': params}, x,
+        {"params": params},
+        x,
         rngs=rng_keys,
         method=model.simulate_consciousness,
-        mutable=['working_memory']
+        mutable=["working_memory"],
     )
 
     # Generate thought
     thought_rng = jax.random.PRNGKey(3)
     thought = model.apply(
-        {'params': params}, consciousness_state,
-        rngs={'dropout': thought_rng},
-        method=model.generate_thought
+        {"params": params},
+        consciousness_state,
+        rngs={"dropout": thought_rng},
+        method=model.generate_thought,
     )
 
     print(f"Consciousness state shape: {consciousness_state.shape}")

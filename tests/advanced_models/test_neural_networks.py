@@ -4,7 +4,11 @@ import torch
 import time
 import io
 import sys
-from NeuroFlex.core_neural_networks.machinelearning import MachineLearning, NeuroFlexClassifier
+from NeuroFlex.core_neural_networks.machinelearning import (
+    MachineLearning,
+    NeuroFlexClassifier,
+)
+
 
 class TestNeuralNetworks(unittest.TestCase):
     def setUp(self):
@@ -103,7 +107,9 @@ class TestNeuralNetworks(unittest.TestCase):
             self.classifier.self_fix(X, y)
             sys.stdout = sys.__stdout__
             output = captured_output.getvalue()
-            final_lr = float(output.split("Learning rate after adjustment: ")[-1].strip())
+            final_lr = float(
+                output.split("Learning rate after adjustment: ")[-1].strip()
+            )
             return output, final_lr
 
         healing_boost_factor = 1.5
@@ -118,11 +124,17 @@ class TestNeuralNetworks(unittest.TestCase):
         self.assertGreater(final_lr, initial_lr)
         self.assertIn("Initial learning rate:", output)
         self.assertIn("Learning rate after adjustment:", output)
-        self.assertNotIn("Final learning rate:", output)  # This should no longer be present
+        self.assertNotIn(
+            "Final learning rate:", output
+        )  # This should no longer be present
 
         # Check if the final learning rate is within the expected range
-        self.assertGreaterEqual(final_lr, min(initial_lr * healing_boost_factor * 0.9, max_lr))
-        self.assertLessEqual(final_lr, min(initial_lr * healing_boost_factor * 1.1, max_lr))
+        self.assertGreaterEqual(
+            final_lr, min(initial_lr * healing_boost_factor * 0.9, max_lr)
+        )
+        self.assertLessEqual(
+            final_lr, min(initial_lr * healing_boost_factor * 1.1, max_lr)
+        )
 
         # Test case when initial learning rate is close to max_lr
         high_initial_lr = 0.09
@@ -143,12 +155,16 @@ class TestNeuralNetworks(unittest.TestCase):
 
         # Verify learning rate never exceeds maximum cap and increases when possible
         for _ in range(20):  # Test multiple times with random initial learning rates
-            random_lr = np.random.uniform(0, 0.2)  # Generate random learning rates, some exceeding max_lr
+            random_lr = np.random.uniform(
+                0, 0.2
+            )  # Generate random learning rates, some exceeding max_lr
             _, random_final_lr = capture_output_and_self_fix(random_lr)
             self.assertLessEqual(random_final_lr, max_lr)
             if random_lr < max_lr:
                 self.assertGreater(random_final_lr, random_lr)
-                self.assertGreaterEqual(random_final_lr, min(random_lr + min_increase, max_lr))
+                self.assertGreaterEqual(
+                    random_final_lr, min(random_lr + min_increase, max_lr)
+                )
             else:
                 self.assertEqual(random_final_lr, max_lr)
 
@@ -170,7 +186,8 @@ class TestNeuralNetworks(unittest.TestCase):
 
         # Test PyTorch-specific functionality
         self.assertIsInstance(classifier.model, torch.nn.Module)
-        self.assertTrue(hasattr(classifier.model, 'forward'))
+        self.assertTrue(hasattr(classifier.model, "forward"))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

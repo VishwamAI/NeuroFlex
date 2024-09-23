@@ -17,36 +17,39 @@ from ..cognitive_architectures import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
-    MAX_HEALING_ATTEMPTS
+    MAX_HEALING_ATTEMPTS,
 )
 
 __all__ = [
-    'QuantumNeuralNetwork',
-    'PERFORMANCE_THRESHOLD',
-    'UPDATE_INTERVAL',
-    'LEARNING_RATE_ADJUSTMENT',
-    'MAX_HEALING_ATTEMPTS',
-    'get_quantum_nn_version',
-    'SUPPORTED_QUANTUM_MODELS',
-    'initialize_quantum_nn',
-    'create_quantum_nn'
+    "QuantumNeuralNetwork",
+    "PERFORMANCE_THRESHOLD",
+    "UPDATE_INTERVAL",
+    "LEARNING_RATE_ADJUSTMENT",
+    "MAX_HEALING_ATTEMPTS",
+    "get_quantum_nn_version",
+    "SUPPORTED_QUANTUM_MODELS",
+    "initialize_quantum_nn",
+    "create_quantum_nn",
 ]
+
 
 def get_quantum_nn_version():
     return "1.0.0"
 
-SUPPORTED_QUANTUM_MODELS = [
-    "QuantumNeuralNetwork"
-]
+
+SUPPORTED_QUANTUM_MODELS = ["QuantumNeuralNetwork"]
+
 
 def initialize_quantum_nn():
     print("Initializing Quantum Neural Networks Module...")
     # Add any necessary initialization code here
+
 
 def create_quantum_nn(model_type, *args, **kwargs):
     if model_type == "QuantumNeuralNetwork":
         return QuantumNeuralNetwork(*args, **kwargs)
     else:
         raise ValueError(f"Unsupported quantum model type: {model_type}")
+
 
 # Add any other Quantum Neural Networks-specific utility functions or constants as needed

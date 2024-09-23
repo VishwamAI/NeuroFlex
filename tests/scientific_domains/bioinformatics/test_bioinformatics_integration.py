@@ -3,13 +3,16 @@ import pytest
 from unittest.mock import patch, mock_open
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
+from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import (
+    BioinformaticsIntegration,
+)
+
 
 class TestBioinformaticsIntegration(unittest.TestCase):
     def setUp(self):
         self.bioinformatics = BioinformaticsIntegration()
 
-    @patch('Bio.SeqIO.parse')
+    @patch("Bio.SeqIO.parse")
     def test_read_sequence_file(self, mock_parse):
         # Test with valid file path and format
         mock_parse.return_value = [SeqRecord(Seq("ATCG"), id="seq1")]
@@ -31,7 +34,7 @@ class TestBioinformaticsIntegration(unittest.TestCase):
     def test_sequence_summary(self):
         sequences = [
             SeqRecord(Seq("ATCG"), id="seq1", description="Test sequence 1"),
-            SeqRecord(Seq("GCTA"), id="seq2", description="Test sequence 2")
+            SeqRecord(Seq("GCTA"), id="seq2", description="Test sequence 2"),
         ]
         result = self.bioinformatics.sequence_summary(sequences)
         self.assertEqual(len(result), 2)
@@ -43,12 +46,14 @@ class TestBioinformaticsIntegration(unittest.TestCase):
     def test_process_sequences(self):
         sequences = [
             SeqRecord(Seq("ATCGAT"), id="seq1", description="DNA sequence"),
-            SeqRecord(Seq("MKLT"), id="seq2", description="Protein sequence")
+            SeqRecord(Seq("MKLT"), id="seq2", description="Protein sequence"),
         ]
         result = self.bioinformatics.process_sequences(sequences)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0].id, "seq1")
-        self.assertEqual(str(result[0].seq), "ID")  # ATCGAT translates to MI (Methionine, Isoleucine)
+        self.assertEqual(
+            str(result[0].seq), "ID"
+        )  # ATCGAT translates to MI (Methionine, Isoleucine)
         self.assertEqual(result[0].description, "Translated DNA sequence")
         self.assertEqual(result[1].id, "seq2")
         self.assertEqual(str(result[1].seq), "MKLT")
@@ -66,5 +71,6 @@ class TestBioinformaticsIntegration(unittest.TestCase):
         self.assertFalse(self.bioinformatics._is_dna(Seq("ATCGU")))
         self.assertFalse(self.bioinformatics._is_dna(Seq("MKLT")))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

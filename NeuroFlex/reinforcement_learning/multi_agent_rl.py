@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+
 class MADDPGAgent:
     def __init__(self, state_dim, action_dim, hidden_dim=64):
         self.actor = nn.Sequential(
@@ -17,14 +18,14 @@ class MADDPGAgent:
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim),
-            nn.Tanh()
+            nn.Tanh(),
         )
         self.critic = nn.Sequential(
             nn.Linear(state_dim + action_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(hidden_dim, 1),
         )
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
@@ -58,6 +59,7 @@ class MADDPGAgent:
         actor_loss.backward()
         self.actor_optimizer.step()
 
+
 class MultiAgentEnvironment:
     def __init__(self, num_agents, state_dim, action_dim):
         self.num_agents = num_agents
@@ -74,6 +76,7 @@ class MultiAgentEnvironment:
         dones = [False for _ in range(self.num_agents)]
         return next_states, rewards, dones, {}
 
+
 def train_maddpg(num_agents, state_dim, action_dim, num_episodes=1000):
     env = MultiAgentEnvironment(num_agents, state_dim, action_dim)
     agents = [MADDPGAgent(state_dim, action_dim) for _ in range(num_agents)]
@@ -88,7 +91,13 @@ def train_maddpg(num_agents, state_dim, action_dim, num_episodes=1000):
             episode_reward += sum(rewards)
 
             for i, agent in enumerate(agents):
-                agent.update([states[i]], [actions[i]], [rewards[i]], [next_states[i]], [dones[i]])
+                agent.update(
+                    [states[i]],
+                    [actions[i]],
+                    [rewards[i]],
+                    [next_states[i]],
+                    [dones[i]],
+                )
 
             states = next_states
 
@@ -96,9 +105,12 @@ def train_maddpg(num_agents, state_dim, action_dim, num_episodes=1000):
                 break
 
         if episode % 100 == 0:
-            print(f"Episode {episode}, Average Reward: {episode_reward / num_agents:.2f}")
+            print(
+                f"Episode {episode}, Average Reward: {episode_reward / num_agents:.2f}"
+            )
 
     return agents
+
 
 def inter_agent_communication(agents, messages):
     """
@@ -108,6 +120,7 @@ def inter_agent_communication(agents, messages):
         received_messages = [msg for j, msg in enumerate(messages) if j != i]
         # Process received messages (simplified)
         agent.process_messages(received_messages)
+
 
 def main():
     num_agents = 3
@@ -119,6 +132,7 @@ def main():
     # Simulate inter-agent communication
     messages = [f"Message from Agent {i}" for i in range(num_agents)]
     inter_agent_communication(trained_agents, messages)
+
 
 if __name__ == "__main__":
     main()

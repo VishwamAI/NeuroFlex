@@ -6,11 +6,14 @@ import logging
 from typing import List, Tuple, Optional
 from skbio.sequence.distance import hamming
 
+
 class ScikitBioIntegration:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def align_dna_sequences(self, seq1: str, seq2: str) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+    def align_dna_sequences(
+        self, seq1: str, seq2: str
+    ) -> Tuple[Optional[str], Optional[str], Optional[float]]:
         """
         Align two DNA sequences using global pairwise alignment.
 
@@ -52,7 +55,9 @@ class ScikitBioIntegration:
         similarity = matches / max(len(aligned_seq1), len(aligned_seq2))
         return similarity
 
-    def detect_anomalies(self, sequences: List[str], threshold: float = 0.8) -> List[int]:
+    def detect_anomalies(
+        self, sequences: List[str], threshold: float = 0.8
+    ) -> List[int]:
         """
         Detect anomalies in a set of DNA sequences.
 
@@ -65,8 +70,11 @@ class ScikitBioIntegration:
         """
         anomalies = []
         for i, seq in enumerate(sequences):
-            similarities = [self.calculate_sequence_similarity(seq, other_seq)
-                            for j, other_seq in enumerate(sequences) if i != j]
+            similarities = [
+                self.calculate_sequence_similarity(seq, other_seq)
+                for j, other_seq in enumerate(sequences)
+                if i != j
+            ]
             if np.mean(similarities) < threshold:
                 anomalies.append(i)
         return anomalies
@@ -86,7 +94,9 @@ class ScikitBioIntegration:
         if aligned_seq1 is None or aligned_seq2 is None:
             return "Alignment failed"
 
-        match_line = ''.join('|' if a == b else ' ' for a, b in zip(aligned_seq1, aligned_seq2))
+        match_line = "".join(
+            "|" if a == b else " " for a, b in zip(aligned_seq1, aligned_seq2)
+        )
         visualization = f"Sequence 1: {aligned_seq1}\n"
         visualization += f"            {match_line}\n"
         visualization += f"Sequence 2: {aligned_seq2}\n"
@@ -118,7 +128,7 @@ class ScikitBioIntegration:
             float: GC content as a percentage.
         """
         sequence = sequence.upper()
-        gc_count = sequence.count('G') + sequence.count('C')
+        gc_count = sequence.count("G") + sequence.count("C")
         total_bases = len(sequence)
         if total_bases == 0:
             return 0.0

@@ -7,6 +7,7 @@ from typing import List, Tuple, Optional
 from tqdm import tqdm
 from NeuroFlex.utils.utils import normalize_data, preprocess_data
 
+
 class CNN(nn.Module):
     """
     A Convolutional Neural Network (CNN) class for NeuroFlex.
@@ -22,8 +23,16 @@ class CNN(nn.Module):
         dropout_rate (float): Dropout rate for regularization.
         learning_rate (float): Initial learning rate for optimization.
     """
-    def __init__(self, features: List[int], conv_dim: int, input_channels: int, num_classes: int,
-                 dropout_rate: float = 0.5, learning_rate: float = 0.001):
+
+    def __init__(
+        self,
+        features: List[int],
+        conv_dim: int,
+        input_channels: int,
+        num_classes: int,
+        dropout_rate: float = 0.5,
+        learning_rate: float = 0.001,
+    ):
         super().__init__()
         self.features = features
         self.conv_dim = conv_dim
@@ -45,8 +54,11 @@ class CNN(nn.Module):
         self.layers = nn.ModuleList()
         in_channels = input_channels
         for feat in features:
-            self.layers.append(nn.Conv2d(in_channels, feat, kernel_size=3, padding=1) if conv_dim == 2
-                               else nn.Conv3d(in_channels, feat, kernel_size=3, padding=1))
+            self.layers.append(
+                nn.Conv2d(in_channels, feat, kernel_size=3, padding=1)
+                if conv_dim == 2
+                else nn.Conv3d(in_channels, feat, kernel_size=3, padding=1)
+            )
             self.layers.append(nn.ReLU())
             self.layers.append(nn.MaxPool2d(2) if conv_dim == 2 else nn.MaxPool3d(2))
             self.layers.append(nn.Dropout(self.dropout_rate))
@@ -72,7 +84,9 @@ class CNN(nn.Module):
             issues.append("Model hasn't been updated in 24 hours")
         if self.gradient_norm > self.gradient_norm_threshold:
             issues.append("Gradient explosion detected")
-        if len(self.performance_history) > 5 and all(p < 0.01 for p in self.performance_history[-5:]):
+        if len(self.performance_history) > 5 and all(
+            p < 0.01 for p in self.performance_history[-5:]
+        ):
             issues.append("Model is stuck in local minimum")
         return issues
 
@@ -101,9 +115,11 @@ class CNN(nn.Module):
         y_tensor = torch.LongTensor(y).to(self.device)
 
         dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True
+        )
 
-        best_loss = float('inf')
+        best_loss = float("inf")
         no_improve = 0
 
         for epoch in tqdm(range(epochs), desc="Training"):
@@ -169,8 +185,15 @@ class CNN(nn.Module):
         self.learning_rate = max(min(self.learning_rate, 0.1), 1e-5)
         return self.learning_rate
 
-def create_cnn(features: List[int], conv_dim: int, input_channels: int, num_classes: int,
-               dropout_rate: float = 0.5, learning_rate: float = 0.001) -> CNN:
+
+def create_cnn(
+    features: List[int],
+    conv_dim: int,
+    input_channels: int,
+    num_classes: int,
+    dropout_rate: float = 0.5,
+    learning_rate: float = 0.001,
+) -> CNN:
     """
     Factory function to create a CNN instance.
 
@@ -185,7 +208,10 @@ def create_cnn(features: List[int], conv_dim: int, input_channels: int, num_clas
     Returns:
         CNN: An instance of the CNN.
     """
-    return CNN(features, conv_dim, input_channels, num_classes, dropout_rate, learning_rate)
+    return CNN(
+        features, conv_dim, input_channels, num_classes, dropout_rate, learning_rate
+    )
+
 
 def calculate_accuracy(model, X, y):
     model.eval()
@@ -199,8 +225,10 @@ def calculate_accuracy(model, X, y):
         accuracy = correct / total
     return accuracy
 
+
 def save_model(model, path):
     torch.save(model.state_dict(), path)
+
 
 def load_model(model, path):
     model.load_state_dict(torch.load(path))

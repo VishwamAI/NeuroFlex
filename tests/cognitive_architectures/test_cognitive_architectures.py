@@ -7,23 +7,21 @@ from NeuroFlex.cognitive_architectures.custom_cognitive_model import (
     CustomCognitiveModel,
     create_custom_cognitive_model,
     AttentionMechanism,
-    WorkingMemory
+    WorkingMemory,
 )
-from NeuroFlex.cognitive_architectures import (
-    PERFORMANCE_THRESHOLD,
-    UPDATE_INTERVAL
-)
+from NeuroFlex.cognitive_architectures import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL
+
 
 class TestCognitiveArchitectures(unittest.TestCase):
     def setUp(self):
         self.seed = 42
         self.input_shape = (100, 32)  # Updated to match expected input shape
         self.config = {
-            'seed': self.seed,
-            'hidden_size': 64,
-            'num_layers': 3,
-            'working_memory_capacity': 10,
-            'prng_key': jax.random.PRNGKey(self.seed)  # Generate prng_key from seed
+            "seed": self.seed,
+            "hidden_size": 64,
+            "num_layers": 3,
+            "working_memory_capacity": 10,
+            "prng_key": jax.random.PRNGKey(self.seed),  # Generate prng_key from seed
         }
 
     def test_custom_cognitive_model(self):
@@ -37,22 +35,28 @@ class TestCognitiveArchitectures(unittest.TestCase):
             attention_head_dim=attention_head_dim,
             working_memory_size=working_memory_size,
             hidden_dim=hidden_dim,
-            attention_schema_size=attention_schema_size
+            attention_schema_size=attention_schema_size,
         )
-        prng_key = self.config['prng_key']
+        prng_key = self.config["prng_key"]
         batch_size = 1
         seq_len = 10
         input_dim = hidden_dim
         inputs = jax.random.normal(prng_key, (batch_size, seq_len, input_dim))
-        prev_memory = jax.random.normal(jax.random.fold_in(prng_key, 1), (batch_size, working_memory_size))
-        prev_attention_state = jax.random.normal(jax.random.fold_in(prng_key, 2), (batch_size, attention_schema_size))
+        prev_memory = jax.random.normal(
+            jax.random.fold_in(prng_key, 1), (batch_size, working_memory_size)
+        )
+        prev_attention_state = jax.random.normal(
+            jax.random.fold_in(prng_key, 2), (batch_size, attention_schema_size)
+        )
 
         variables = model.init(prng_key, inputs, prev_memory, prev_attention_state)
 
         # Ensure the variables dictionary has the correct structure
-        self.assertIn('params', variables)
+        self.assertIn("params", variables)
 
-        output, new_memory, new_attention_state = model.apply(variables, inputs, prev_memory, prev_attention_state)
+        output, new_memory, new_attention_state = model.apply(
+            variables, inputs, prev_memory, prev_attention_state
+        )
 
         # Check that output, new_memory, and new_attention_state are JAX arrays
         self.assertIsInstance(output, (jnp.ndarray, jax.Array))
@@ -75,9 +79,11 @@ class TestCognitiveArchitectures(unittest.TestCase):
         batch_size = 1
         seq_len = 10
         input_dim = num_heads * head_dim
-        inputs = jax.random.normal(self.config['prng_key'], (batch_size, seq_len, input_dim))
+        inputs = jax.random.normal(
+            self.config["prng_key"], (batch_size, seq_len, input_dim)
+        )
 
-        variables = attention.init(self.config['prng_key'], inputs)
+        variables = attention.init(self.config["prng_key"], inputs)
         output = attention.apply(variables, inputs)
 
         self.assertIsInstance(output, (jnp.ndarray, jax.Array))
@@ -89,10 +95,12 @@ class TestCognitiveArchitectures(unittest.TestCase):
         working_memory = WorkingMemory(memory_size=memory_size, hidden_dim=hidden_dim)
 
         batch_size = 1
-        inputs = jax.random.normal(self.config['prng_key'], (batch_size, hidden_dim))
-        prev_memory = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 1), (batch_size, memory_size))
+        inputs = jax.random.normal(self.config["prng_key"], (batch_size, hidden_dim))
+        prev_memory = jax.random.normal(
+            jax.random.fold_in(self.config["prng_key"], 1), (batch_size, memory_size)
+        )
 
-        variables = working_memory.init(self.config['prng_key'], inputs, prev_memory)
+        variables = working_memory.init(self.config["prng_key"], inputs, prev_memory)
         new_memory = working_memory.apply(variables, inputs, prev_memory)
 
         self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
@@ -109,25 +117,41 @@ class TestCognitiveArchitectures(unittest.TestCase):
             attention_head_dim=attention_head_dim,
             working_memory_size=working_memory_size,
             hidden_dim=hidden_dim,
-            attention_schema_size=attention_schema_size  # Add this line
+            attention_schema_size=attention_schema_size,  # Add this line
         )
 
         batch_size = 1
         seq_len = 10
         input_dim = hidden_dim
-        inputs = jax.random.normal(self.config['prng_key'], (batch_size, seq_len, input_dim))
-        prev_memory = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 1), (batch_size, working_memory_size))
-        prev_attention_state = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 2), (batch_size, attention_schema_size))  # Add this line
+        inputs = jax.random.normal(
+            self.config["prng_key"], (batch_size, seq_len, input_dim)
+        )
+        prev_memory = jax.random.normal(
+            jax.random.fold_in(self.config["prng_key"], 1),
+            (batch_size, working_memory_size),
+        )
+        prev_attention_state = jax.random.normal(
+            jax.random.fold_in(self.config["prng_key"], 2),
+            (batch_size, attention_schema_size),
+        )  # Add this line
 
-        variables = model.init(self.config['prng_key'], inputs, prev_memory, prev_attention_state)
-        output, new_memory, new_attention_state = model.apply(variables, inputs, prev_memory, prev_attention_state)
+        variables = model.init(
+            self.config["prng_key"], inputs, prev_memory, prev_attention_state
+        )
+        output, new_memory, new_attention_state = model.apply(
+            variables, inputs, prev_memory, prev_attention_state
+        )
 
         self.assertIsInstance(output, (jnp.ndarray, jax.Array))
         self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
-        self.assertIsInstance(new_attention_state, (jnp.ndarray, jax.Array))  # Add this line
+        self.assertIsInstance(
+            new_attention_state, (jnp.ndarray, jax.Array)
+        )  # Add this line
         self.assertEqual(output.shape, (batch_size, hidden_dim))
         self.assertEqual(new_memory.shape, (batch_size, working_memory_size))
-        self.assertEqual(new_attention_state.shape, (batch_size, 1, 10 * attention_schema_size))  # Add this line
+        self.assertEqual(
+            new_attention_state.shape, (batch_size, 1, 10 * attention_schema_size)
+        )  # Add this line
 
     def test_performance_threshold(self):
         self.assertIsInstance(PERFORMANCE_THRESHOLD, float)
@@ -153,7 +177,9 @@ class TestCognitiveArchitectures(unittest.TestCase):
         key = jax.random.PRNGKey(0)
         batch_size = 1
         inputs = jax.random.normal(key, (batch_size, hidden_dim))
-        prev_memory = jax.random.normal(jax.random.fold_in(key, 1), (batch_size, memory_size))
+        prev_memory = jax.random.normal(
+            jax.random.fold_in(key, 1), (batch_size, memory_size)
+        )
 
         # Initialize the WorkingMemory
         variables = wm.init(key, inputs, prev_memory)
@@ -182,29 +208,44 @@ class TestCognitiveArchitectures(unittest.TestCase):
             attention_head_dim=attention_head_dim,
             working_memory_size=working_memory_size,
             hidden_dim=hidden_dim,
-            attention_schema_size=attention_schema_size
+            attention_schema_size=attention_schema_size,
         )
 
         batch_size = 1
         seq_len = 10
         input_dim = hidden_dim
-        inputs = jax.random.normal(self.config['prng_key'], (batch_size, seq_len, input_dim))
-        prev_memory = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 1), (batch_size, working_memory_size))
-        prev_attention_state = jax.random.normal(jax.random.fold_in(self.config['prng_key'], 2), (batch_size, attention_schema_size))
+        inputs = jax.random.normal(
+            self.config["prng_key"], (batch_size, seq_len, input_dim)
+        )
+        prev_memory = jax.random.normal(
+            jax.random.fold_in(self.config["prng_key"], 1),
+            (batch_size, working_memory_size),
+        )
+        prev_attention_state = jax.random.normal(
+            jax.random.fold_in(self.config["prng_key"], 2),
+            (batch_size, attention_schema_size),
+        )
 
-        variables = model.init(self.config['prng_key'], inputs, prev_memory, prev_attention_state)
-        output, new_memory, new_attention_state = model.apply(variables, inputs, prev_memory, prev_attention_state)
+        variables = model.init(
+            self.config["prng_key"], inputs, prev_memory, prev_attention_state
+        )
+        output, new_memory, new_attention_state = model.apply(
+            variables, inputs, prev_memory, prev_attention_state
+        )
 
         self.assertIsInstance(output, (jnp.ndarray, jax.Array))
         self.assertIsInstance(new_memory, (jnp.ndarray, jax.Array))
         self.assertIsInstance(new_attention_state, (jnp.ndarray, jax.Array))
         self.assertEqual(output.shape, (batch_size, hidden_dim))
         self.assertEqual(new_memory.shape, (batch_size, working_memory_size))
-        self.assertEqual(new_attention_state.shape, (batch_size, 1, 10 * attention_schema_size))
+        self.assertEqual(
+            new_attention_state.shape, (batch_size, 1, 10 * attention_schema_size)
+        )
 
     def test_higher_order_theories(self):
         # TODO: Implement test for Higher-Order Theories components
         pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

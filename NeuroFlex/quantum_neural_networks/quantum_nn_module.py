@@ -10,16 +10,21 @@ from ..constants import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
-    MAX_HEALING_ATTEMPTS
+    MAX_HEALING_ATTEMPTS,
 )
 
 # Check PennyLane version
 try:
     pennylane_version = importlib.metadata.version("pennylane")
     if pennylane_version != "0.37.0":
-        logging.warning(f"This module was tested with PennyLane 0.37.0. You are using version {pennylane_version}. Some features may not work as expected.")
+        logging.warning(
+            f"This module was tested with PennyLane 0.37.0. You are using version {pennylane_version}. Some features may not work as expected."
+        )
 except importlib.metadata.PackageNotFoundError:
-    logging.warning("Unable to determine PennyLane version. Make sure it's installed correctly.")
+    logging.warning(
+        "Unable to determine PennyLane version. Make sure it's installed correctly."
+    )
+
 
 class QuantumNeuralNetwork:
     """
@@ -36,8 +41,13 @@ class QuantumNeuralNetwork:
         encoding_method (Callable): The method used for encoding classical data into quantum states.
     """
 
-    def __init__(self, n_qubits: int, n_layers: int, encoding_method: Optional[Callable] = None,
-                 learning_rate: float = 0.001):
+    def __init__(
+        self,
+        n_qubits: int,
+        n_layers: int,
+        encoding_method: Optional[Callable] = None,
+        learning_rate: float = 0.001,
+    ):
         """
         Initialize the enhanced Quantum Neural Network with self-healing capabilities.
 
@@ -85,8 +95,9 @@ class QuantumNeuralNetwork:
         self.entangling_layer()
 
         # Measure the output using different observables
-        return [qml.expval(qml.PauliZ(i)) for i in range(self.n_qubits)] + \
-               [qml.expval(qml.PauliX(i)) for i in range(self.n_qubits)]
+        return [qml.expval(qml.PauliZ(i)) for i in range(self.n_qubits)] + [
+            qml.expval(qml.PauliX(i)) for i in range(self.n_qubits)
+        ]
 
     def amplitude_encoding(self, inputs: jnp.ndarray) -> None:
         """
@@ -154,9 +165,13 @@ class QuantumNeuralNetwork:
             jnp.ndarray: Randomly initialized weights for all layers of the quantum circuit.
         """
         key = jax.random.PRNGKey(0)
-        return jax.random.uniform(key, shape=(self.n_layers, self.n_qubits, 5), minval=0, maxval=2*jnp.pi)
+        return jax.random.uniform(
+            key, shape=(self.n_layers, self.n_qubits, 5), minval=0, maxval=2 * jnp.pi
+        )
 
-    def quantum_classical_hybrid(self, inputs: jnp.ndarray, weights: jnp.ndarray, classical_layer: Callable) -> jnp.ndarray:
+    def quantum_classical_hybrid(
+        self, inputs: jnp.ndarray, weights: jnp.ndarray, classical_layer: Callable
+    ) -> jnp.ndarray:
         """
         Perform a quantum-classical hybrid computation.
 
@@ -182,8 +197,12 @@ class QuantumNeuralNetwork:
         if self.performance < self.performance_threshold:
             issues.append(f"Low performance: {self.performance:.4f}")
         if (time.time() - self.last_update) > self.update_interval:
-            issues.append(f"Long time since last update: {(time.time() - self.last_update) / 3600:.2f} hours")
-        if len(self.performance_history) > 5 and all(p < self.performance_threshold for p in self.performance_history[-5:]):
+            issues.append(
+                f"Long time since last update: {(time.time() - self.last_update) / 3600:.2f} hours"
+            )
+        if len(self.performance_history) > 5 and all(
+            p < self.performance_threshold for p in self.performance_history[-5:]
+        ):
             issues.append("Consistently low performance")
         return issues
 
@@ -215,7 +234,9 @@ class QuantumNeuralNetwork:
                 new_weights = self.reinitialize_weights()
                 new_performance = self.evaluate_performance(inputs, new_weights)
                 if new_performance > self.performance_threshold:
-                    logging.info(f"Self-healing successful. New performance: {new_performance:.4f}")
+                    logging.info(
+                        f"Self-healing successful. New performance: {new_performance:.4f}"
+                    )
                     return new_weights
             logging.warning("Self-healing unsuccessful after maximum attempts")
         return weights

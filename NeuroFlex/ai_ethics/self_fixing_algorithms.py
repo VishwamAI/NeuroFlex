@@ -8,6 +8,7 @@ import logging
 import time
 from .rl_module import ReplayBuffer, create_train_state, select_action, train_rl_agent
 
+
 class SelfCuringRLAgent(nn.Module):
     features: List[int]
     action_dim: int
@@ -22,16 +23,22 @@ class SelfCuringRLAgent(nn.Module):
     epsilon: float = epsilon_start  # Initialize epsilon as a class attribute
 
     def setup(self):
-        self.q_network = nn.Sequential([
-            nn.Dense(feat) for feat in self.features
-        ] + [nn.Dense(self.action_dim)])
-        self.target_network = nn.Sequential([
-            nn.Dense(feat) for feat in self.features
-        ] + [nn.Dense(self.action_dim)])
+        self.q_network = nn.Sequential(
+            [nn.Dense(feat) for feat in self.features] + [nn.Dense(self.action_dim)]
+        )
+        self.target_network = nn.Sequential(
+            [nn.Dense(feat) for feat in self.features] + [nn.Dense(self.action_dim)]
+        )
         self.replay_buffer = ReplayBuffer(100000)
-        self.is_trained = self.variable('agent_state', 'is_trained', lambda: jnp.array(False))
-        self.performance = self.variable('agent_state', 'performance', lambda: jnp.array(0.0))
-        self.last_update = self.variable('agent_state', 'last_update', lambda: jnp.array(time.time()))
+        self.is_trained = self.variable(
+            "agent_state", "is_trained", lambda: jnp.array(False)
+        )
+        self.performance = self.variable(
+            "agent_state", "performance", lambda: jnp.array(0.0)
+        )
+        self.last_update = self.variable(
+            "agent_state", "last_update", lambda: jnp.array(time.time())
+        )
 
     def __call__(self, x):
         return self.q_network(x)
@@ -40,15 +47,26 @@ class SelfCuringRLAgent(nn.Module):
         if training and jax.random.uniform(jax.random.PRNGKey(0)) < self.epsilon:
             return jax.random.randint(jax.random.PRNGKey(0), (), 0, self.action_dim)
         else:
-            q_values = self.apply({'params': params}, state)
+            q_values = self.apply({"params": params}, state)
             return jnp.argmax(q_values)
 
-    def update(self, state: train_state.TrainState, batch: Dict[str, jnp.ndarray]) -> Tuple[train_state.TrainState, float]:
+    def update(
+        self, state: train_state.TrainState, batch: Dict[str, jnp.ndarray]
+    ) -> Tuple[train_state.TrainState, float]:
         def loss_fn(params):
-            q_values = self.apply({'params': params}, batch['observations'])
-            next_q_values = self.apply({'params': self.target_params}, batch['next_observations'])
-            targets = batch['rewards'] + self.gamma * jnp.max(next_q_values, axis=-1) * (1 - batch['dones'])
-            loss = jnp.mean(optax.huber_loss(q_values[jnp.arange(len(batch['actions'])), batch['actions']], targets))
+            q_values = self.apply({"params": params}, batch["observations"])
+            next_q_values = self.apply(
+                {"params": self.target_params}, batch["next_observations"]
+            )
+            targets = batch["rewards"] + self.gamma * jnp.max(
+                next_q_values, axis=-1
+            ) * (1 - batch["dones"])
+            loss = jnp.mean(
+                optax.huber_loss(
+                    q_values[jnp.arange(len(batch["actions"])), batch["actions"]],
+                    targets,
+                )
+            )
             return loss
 
         grad_fn = jax.value_and_grad(loss_fn)
@@ -58,8 +76,7 @@ class SelfCuringRLAgent(nn.Module):
         # Update target network
         tau = 0.005  # Soft update parameter
         self.target_params = jax.tree_map(
-            lambda p, tp: p * tau + tp * (1 - tau),
-            state.params, self.target_params
+            lambda p, tp: p * tau + tp * (1 - tau), state.params, self.target_params
         )
 
         return state, loss
@@ -70,10 +87,10 @@ class SelfCuringRLAgent(nn.Module):
         variables = self.init(rng, jnp.ones(input_shape))
         state = train_state.TrainState.create(
             apply_fn=self.apply,
-            params=variables['params'],
-            tx=optax.adam(self.learning_rate)
+            params=variables["params"],
+            tx=optax.adam(self.learning_rate),
         )
-        self.target_params = variables['params']  # Store target_params separately
+        self.target_params = variables["params"]  # Store target_params separately
 
         def train_step(carry, _):
             state, env_state, total_reward, step = carry
@@ -87,10 +104,7 @@ class SelfCuringRLAgent(nn.Module):
                 state, _ = self.update(state, batch)
 
             # Update epsilon
-            self.epsilon = max(
-                self.epsilon_end,
-                self.epsilon * self.epsilon_decay
-            )
+            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
             return (state, next_state, total_reward, step + 1), (total_reward, done)
 
@@ -112,11 +126,11 @@ class SelfCuringRLAgent(nn.Module):
         self.last_update.value = jnp.array(time.time())
 
         return {
-            'is_trained': self.is_trained.value,
-            'performance': self.performance.value,
-            'episode_rewards': episode_rewards,
-            'params': state.params,
-            'target_params': self.target_params
+            "is_trained": self.is_trained.value,
+            "performance": self.performance.value,
+            "episode_rewards": episode_rewards,
+            "params": state.params,
+            "target_params": self.target_params,
         }
 
     def diagnose(self) -> List[str]:
@@ -132,22 +146,31 @@ class SelfCuringRLAgent(nn.Module):
     def heal(self, env, num_episodes: int, max_steps: int):
         issues = self.diagnose()
         for issue in issues:
-            if issue == "Model is not trained" or issue == "Model performance is below threshold":
+            if (
+                issue == "Model is not trained"
+                or issue == "Model performance is below threshold"
+            ):
                 logging.info(f"Healing issue: {issue}")
                 training_info = self.train(env, num_episodes, max_steps)
-                self.performance.value = training_info['performance']
+                self.performance.value = training_info["performance"]
             elif issue == "Model hasn't been updated in 24 hours":
                 logging.info(f"Healing issue: {issue}")
-                self.update_model(env, num_episodes // 10, max_steps)  # Perform a shorter training session
+                self.update_model(
+                    env, num_episodes // 10, max_steps
+                )  # Perform a shorter training session
 
     def update_model(self, env, num_episodes: int, max_steps: int):
         training_info = self.train(env, num_episodes, max_steps)
-        self.performance.value = training_info['performance']
+        self.performance.value = training_info["performance"]
         self.last_update.value = jnp.array(time.time())
         return training_info
 
-def create_self_curing_rl_agent(features: List[int], action_dim: int) -> SelfCuringRLAgent:
+
+def create_self_curing_rl_agent(
+    features: List[int], action_dim: int
+) -> SelfCuringRLAgent:
     return SelfCuringRLAgent(features=features, action_dim=action_dim)
+
 
 if __name__ == "__main__":
     from .rl_module import RLEnvironment
@@ -158,7 +181,9 @@ if __name__ == "__main__":
 
     # Initial training
     training_info = agent.train(env, num_episodes=1000, max_steps=500)
-    logging.info(f"Initial training completed. Final reward: {training_info['final_reward']}")
+    logging.info(
+        f"Initial training completed. Final reward: {training_info['final_reward']}"
+    )
 
     # Simulate some time passing and performance degradation
     agent.last_update -= 100000  # Simulate 27+ hours passing

@@ -1,7 +1,10 @@
 import numpy as np
 from typing import Dict, Union, Optional
 
-def calculate_descriptive_statistics(data: np.ndarray, axis: Optional[int] = None) -> Dict[str, Union[float, np.ndarray]]:
+
+def calculate_descriptive_statistics(
+    data: np.ndarray, axis: Optional[int] = None
+) -> Dict[str, Union[float, np.ndarray]]:
     """
     Calculate descriptive statistics for the input data.
 
@@ -25,14 +28,12 @@ def calculate_descriptive_statistics(data: np.ndarray, axis: Optional[int] = Non
     mean = np.mean(data, axis=axis)
     median = np.median(data, axis=axis)
     variance = np.var(data, axis=axis, ddof=1)  # Use ddof=1 for sample variance
-    std_dev = np.std(data, axis=axis, ddof=1)  # Use ddof=1 for sample standard deviation
+    std_dev = np.std(
+        data, axis=axis, ddof=1
+    )  # Use ddof=1 for sample standard deviation
 
-    return {
-        "mean": mean,
-        "median": median,
-        "variance": variance,
-        "std_dev": std_dev
-    }
+    return {"mean": mean, "median": median, "variance": variance, "std_dev": std_dev}
+
 
 def preprocess_data(data: np.ndarray) -> np.ndarray:
     """
@@ -52,7 +53,10 @@ def preprocess_data(data: np.ndarray) -> np.ndarray:
 
     return preprocessed_data
 
-def analyze_bci_data(data: np.ndarray, axis: Optional[int] = None) -> Dict[str, Union[float, np.ndarray]]:
+
+def analyze_bci_data(
+    data: np.ndarray, axis: Optional[int] = None
+) -> Dict[str, Union[float, np.ndarray]]:
     """
     Analyze BCI data by preprocessing and calculating descriptive statistics.
 
@@ -73,6 +77,7 @@ def analyze_bci_data(data: np.ndarray, axis: Optional[int] = None) -> Dict[str, 
 
     # Calculate and return descriptive statistics
     return calculate_descriptive_statistics(cleaned_data, axis)
+
 
 # Example usage:
 # bci_data = np.random.rand(1000, 64)  # Simulated BCI data: 1000 time points, 64 channels

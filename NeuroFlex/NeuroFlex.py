@@ -11,6 +11,7 @@ from .edge_ai import EdgeAIOptimization
 from .utils import Config, setup_logging
 from .Transformers.unified_transformer import UnifiedTransformer
 
+
 class NeuroFlex:
     """
     NeuroFlex is the main class for the NeuroFlex project, integrating various AI and neural network components.
@@ -70,17 +71,17 @@ class NeuroFlex:
 
     def _setup_core_model(self):
         self.core_model = CoreNeuroFlex(
-            features=self.config['CORE_MODEL_FEATURES'],
-            use_cnn=self.config['USE_CNN'],
-            use_rnn=self.config['USE_RNN'],
-            use_lstm=self.config['USE_LSTM']
+            features=self.config["CORE_MODEL_FEATURES"],
+            use_cnn=self.config["USE_CNN"],
+            use_rnn=self.config["USE_RNN"],
+            use_lstm=self.config["USE_LSTM"],
         )
 
     def _setup_quantum_model(self):
-        if self.config['USE_QUANTUM']:
+        if self.config["USE_QUANTUM"]:
             self.quantum_model = QuantumNeuralNetwork(
-                n_qubits=self.config['QUANTUM_N_QUBITS'],
-                n_layers=self.config['QUANTUM_N_LAYERS']
+                n_qubits=self.config["QUANTUM_N_QUBITS"],
+                n_layers=self.config["QUANTUM_N_LAYERS"],
             )
 
     def _setup_ethical_framework(self):
@@ -90,39 +91,39 @@ class NeuroFlex:
         self.explainable_ai = ExplainableAI()
 
     def _setup_bci_processor(self):
-        if self.config['USE_BCI']:
+        if self.config["USE_BCI"]:
             self.bci_processor = BCIProcessor(
-                sampling_rate=self.config['BCI_SAMPLING_RATE'],
-                num_channels=self.config['BCI_NUM_CHANNELS']
+                sampling_rate=self.config["BCI_SAMPLING_RATE"],
+                num_channels=self.config["BCI_NUM_CHANNELS"],
             )
 
     def _setup_consciousness_sim(self):
-        if self.config['USE_CONSCIOUSNESS_SIM']:
+        if self.config["USE_CONSCIOUSNESS_SIM"]:
             self.consciousness_sim = ConsciousnessSimulation(
-                features=self.config['CONSCIOUSNESS_SIM_FEATURES']
+                features=self.config["CONSCIOUSNESS_SIM_FEATURES"]
             )
 
     def _setup_alphafold(self):
-        if self.config['USE_ALPHAFOLD']:
+        if self.config["USE_ALPHAFOLD"]:
             self.alphafold = AlphaFoldIntegration()
 
     def _setup_math_solver(self):
         self.math_solver = MathSolver()
 
     def _setup_edge_optimizer(self):
-        if self.config['USE_EDGE_OPTIMIZATION']:
+        if self.config["USE_EDGE_OPTIMIZATION"]:
             self.edge_optimizer = EdgeAIOptimization()
 
     def _setup_unified_transformer(self):
-        if self.config['USE_UNIFIED_TRANSFORMER']:
+        if self.config["USE_UNIFIED_TRANSFORMER"]:
             self.unified_transformer = UnifiedTransformer(
-                vocab_size=self.config['UNIFIED_TRANSFORMER_VOCAB_SIZE'],
-                d_model=self.config['UNIFIED_TRANSFORMER_D_MODEL'],
-                num_heads=self.config['UNIFIED_TRANSFORMER_NUM_HEADS'],
-                num_layers=self.config['UNIFIED_TRANSFORMER_NUM_LAYERS'],
-                d_ff=self.config['UNIFIED_TRANSFORMER_D_FF'],
-                max_seq_length=self.config['UNIFIED_TRANSFORMER_MAX_SEQ_LENGTH'],
-                dropout=self.config['UNIFIED_TRANSFORMER_DROPOUT']
+                vocab_size=self.config["UNIFIED_TRANSFORMER_VOCAB_SIZE"],
+                d_model=self.config["UNIFIED_TRANSFORMER_D_MODEL"],
+                num_heads=self.config["UNIFIED_TRANSFORMER_NUM_HEADS"],
+                num_layers=self.config["UNIFIED_TRANSFORMER_NUM_LAYERS"],
+                d_ff=self.config["UNIFIED_TRANSFORMER_D_FF"],
+                max_seq_length=self.config["UNIFIED_TRANSFORMER_MAX_SEQ_LENGTH"],
+                dropout=self.config["UNIFIED_TRANSFORMER_DROPOUT"],
             )
 
     def train(self, data, labels):

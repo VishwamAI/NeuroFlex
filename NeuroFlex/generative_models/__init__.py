@@ -18,30 +18,36 @@ from .cognitive_architecture import CognitiveArchitecture
 from .ddim import DDIMSampler
 
 __all__ = [
-    'GAN',
-    'VAE',
-    'NLPIntegration',
-    'TextToImageGenerator',
-    'LatentDiffusionModel',
-    'CognitiveArchitecture',
-    'DDIMSampler',
-    'get_generative_models_version',
-    'SUPPORTED_GENERATIVE_MODELS',
-    'generate_random_noise',
-    'initialize_generative_models'
+    "GAN",
+    "VAE",
+    "NLPIntegration",
+    "TextToImageGenerator",
+    "LatentDiffusionModel",
+    "CognitiveArchitecture",
+    "DDIMSampler",
+    "get_generative_models_version",
+    "SUPPORTED_GENERATIVE_MODELS",
+    "generate_random_noise",
+    "initialize_generative_models",
 ]
+
 
 def get_generative_models_version():
     return "1.0.0"
 
-SUPPORTED_GENERATIVE_MODELS = ['GAN', 'VAE', 'Diffusion']
+
+SUPPORTED_GENERATIVE_MODELS = ["GAN", "VAE", "Diffusion"]
+
 
 def generate_random_noise(shape):
     import numpy as np
+
     return np.random.normal(0, 1, shape)
+
 
 def initialize_generative_models():
     print("Initializing Generative Models...")
     # Add any necessary initialization code here
+
 
 # Add any other Generative Models-specific utility functions or constants as needed

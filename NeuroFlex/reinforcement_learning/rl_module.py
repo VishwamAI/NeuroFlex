@@ -16,7 +16,10 @@ lam = 0.95
 value_loss_coef = 0.5
 entropy_coef = 0.01
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 class PPOBuffer:
     def __init__(self, size, obs_dim, act_dim):
@@ -28,6 +31,7 @@ class PPOBuffer:
         self.val_buf = torch.zeros(size, dtype=torch.float32)
         self.logp_buf = torch.zeros(size, dtype=torch.float32)
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
+
 
 class PrioritizedReplayBuffer:
     def __init__(self, capacity, obs_dim, act_dim, alpha=0.6):
@@ -72,15 +76,22 @@ class PrioritizedReplayBuffer:
         # Advantage normalization
         adv_mean, adv_std = self.adv_buf.mean(), self.adv_buf.std()
         self.adv_buf = (self.adv_buf - adv_mean) / (adv_std + 1e-8)
-        data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
-                    adv=self.adv_buf, logp=self.logp_buf)
+        data = dict(
+            obs=self.obs_buf,
+            act=self.act_buf,
+            ret=self.ret_buf,
+            adv=self.adv_buf,
+            logp=self.logp_buf,
+        )
         return {k: v for k, v in data.items()}
+
 
 def discount_cumsum(x, discount):
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
+
 def compute_gae(state, buffer, gamma, lam=0.95):
-    values = state.apply_fn({'params': state.params}, buffer.obs_buf)
+    values = state.apply_fn({"params": state.params}, buffer.obs_buf)
     last_gae_lam = 0
     for step in reversed(range(buffer.ptr)):
         if step == buffer.ptr - 1:
@@ -89,10 +100,17 @@ def compute_gae(state, buffer, gamma, lam=0.95):
         else:
             next_non_terminal = 1.0
             next_values = values[step + 1]
-        delta = buffer.rew_buf[step] + gamma * next_values * next_non_terminal - values[step]
-        buffer.adv_buf[step] = last_gae_lam = delta + gamma * lam * next_non_terminal * last_gae_lam
-    buffer.ret_buf[:buffer.ptr] = buffer.adv_buf[:buffer.ptr] + values[:buffer.ptr]
-    return buffer.adv_buf[:buffer.ptr]
+        delta = (
+            buffer.rew_buf[step]
+            + gamma * next_values * next_non_terminal
+            - values[step]
+        )
+        buffer.adv_buf[step] = last_gae_lam = (
+            delta + gamma * lam * next_non_terminal * last_gae_lam
+        )
+    buffer.ret_buf[: buffer.ptr] = buffer.adv_buf[: buffer.ptr] + values[: buffer.ptr]
+    return buffer.adv_buf[: buffer.ptr]
+
 
 class Actor(nn.Module):
     def __init__(self, action_dim: int, features: List[int]):
@@ -101,7 +119,9 @@ class Actor(nn.Module):
         self.features = features
         self.layers = nn.ModuleList()
         for i, feat in enumerate(self.features):
-            self.layers.append(nn.Linear(features[i-1] if i > 0 else features[0], feat))
+            self.layers.append(
+                nn.Linear(features[i - 1] if i > 0 else features[0], feat)
+            )
             self.layers.append(nn.LayerNorm(feat))
             self.layers.append(nn.ReLU())
         self.policy_logits = nn.Linear(features[-1], self.action_dim)
@@ -112,13 +132,16 @@ class Actor(nn.Module):
         logits = self.policy_logits(x)
         return logits
 
+
 class Critic(nn.Module):
     def __init__(self, features: List[int]):
         super(Critic, self).__init__()
         self.features = features
         self.layers = nn.ModuleList()
         for i, feat in enumerate(self.features):
-            self.layers.append(nn.Linear(features[i-1] if i > 0 else features[0], feat))
+            self.layers.append(
+                nn.Linear(features[i - 1] if i > 0 else features[0], feat)
+            )
             self.layers.append(nn.LayerNorm(feat))
             self.layers.append(nn.ReLU())
         self.value = nn.Linear(features[-1], 1)
@@ -128,16 +151,26 @@ class Critic(nn.Module):
             x = layer(x)
         return self.value(x)
 
+
 class RLAgent(nn.Module):
-    def __init__(self, observation_dim: int, action_dim: int, features: List[int] = [256, 256, 256]):
+    def __init__(
+        self,
+        observation_dim: int,
+        action_dim: int,
+        features: List[int] = [256, 256, 256],
+    ):
         super(RLAgent, self).__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.features = features
-        logging.info(f"Setting up RLAgent with observation_dim: {self.observation_dim}, action_dim: {self.action_dim}, features: {self.features}")
+        logging.info(
+            f"Setting up RLAgent with observation_dim: {self.observation_dim}, action_dim: {self.action_dim}, features: {self.features}"
+        )
         self.actor = Actor(self.action_dim, [self.observation_dim] + self.features)
         self.critic = Critic([self.observation_dim] + self.features)
-        logging.info(f"RLAgent setup complete. Actor: {self.actor}, Critic: {self.critic}")
+        logging.info(
+            f"RLAgent setup complete. Actor: {self.actor}, Critic: {self.critic}"
+        )
 
     def forward(self, x):
         logging.debug(f"RLAgent forward pass with input shape: {x.shape}")
@@ -161,16 +194,29 @@ class RLAgent(nn.Module):
         logging.debug(f"Critic params structure: {self.critic.state_dict().keys()}")
 
     def _check_params_structure(self):
-        for submodule in ['actor', 'critic']:
+        for submodule in ["actor", "critic"]:
             if not hasattr(self, submodule):
                 logging.error(f"{submodule} not found in RLAgent")
-                raise ValueError(f"RLAgent initialization did not create {submodule} submodule")
+                raise ValueError(
+                    f"RLAgent initialization did not create {submodule} submodule"
+                )
             if not isinstance(getattr(self, submodule), nn.Module):
-                logging.error(f"{submodule} is not a nn.Module. Type: {type(getattr(self, submodule))}")
-                raise ValueError(f"{submodule} initialization did not return a nn.Module")
-            if not any(name.startswith('0') for name in getattr(self, submodule).state_dict().keys()):
-                logging.error(f"First layer not found in {submodule} params. Keys: {getattr(self, submodule).state_dict().keys()}")
-                raise ValueError(f"{submodule} initialization did not create expected layer structure")
+                logging.error(
+                    f"{submodule} is not a nn.Module. Type: {type(getattr(self, submodule))}"
+                )
+                raise ValueError(
+                    f"{submodule} initialization did not return a nn.Module"
+                )
+            if not any(
+                name.startswith("0")
+                for name in getattr(self, submodule).state_dict().keys()
+            ):
+                logging.error(
+                    f"First layer not found in {submodule} params. Keys: {getattr(self, submodule).state_dict().keys()}"
+                )
+                raise ValueError(
+                    f"{submodule} initialization did not create expected layer structure"
+                )
 
     @property
     def actor_params(self):
@@ -179,6 +225,7 @@ class RLAgent(nn.Module):
     @property
     def critic_params(self):
         return self.critic.state_dict()
+
 
 class RLEnvironment:
     def __init__(self, env_name: str, seed: int = 42):
@@ -200,19 +247,26 @@ class RLEnvironment:
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.episode_step += 1
         done = terminated or truncated or (self.episode_step >= self.max_episode_steps)
-        logging.debug(f"Step {self.episode_step}: Action={action}, Reward={reward}, Done={done}")
+        logging.debug(
+            f"Step {self.episode_step}: Action={action}, Reward={reward}, Done={done}"
+        )
         return torch.tensor(obs, dtype=torch.float32), reward, done, truncated, info
 
     def is_episode_done(self, done: bool, truncated: bool) -> bool:
-        episode_done = done or truncated or (self.episode_step >= self.max_episode_steps)
+        episode_done = (
+            done or truncated or (self.episode_step >= self.max_episode_steps)
+        )
         if episode_done:
             logging.info(f"Episode completed after {self.episode_step} steps.")
         return episode_done
 
+
 def create_train_state(model, dummy_input, optimizer):
     if isinstance(dummy_input, tuple):
         dummy_input = dummy_input[0]  # Extract observation from tuple
-    dummy_input = torch.tensor(dummy_input, dtype=torch.float32)  # Ensure input is a PyTorch tensor
+    dummy_input = torch.tensor(
+        dummy_input, dtype=torch.float32
+    )  # Ensure input is a PyTorch tensor
     logging.info(f"Creating train state with dummy input shape: {dummy_input.shape}")
 
     try:
@@ -226,32 +280,44 @@ def create_train_state(model, dummy_input, optimizer):
         raise ValueError(f"Failed to initialize model: {str(e)}")
 
     params = {name: param for name, param in model.named_parameters()}
-    logging.info(f"Initial params structure: {[(name, param.shape) for name, param in params.items()]}")
+    logging.info(
+        f"Initial params structure: {[(name, param.shape) for name, param in params.items()]}"
+    )
 
     if not isinstance(params, dict):
         logging.error(f"Params is not a dictionary. Type: {type(params)}")
         raise ValueError("Model initialization did not return a dictionary for params")
 
-    if not hasattr(model, 'actor') or not hasattr(model, 'critic'):
+    if not hasattr(model, "actor") or not hasattr(model, "critic"):
         logging.error("Missing 'actor' or 'critic' in model.")
         raise ValueError("Model does not have 'actor' and 'critic' submodules")
 
-    logging.info(f"Actor params structure: {[(name, param.shape) for name, param in model.actor.named_parameters()]}")
-    logging.info(f"Critic params structure: {[(name, param.shape) for name, param in model.critic.named_parameters()]}")
+    logging.info(
+        f"Actor params structure: {[(name, param.shape) for name, param in model.actor.named_parameters()]}"
+    )
+    logging.info(
+        f"Critic params structure: {[(name, param.shape) for name, param in model.critic.named_parameters()]}"
+    )
 
     # Add assertions to ensure 'actor' and 'critic' are properly structured
-    assert isinstance(model.actor, torch.nn.Module), f"'actor' should be a torch.nn.Module, got {type(model.actor)}"
-    assert isinstance(model.critic, torch.nn.Module), f"'critic' should be a torch.nn.Module, got {type(model.critic)}"
+    assert isinstance(
+        model.actor, torch.nn.Module
+    ), f"'actor' should be a torch.nn.Module, got {type(model.actor)}"
+    assert isinstance(
+        model.critic, torch.nn.Module
+    ), f"'critic' should be a torch.nn.Module, got {type(model.critic)}"
 
     try:
         # Create separate optimizers for actor and critic
         optimizer_actor = optimizer(model.actor.parameters())
         optimizer_critic = optimizer(model.critic.parameters())
-        logging.info(f"Optimizer structure - Actor: {optimizer_actor}, Critic: {optimizer_critic}")
+        logging.info(
+            f"Optimizer structure - Actor: {optimizer_actor}, Critic: {optimizer_critic}"
+        )
 
         state = {
-            'model': model,
-            'optimizer': {'actor': optimizer_actor, 'critic': optimizer_critic}
+            "model": model,
+            "optimizer": {"actor": optimizer_actor, "critic": optimizer_critic},
         }
         logging.info("Train state created successfully")
         logging.debug(f"Train state structure: {state}")
@@ -262,19 +328,33 @@ def create_train_state(model, dummy_input, optimizer):
         raise ValueError(f"Failed to create train state: {str(e)}")
 
     logging.info(f"Created train state with model structure: {model}")
-    logging.debug(f"Actor params in state: {[(name, param.shape) for name, param in model.actor.named_parameters()]}")
-    logging.debug(f"Critic params in state: {[(name, param.shape) for name, param in model.critic.named_parameters()]}")
+    logging.debug(
+        f"Actor params in state: {[(name, param.shape) for name, param in model.actor.named_parameters()]}"
+    )
+    logging.debug(
+        f"Critic params in state: {[(name, param.shape) for name, param in model.critic.named_parameters()]}"
+    )
     logging.debug(f"Full state structure: {state}")
 
-    logging.info("Train state creation successful with proper 'actor' and 'critic' submodules")
+    logging.info(
+        "Train state creation successful with proper 'actor' and 'critic' submodules"
+    )
 
     return state
 
-def select_action(model: nn.Module, observation: torch.Tensor, epsilon: float = 0.0, training: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+
+def select_action(
+    model: nn.Module,
+    observation: torch.Tensor,
+    epsilon: float = 0.0,
+    training: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     logging.info(f"Selecting action for observation shape: {observation.shape}")
 
     try:
-        logging.debug(f"Applying actor forward pass with observation shape: {observation.unsqueeze(0).shape}")
+        logging.debug(
+            f"Applying actor forward pass with observation shape: {observation.unsqueeze(0).shape}"
+        )
 
         with torch.no_grad():
             logits = model.actor(observation.unsqueeze(0))
@@ -294,11 +374,17 @@ def select_action(model: nn.Module, observation: torch.Tensor, epsilon: float = 
         logging.error(f"Observation: {observation}")
         raise RuntimeError(f"Actor forward pass failed: {str(e)}") from e
 
+
 from typing import Dict, Generator, Any
 
-def get_minibatches(data: Dict[str, torch.Tensor], batch_size: int) -> Generator[Dict[str, torch.Tensor], None, None]:
-    data_size = len(data['obs'])
-    assert all(len(v) == data_size for v in data.values()), "All tensors must have the same length"
+
+def get_minibatches(
+    data: Dict[str, torch.Tensor], batch_size: int
+) -> Generator[Dict[str, torch.Tensor], None, None]:
+    data_size = len(data["obs"])
+    assert all(
+        len(v) == data_size for v in data.values()
+    ), "All tensors must have the same length"
     indices = torch.randperm(data_size)
     start_idx = 0
     while start_idx < data_size:
@@ -306,6 +392,7 @@ def get_minibatches(data: Dict[str, torch.Tensor], batch_size: int) -> Generator
         batch_indices = indices[start_idx:end_idx]
         yield {k: v[batch_indices] for k, v in data.items()}
         start_idx += batch_size
+
 
 def train_rl_agent(
     agent: RLAgent,
@@ -339,27 +426,43 @@ def train_rl_agent(
         dummy_obs, _ = env.reset()
         dummy_obs = torch.tensor(dummy_obs, dtype=torch.float32)
         optimizer = optim.Adam(agent.parameters(), lr=learning_rate)
-        buffer = PPOBuffer(buffer_size, env.observation_space.shape, env.action_space.shape)
+        buffer = PPOBuffer(
+            buffer_size, env.observation_space.shape, env.action_space.shape
+        )
         logging.info(f"Initialized agent and PPO buffer with size {buffer_size}")
         logging.info(f"Agent architecture: {agent}")
-        logging.info(f"Training parameters: LR={learning_rate}, Gamma={gamma}, Clip ratio={clip_ratio}")
-        logging.info(f"Episodes={num_episodes}, Max steps={max_steps}, Batch size={batch_size}")
+        logging.info(
+            f"Training parameters: LR={learning_rate}, Gamma={gamma}, Clip ratio={clip_ratio}"
+        )
+        logging.info(
+            f"Episodes={num_episodes}, Max steps={max_steps}, Batch size={batch_size}"
+        )
     except Exception as e:
         logging.error(f"Error initializing PPO agent: {str(e)}")
         raise RuntimeError(f"Failed to initialize PPO agent: {str(e)}")
 
     def update_ppo(agent: RLAgent, batch: Dict[str, torch.Tensor]):
-        pi, v = agent(batch['obs'])
-        log_prob = torch.nn.functional.log_softmax(pi, dim=-1).gather(1, batch['act'].unsqueeze(-1)).squeeze(-1)
-        ratio = torch.exp(log_prob - batch['logp'])
-        clip_adv = torch.clamp(ratio, 1-clip_ratio, 1+clip_ratio) * batch['adv']
-        policy_loss = -torch.mean(torch.min(ratio * batch['adv'], clip_adv))
+        pi, v = agent(batch["obs"])
+        log_prob = (
+            torch.nn.functional.log_softmax(pi, dim=-1)
+            .gather(1, batch["act"].unsqueeze(-1))
+            .squeeze(-1)
+        )
+        ratio = torch.exp(log_prob - batch["logp"])
+        clip_adv = torch.clamp(ratio, 1 - clip_ratio, 1 + clip_ratio) * batch["adv"]
+        policy_loss = -torch.mean(torch.min(ratio * batch["adv"], clip_adv))
 
         value_pred = v.squeeze(-1)
-        value_loss = 0.5 * torch.mean((value_pred - batch['ret'])**2)
+        value_loss = 0.5 * torch.mean((value_pred - batch["ret"]) ** 2)
 
-        entropy = -torch.mean(torch.sum(torch.nn.functional.softmax(pi, dim=-1) * torch.nn.functional.log_softmax(pi, dim=-1), dim=-1))
-        kl = torch.mean(batch['logp'] - log_prob)
+        entropy = -torch.mean(
+            torch.sum(
+                torch.nn.functional.softmax(pi, dim=-1)
+                * torch.nn.functional.log_softmax(pi, dim=-1),
+                dim=-1,
+            )
+        )
+        kl = torch.mean(batch["logp"] - log_prob)
 
         total_loss = policy_loss + value_loss_coef * value_loss - entropy_coef * entropy
 
@@ -370,14 +473,21 @@ def train_rl_agent(
         return policy_loss.item(), value_loss.item(), kl.item(), entropy.item()
 
     episode_rewards = []
-    best_average_reward = float('-inf')
+    best_average_reward = float("-inf")
     episodes_without_improvement = 0
     solved = False
     errors = []
-    training_info = {'policy_loss_history': [], 'value_loss_history': [], 'kl_history': [],
-                     'episode_lengths': [], 'reward_history': []}
+    training_info = {
+        "policy_loss_history": [],
+        "value_loss_history": [],
+        "kl_history": [],
+        "episode_lengths": [],
+        "reward_history": [],
+    }
 
-    logging.info(f"Starting training for {num_episodes} episodes, max {max_steps} steps per episode")
+    logging.info(
+        f"Starting training for {num_episodes} episodes, max {max_steps} steps per episode"
+    )
     try:
         for episode in range(num_episodes):
             obs, _ = env.reset()
@@ -385,29 +495,41 @@ def train_rl_agent(
             episode_length = 0
 
             for step in range(max_steps):
-                action, log_prob = agent.select_action(torch.tensor(obs, dtype=torch.float32))
+                action, log_prob = agent.select_action(
+                    torch.tensor(obs, dtype=torch.float32)
+                )
                 next_obs, reward, done, truncated, _ = env.step(action.item())
 
                 episode_reward += reward
                 episode_length += 1
 
-                value = agent.critic(torch.tensor(obs, dtype=torch.float32).unsqueeze(0)).squeeze()
+                value = agent.critic(
+                    torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+                ).squeeze()
                 buffer.add(obs, action, reward, value, log_prob)
 
                 if buffer.ptr == buffer.max_size:
-                    last_val = agent.critic(torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)).squeeze()
+                    last_val = agent.critic(
+                        torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)
+                    ).squeeze()
                     buffer.finish_path(last_val)
                     data = buffer.get()
                     for _ in range(n_epochs):
                         for mini_batch in get_minibatches(data, batch_size):
-                            policy_loss, value_loss, kl, entropy = update_ppo(agent, mini_batch)
-                            training_info['policy_loss_history'].append(policy_loss)
-                            training_info['value_loss_history'].append(value_loss)
-                            training_info['kl_history'].append(kl)
+                            policy_loss, value_loss, kl, entropy = update_ppo(
+                                agent, mini_batch
+                            )
+                            training_info["policy_loss_history"].append(policy_loss)
+                            training_info["value_loss_history"].append(value_loss)
+                            training_info["kl_history"].append(kl)
                             if kl > 1.5 * target_kl:
-                                logging.info(f"Early stopping at step {step}, epoch {_} due to reaching max KL.")
+                                logging.info(
+                                    f"Early stopping at step {step}, epoch {_} due to reaching max KL."
+                                )
                                 break
-                    buffer = PPOBuffer(buffer_size, env.observation_space.shape, env.action_space.shape)
+                    buffer = PPOBuffer(
+                        buffer_size, env.observation_space.shape, env.action_space.shape
+                    )
 
                 obs = next_obs
                 if done or truncated:
@@ -416,11 +538,13 @@ def train_rl_agent(
             episode_rewards.append(episode_reward)
             avg_reward = sum(episode_rewards[-100:]) / min(len(episode_rewards), 100)
 
-            logging.info(f"Episode {episode + 1}/{num_episodes}, Steps: {episode_length}, "
-                         f"Reward: {episode_reward:.2f}, Avg Reward: {avg_reward:.2f}")
+            logging.info(
+                f"Episode {episode + 1}/{num_episodes}, Steps: {episode_length}, "
+                f"Reward: {episode_reward:.2f}, Avg Reward: {avg_reward:.2f}"
+            )
 
-            training_info['reward_history'].append(episode_reward)
-            training_info['episode_lengths'].append(episode_length)
+            training_info["reward_history"].append(episode_reward)
+            training_info["episode_lengths"].append(episode_length)
 
             if avg_reward > best_average_reward * improvement_threshold:
                 best_average_reward = avg_reward
@@ -430,59 +554,86 @@ def train_rl_agent(
 
             # Early stopping checks
             if avg_reward >= early_stop_threshold and episode >= min_episodes:
-                validation_rewards = run_validation(agent, env, validation_episodes, max_steps)
+                validation_rewards = run_validation(
+                    agent, env, validation_episodes, max_steps
+                )
                 val_avg_reward = sum(validation_rewards) / validation_episodes
                 val_std_reward = torch.tensor(validation_rewards).std().item()
-                if val_avg_reward >= validation_threshold and val_std_reward < early_stop_threshold * 0.25:
-                    logging.info(f"Environment solved! Validation avg: {val_avg_reward:.2f}, std: {val_std_reward:.2f}")
+                if (
+                    val_avg_reward >= validation_threshold
+                    and val_std_reward < early_stop_threshold * 0.25
+                ):
+                    logging.info(
+                        f"Environment solved! Validation avg: {val_avg_reward:.2f}, std: {val_std_reward:.2f}"
+                    )
                     solved = True
-                    training_info['early_stop_reason'] = 'solved'
+                    training_info["early_stop_reason"] = "solved"
                     break
                 else:
-                    logging.info(f"Validation failed. Avg: {val_avg_reward:.2f}, std: {val_std_reward:.2f}")
+                    logging.info(
+                        f"Validation failed. Avg: {val_avg_reward:.2f}, std: {val_std_reward:.2f}"
+                    )
                     episodes_without_improvement = 0
 
             if episodes_without_improvement >= early_stop_episodes:
-                logging.info(f"Early stopping: no improvement for {early_stop_episodes} episodes")
-                training_info['early_stop_reason'] = 'no_improvement'
+                logging.info(
+                    f"Early stopping: no improvement for {early_stop_episodes} episodes"
+                )
+                training_info["early_stop_reason"] = "no_improvement"
                 break
 
             if episodes_without_improvement >= max_episodes_without_improvement:
-                logging.warning(f"No improvement for {max_episodes_without_improvement} episodes. Stopping.")
-                training_info['early_stop_reason'] = 'max_episodes_without_improvement'
+                logging.warning(
+                    f"No improvement for {max_episodes_without_improvement} episodes. Stopping."
+                )
+                training_info["early_stop_reason"] = "max_episodes_without_improvement"
                 break
 
             if time.time() - start_time > max_training_time:
-                logging.warning(f"Maximum training time of {max_training_time} seconds reached. Stopping.")
-                training_info['early_stop_reason'] = 'max_training_time_reached'
+                logging.warning(
+                    f"Maximum training time of {max_training_time} seconds reached. Stopping."
+                )
+                training_info["early_stop_reason"] = "max_training_time_reached"
                 break
 
     except Exception as e:
         logging.error(f"Unexpected error during training: {str(e)}")
         logging.error(f"Current episode: {episode}")
         errors.append(f"Training error: {str(e)}")
-        training_info['training_stopped_early'] = True
+        training_info["training_stopped_early"] = True
 
     if not episode_rewards:
         raise ValueError("No episodes completed successfully")
 
-    logging_message = "Training completed successfully" if solved else "Training completed without solving"
+    logging_message = (
+        "Training completed successfully"
+        if solved
+        else "Training completed without solving"
+    )
     logging.info(f"{logging_message}. Best average reward: {best_average_reward:.2f}")
 
-    training_info.update({
-        'best_average_reward': best_average_reward,
-        'total_episodes': episode + 1,
-        'solved': solved,
-        'errors': errors,
-        'validation_rewards': validation_rewards if 'validation_rewards' in locals() else None,
-        'training_stopped_early': episodes_without_improvement >= max_episodes_without_improvement,
-        'total_training_time': time.time() - start_time
-    })
+    training_info.update(
+        {
+            "best_average_reward": best_average_reward,
+            "total_episodes": episode + 1,
+            "solved": solved,
+            "errors": errors,
+            "validation_rewards": (
+                validation_rewards if "validation_rewards" in locals() else None
+            ),
+            "training_stopped_early": episodes_without_improvement
+            >= max_episodes_without_improvement,
+            "total_training_time": time.time() - start_time,
+        }
+    )
 
     logging.info("Training completed. Returning results.")
     return agent, episode_rewards, training_info
 
-def run_validation(agent: RLAgent, env: RLEnvironment, num_episodes: int, max_steps: int) -> List[float]:
+
+def run_validation(
+    agent: RLAgent, env: RLEnvironment, num_episodes: int, max_steps: int
+) -> List[float]:
     validation_rewards = []
     for _ in range(num_episodes):
         obs, _ = env.reset()
@@ -496,8 +647,16 @@ def run_validation(agent: RLAgent, env: RLEnvironment, num_episodes: int, max_st
         validation_rewards.append(episode_reward)
     return validation_rewards
 
+
 class PrioritizedReplayBuffer:
-    def __init__(self, capacity: int, obs_dim: Tuple[int, ...], act_dim: Tuple[int, ...], batch_size: int = 32, alpha: float = 0.6):
+    def __init__(
+        self,
+        capacity: int,
+        obs_dim: Tuple[int, ...],
+        act_dim: Tuple[int, ...],
+        batch_size: int = 32,
+        alpha: float = 0.6,
+    ):
         self.capacity = capacity
         self.batch_size = batch_size
         self.alpha = alpha
@@ -526,7 +685,7 @@ class PrioritizedReplayBuffer:
             return None
 
         batch_size = batch_size or self.batch_size
-        priorities = self.priorities[:self.size]
+        priorities = self.priorities[: self.size]
         probabilities = priorities.pow(self.alpha)
         probabilities /= probabilities.sum()
 
@@ -535,13 +694,13 @@ class PrioritizedReplayBuffer:
         weights /= weights.max()
 
         return {
-            'observations': self.obs_buf[indices],
-            'actions': self.act_buf[indices],
-            'rewards': self.rew_buf[indices],
-            'next_observations': self.next_obs_buf[indices],
-            'dones': self.done_buf[indices],
-            'indices': indices,
-            'weights': weights
+            "observations": self.obs_buf[indices],
+            "actions": self.act_buf[indices],
+            "rewards": self.rew_buf[indices],
+            "next_observations": self.next_obs_buf[indices],
+            "dones": self.done_buf[indices],
+            "indices": indices,
+            "weights": weights,
         }
 
     def update_priorities(self, indices, priorities):

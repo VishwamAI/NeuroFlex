@@ -5,8 +5,15 @@ import numpy as np
 import time
 from typing import Dict, Tuple
 
+
 class CDSTDP(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int, learning_rate: float = 0.001):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        learning_rate: float = 0.001,
+    ):
         super(CDSTDP, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -35,27 +42,43 @@ class CDSTDP(nn.Module):
         x = self.output_layer(x)
         return x
 
-    def update_synaptic_weights(self, pre_synaptic: torch.Tensor, post_synaptic: torch.Tensor, dopamine: float):
+    def update_synaptic_weights(
+        self, pre_synaptic: torch.Tensor, post_synaptic: torch.Tensor, dopamine: float
+    ):
         # Ensure pre_synaptic and post_synaptic have the same batch size
         assert pre_synaptic.size(0) == post_synaptic.size(0), "Batch sizes must match"
 
         # Implement STDP rule
         time_window = 21  # -10 to 10, inclusive
-        delta_t = torch.arange(-10, 11).unsqueeze(0).unsqueeze(1).unsqueeze(2).repeat(
-            pre_synaptic.size(0), pre_synaptic.size(1), post_synaptic.size(1), 1
+        delta_t = (
+            torch.arange(-10, 11)
+            .unsqueeze(0)
+            .unsqueeze(1)
+            .unsqueeze(2)
+            .repeat(
+                pre_synaptic.size(0), pre_synaptic.size(1), post_synaptic.size(1), 1
+            )
         )
         stdp = torch.where(
             delta_t > 0,
             torch.exp(-delta_t / 20.0) * 0.1,
-            torch.exp(delta_t / 20.0) * -0.12
+            torch.exp(delta_t / 20.0) * -0.12,
         )
 
         # Modulate STDP by dopamine
         modulated_stdp = stdp * dopamine
 
         # Compute weight updates
-        pre_expanded = pre_synaptic.unsqueeze(2).unsqueeze(3).expand(-1, -1, post_synaptic.size(1), time_window)
-        post_expanded = post_synaptic.unsqueeze(1).unsqueeze(3).expand(-1, pre_synaptic.size(1), -1, time_window)
+        pre_expanded = (
+            pre_synaptic.unsqueeze(2)
+            .unsqueeze(3)
+            .expand(-1, -1, post_synaptic.size(1), time_window)
+        )
+        post_expanded = (
+            post_synaptic.unsqueeze(1)
+            .unsqueeze(3)
+            .expand(-1, pre_synaptic.size(1), -1, time_window)
+        )
         dw = (pre_expanded * post_expanded * modulated_stdp).sum(dim=3)
 
         # Update synaptic weights
@@ -80,9 +103,12 @@ class CDSTDP(nn.Module):
         current_time = time.time()
         issues = {
             "low_performance": self.performance < 0.8,
-            "stagnant_performance": len(self.performance_history) > 10 and
-                                    np.mean(self.performance_history[-10:]) < np.mean(self.performance_history[-20:-10]),
-            "needs_update": (current_time - self.last_update > 86400)  # 24 hours in seconds
+            "stagnant_performance": len(self.performance_history) > 10
+            and np.mean(self.performance_history[-10:])
+            < np.mean(self.performance_history[-20:-10]),
+            "needs_update": (
+                current_time - self.last_update > 86400
+            ),  # 24 hours in seconds
         }
         return issues
 
@@ -91,7 +117,7 @@ class CDSTDP(nn.Module):
         if issues["low_performance"] or issues["stagnant_performance"]:
             # Increase learning rate temporarily
             for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.learning_rate * 2
+                param_group["lr"] = self.learning_rate * 2
 
             # Perform additional training
             for _ in range(100):
@@ -99,7 +125,7 @@ class CDSTDP(nn.Module):
 
             # Reset learning rate
             for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.learning_rate
+                param_group["lr"] = self.learning_rate
 
         if issues["needs_update"]:
             self.last_update = time.time()
@@ -111,8 +137,13 @@ class CDSTDP(nn.Module):
         with torch.no_grad():
             outputs = self(inputs)
             loss = nn.functional.mse_loss(outputs, targets)
-        performance = 1.0 / (1.0 + loss.item())  # Convert loss to performance metric (0 to 1)
+        performance = 1.0 / (
+            1.0 + loss.item()
+        )  # Convert loss to performance metric (0 to 1)
         return performance
 
-def create_cdstdp(input_size: int, hidden_size: int, output_size: int, learning_rate: float = 0.001) -> CDSTDP:
+
+def create_cdstdp(
+    input_size: int, hidden_size: int, output_size: int, learning_rate: float = 0.001
+) -> CDSTDP:
     return CDSTDP(input_size, hidden_size, output_size, learning_rate)

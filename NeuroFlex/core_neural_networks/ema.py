@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+
 class LitEma(nn.Module):
     def __init__(self, model, decay=0.9999, use_num_updates=True):
         super().__init__()

@@ -4,14 +4,15 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-def setup_logging(log_dir='logs', log_level=logging.INFO):
+
+def setup_logging(log_dir="logs", log_level=logging.INFO):
     """
     Set up logging configuration for the NeuroFlex project.
-    
+
     Args:
     log_dir (str): Directory to store log files
     log_level (int): Logging level (e.g., logging.INFO, logging.DEBUG)
-    
+
     Returns:
     logger: Configured logger object
     """
@@ -20,20 +21,24 @@ def setup_logging(log_dir='logs', log_level=logging.INFO):
         os.makedirs(log_dir)
 
     # Create logger
-    logger = logging.getLogger('NeuroFlex')
+    logger = logging.getLogger("NeuroFlex")
     logger.setLevel(log_level)
 
     # Create handlers
     console_handler = logging.StreamHandler()
     file_handler = RotatingFileHandler(
-        os.path.join(log_dir, 'neuroflex.log'),
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        os.path.join(log_dir, "neuroflex.log"),
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
     )
 
     # Create formatters
-    console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    console_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+    )
 
     # Set formatters for handlers
     console_handler.setFormatter(console_formatter)
@@ -44,6 +49,7 @@ def setup_logging(log_dir='logs', log_level=logging.INFO):
     logger.addHandler(file_handler)
 
     return logger
+
 
 # Example usage
 if __name__ == "__main__":

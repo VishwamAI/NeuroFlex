@@ -4,24 +4,32 @@ import numpy as np
 import time
 from unittest.mock import patch, MagicMock
 from NeuroFlex.edge_ai.neuromorphic_computing import NeuromorphicComputing
-from NeuroFlex.constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
+from NeuroFlex.constants import (
+    PERFORMANCE_THRESHOLD,
+    UPDATE_INTERVAL,
+    LEARNING_RATE_ADJUSTMENT,
+    MAX_HEALING_ATTEMPTS,
+)
+
 
 class TestNeuromorphicComputing(unittest.TestCase):
     def setUp(self):
         self.nc = NeuromorphicComputing()
 
     def test_create_spiking_neural_network(self):
-        lif_network = self.nc.create_spiking_neural_network('LIF', num_neurons=100)
+        lif_network = self.nc.create_spiking_neural_network("LIF", num_neurons=100)
         self.assertIsInstance(lif_network, torch.nn.Module)
 
-        izhikevich_network = self.nc.create_spiking_neural_network('Izhikevich', num_neurons=50)
+        izhikevich_network = self.nc.create_spiking_neural_network(
+            "Izhikevich", num_neurons=50
+        )
         self.assertIsInstance(izhikevich_network, torch.nn.Module)
 
         with self.assertRaises(ValueError):
-            self.nc.create_spiking_neural_network('InvalidModel', num_neurons=10)
+            self.nc.create_spiking_neural_network("InvalidModel", num_neurons=10)
 
     def test_simulate_network(self):
-        network = self.nc.create_spiking_neural_network('LIF', num_neurons=100)
+        network = self.nc.create_spiking_neural_network("LIF", num_neurons=100)
         input_data = torch.randn(1, 100)
         output = self.nc.simulate_network(network, input_data, simulation_time=1000)
         self.assertEqual(output.shape, (1, 100))
@@ -38,7 +46,7 @@ class TestNeuromorphicComputing(unittest.TestCase):
             self.nc._update_performance(torch.tensor([0.5]))
         self.assertEqual(len(self.nc.performance_history), 100)
 
-    @patch('NeuroFlex.edge_ai.neuromorphic_computing.NeuromorphicComputing._self_heal')
+    @patch("NeuroFlex.edge_ai.neuromorphic_computing.NeuromorphicComputing._self_heal")
     def test_update_performance_triggers_self_heal(self, mock_self_heal):
         self.nc.performance = PERFORMANCE_THRESHOLD - 0.1
         output = torch.tensor([PERFORMANCE_THRESHOLD - 0.1])
@@ -86,7 +94,9 @@ class TestNeuromorphicComputing(unittest.TestCase):
         self.assertEqual(len(issues), 3)
         self.assertTrue(any("Low performance" in issue for issue in issues))
         self.assertTrue(any("Long time since last update" in issue for issue in issues))
-        self.assertTrue(any("Consistently low performance" in issue for issue in issues))
+        self.assertTrue(
+            any("Consistently low performance" in issue for issue in issues)
+        )
 
         # Test with good performance
         self.nc.performance = PERFORMANCE_THRESHOLD + 0.1
@@ -95,5 +105,6 @@ class TestNeuromorphicComputing(unittest.TestCase):
         issues = self.nc.diagnose()
         self.assertEqual(len(issues), 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
