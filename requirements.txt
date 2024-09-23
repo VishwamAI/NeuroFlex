@@ -153,7 +153,6 @@ zipp
 PyQt5
 einops
 prophet
-psutil
 aif360
 mne
 PyWavelets

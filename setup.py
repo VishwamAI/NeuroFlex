@@ -30,7 +30,7 @@ setup(
         "aiohappyeyeballs",
         "aiohttp",
         "aiosignal",
-        "alphafold",
+        "git+https://github.com/google-deepmind/alphafold.git",
         "appdirs",
         "astunparse",
         "attrs",
@@ -182,6 +182,9 @@ setup(
         "prophet",
         "psutil",
         "aif360",
+        "mne",
+        "PyWavelets",
+        "filterpy",
     ],
     extras_require={
         'dev': [
