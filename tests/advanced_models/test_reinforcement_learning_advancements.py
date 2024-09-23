@@ -68,7 +68,8 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
         self.assertEqual(agent.action_dim, env.action_space.n)
 
     @patch(
-        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.AdvancedRLAgent"
+        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements."
+        "AdvancedRLAgent"
     )
     def test_train_multi_agent_rl(self, mock_agent_class):
         mock_agent = MagicMock()
@@ -106,7 +107,8 @@ class TestReinforcementLearningAdvancements(unittest.TestCase):
             self.assertGreater(agent.update.call_count, 0)
 
     @patch(
-        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements.train_multi_agent_rl"
+        "NeuroFlex.reinforcement_learning.reinforcement_learning_advancements."
+        "train_multi_agent_rl"
     )
     def test_advanced_rl_training(self, mock_train):
         mock_train.return_value = [
