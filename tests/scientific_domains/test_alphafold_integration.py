@@ -1,5 +1,6 @@
 import unittest
 import pytest
+import random
 from unittest.mock import patch, MagicMock
 import ml_collections
 import sys
