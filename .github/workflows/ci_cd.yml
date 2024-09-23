@@ -21,7 +21,7 @@ jobs:
           pip install flake8
       - name: Run linter
         run: |
-          flake8 --ignore E402,W503 --max-line-length 88 .
+          flake8 .
   test:
     runs-on: ubuntu-latest
     needs: lint
