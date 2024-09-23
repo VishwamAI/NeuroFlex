@@ -315,6 +315,7 @@ class NeuroFlex:
         self.security_agent = None
         self.optimizer = None
         self.loss_fn = None
+        self.performance = {}  # Initialize performance attribute as an empty dictionary
         self.self_curing_algorithm = SelfCuringAlgorithm(self)
 
     def _setup_core_model(self):
