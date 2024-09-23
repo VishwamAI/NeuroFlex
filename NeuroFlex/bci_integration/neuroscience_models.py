@@ -90,9 +90,9 @@ class LSTMNetwork(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        lstm_cell = nn.LSTMCell(features=self.hidden_size)
+        lstm_cell = nn.LSTMCell()
         batch_size, seq_len, _ = x.shape
-        carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,))
+        carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,), self.hidden_size)
 
         outputs = []
         for i in range(seq_len):
