@@ -62,7 +62,8 @@ class TestSecurityIntegration(unittest.TestCase):
                 if self.model.bioinformatics_data:
                     logging.info("Bioinformatics data is set in the model")
                     logging.debug(
-                        f"Bioinformatics data keys: {self.model.bioinformatics_data.keys()}"
+                        f"Bioinformatics data keys: "
+                        f"{self.model.bioinformatics_data.keys()}"
                     )
                 else:
                     logging.error("Bioinformatics data is not set in the model")
@@ -70,11 +71,13 @@ class TestSecurityIntegration(unittest.TestCase):
                 # Verify that the merged_bio_data.nc file was created
                 if os.path.exists(self.merged_bio_data_path):
                     logging.info(
-                        f"merged_bio_data.nc file created at {self.merged_bio_data_path}"
+                        f"merged_bio_data.nc file created at "
+                        f"{self.merged_bio_data_path}"
                     )
                 else:
                     logging.error(
-                        f"merged_bio_data.nc file not found at {self.merged_bio_data_path}"
+                        f"merged_bio_data.nc file not found at "
+                        f"{self.merged_bio_data_path}"
                     )
             except Exception as e:
                 logging.error(f"Error loading bioinformatics data: {str(e)}")
@@ -121,7 +124,7 @@ class TestSecurityIntegration(unittest.TestCase):
             # Simulate training process
             batch_size = 32  # Define a batch size
             for i in range(0, len(train_data), batch_size):
-                batch = train_data[i : i + batch_size]
+                batch = train_data[i:i + batch_size]
                 inputs = np.array([x[0] for x in batch])
                 targets = np.array([x[1] for x in batch])
                 model.update((inputs, targets))
