@@ -106,16 +106,12 @@ class TestSecurityIntegration(unittest.TestCase):
     def test_security_integration_in_training(self, mock_agent):
         mock_agent.return_value.security_check.return_value = None
         mock_agent.return_value.threat_detector.detect_threat.return_value = False
-        mock_agent.return_value.evaluate_fairness.return_value = {
-            "disparate_impact": 0.9
-        }
+        mock_agent.return_value.evaluate_fairness.return_value = {"disparate_impact": 0.9}
 
         self.model._setup_security_agent()
 
         # Mock training data
-        train_data = [
-            (np.random.rand(784), np.random.randint(10)) for _ in range(100)
-        ]  # 784 features (28x28x1 flattened), with random labels
+        train_data = [(np.random.rand(784), np.random.randint(10)) for _ in range(100)]
         val_data = [(np.random.rand(784), np.random.randint(10)) for _ in range(20)]
 
         def mock_train_function(model, train_data, val_data):
@@ -123,9 +119,7 @@ class TestSecurityIntegration(unittest.TestCase):
             batch_size = 32  # Define a batch size
             for i in range(0, len(train_data), batch_size):
                 batch = train_data[i : i + batch_size]
-                inputs = np.array(
-                    [x[0] for x in batch]
-                )  # Already in shape (batch_size, 784)
+                inputs = np.array([x[0] for x in batch])
                 targets = np.array([x[1] for x in batch])
                 model.update((inputs, targets))
             return None, model
@@ -133,7 +127,7 @@ class TestSecurityIntegration(unittest.TestCase):
         with patch(
             "NeuroFlex.core_neural_networks.model.train_neuroflex_model",
             side_effect=mock_train_function,
-        ) as mock_train:
+        ):
             trained_state, trained_model = train_neuroflex_model(
                 self.model, train_data, val_data
             )
