@@ -15,8 +15,6 @@ from NeuroFlex.constants import (
     LEARNING_RATE_ADJUSTMENT,
     MAX_HEALING_ATTEMPTS,
 )
-from torch.nn.functional import mse_loss
-from torch.optim import Adam
 
 
 class TestMultiModalLearning(unittest.TestCase):
