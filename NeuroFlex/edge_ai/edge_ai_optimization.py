@@ -230,12 +230,15 @@ class EdgeAIOptimization:
             with torch.no_grad():
                 outputs = model(test_data)
                 _, predicted = torch.max(outputs, 1)
-                accuracy = (predicted == torch.zeros(test_data.size(0), device=device)).sum().item() / test_data.size(0)
+                # Generate random labels for consistency in accuracy calculation
+                random_labels = torch.randint(0, outputs.size(1), (test_data.size(0),), device=device)
+                accuracy = (predicted == random_labels).float().mean().item()
 
             # Measure latency
             start_time = time.perf_counter()
             for _ in range(10):  # Run multiple times for more accurate measurement
-                model(test_data)
+                with torch.no_grad():
+                    model(test_data)
             end_time = time.perf_counter()
             latency = (end_time - start_time) / 10  # Average latency in seconds
 
