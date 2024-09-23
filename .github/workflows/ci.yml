@@ -7,30 +7,54 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10']
-
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: 3.8
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install flake8 pytest
-    - name: Test with pytest
+    - name: Create necessary directories
       run: |
-        pytest
+        mkdir -p ${{ github.workspace }}/data
+        mkdir -p ${{ github.workspace }}/path/to/save
+    - name: Set ALPHAFOLD_PATH environment variable
+      run: echo "ALPHAFOLD_PATH=${{ github.workspace }}/alphafold" >> $GITHUB_ENV
+    - name: Run tests
+      run: |
+        pytest tests/ --disable-warnings
+      env:
+        NEUROFLEX_DATA_DIR: ${{ github.workspace }}/data
+        NEUROFLEX_SAVE_DIR: ${{ github.workspace }}/path/to/save
+        ALPHAFOLD_PATH: ${{ env.ALPHAFOLD_PATH }}
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Build package
+      run: |
+        pip install build
+        python -m build
     - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        python setup.py sdist bdist_wheel
+        pip install twine
         twine upload dist/*
