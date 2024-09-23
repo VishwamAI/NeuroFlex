@@ -157,7 +157,8 @@ class TestEdgeAIOptimization(unittest.TestCase):
         initial_learning_rate = self.edge_ai_optimizer.learning_rate
         initial_performance = self.edge_ai_optimizer.performance
         print(
-            f"Initial learning rate: {initial_learning_rate}, Initial performance: {initial_performance}"
+            f"Initial learning rate: {initial_learning_rate}, "
+            f"Initial performance: {initial_performance}"
         )
 
         # Ensure optimizer is correctly initialized
@@ -167,29 +168,36 @@ class TestEdgeAIOptimization(unittest.TestCase):
 
         # Add detailed logging
         print(
-            f"Before self-heal - Learning rate: {self.edge_ai_optimizer.learning_rate}, Performance: {self.edge_ai_optimizer.performance}"
+            f"Before self-heal - Learning rate: {self.edge_ai_optimizer.learning_rate}, "
+            f"Performance: {self.edge_ai_optimizer.performance}"
         )
         print(
-            f"Performance history before self-heal: {self.edge_ai_optimizer.performance_history}"
+            f"Performance history before self-heal: "
+            f"{self.edge_ai_optimizer.performance_history}"
         )
         print(f"LEARNING_RATE_ADJUSTMENT: {LEARNING_RATE_ADJUSTMENT}")
 
         self.edge_ai_optimizer._self_heal(self.model)
 
         print(
-            f"After self-heal - Learning rate: {self.edge_ai_optimizer.learning_rate}, Performance: {self.edge_ai_optimizer.performance}"
+            f"After self-heal - Learning rate: {self.edge_ai_optimizer.learning_rate}, "
+            f"Performance: {self.edge_ai_optimizer.performance}"
         )
         print(
-            f"Performance history after self-heal: {self.edge_ai_optimizer.performance_history}"
+            f"Performance history after self-heal: "
+            f"{self.edge_ai_optimizer.performance_history}"
         )
         print(
-            f"Learning rate history: {[group['lr'] for group in self.model.optimizer.param_groups]}"
+            f"Learning rate history: "
+            f"{[group['lr'] for group in self.model.optimizer.param_groups]}"
         )
         print(
-            f"EdgeAIOptimization learning rate: {self.edge_ai_optimizer.learning_rate}"
+            f"EdgeAIOptimization learning rate: "
+            f"{self.edge_ai_optimizer.learning_rate}"
         )
         print(
-            f"Model optimizer learning rate: {self.model.optimizer.param_groups[0]['lr']}"
+            f"Model optimizer learning rate: "
+            f"{self.model.optimizer.param_groups[0]['lr']}"
         )
 
         self.assertGreaterEqual(len(self.edge_ai_optimizer.performance_history), 1)
