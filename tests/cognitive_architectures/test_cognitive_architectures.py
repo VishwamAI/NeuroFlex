@@ -166,8 +166,6 @@ class TestCognitiveArchitectures(unittest.TestCase):
         self.assertIsInstance(UPDATE_INTERVAL, int)
         self.assertTrue(UPDATE_INTERVAL > 0)
 
-
-
     def test_attention_schema_theory(self):
         num_attention_heads = 4
         attention_head_dim = 64
