@@ -1,6 +1,5 @@
 import unittest
 import torch
-import numpy as np
 from NeuroFlex.cognitive_architectures.advanced_thinking import CDSTDP, create_cdstdp
 
 
