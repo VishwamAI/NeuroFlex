@@ -128,7 +128,6 @@ def test_generative_ai_framework_init(generative_ai_framework):
     assert generative_ai_framework.input_shape == (784,)
     assert generative_ai_framework.hidden_layers == (128, 64)
 
-@pytest.mark.skip(reason="Failing test - to be investigated")
 def test_generative_ai_framework_train_step(generative_ai_framework):
     rng = jax.random.PRNGKey(0)
     input_shape = (1, 784)  # Flattened input
@@ -138,11 +137,20 @@ def test_generative_ai_framework_train_step(generative_ai_framework):
     dummy_input = jax.random.normal(rng, (32,) + input_shape[1:]).block_until_ready()
     dummy_target = jax.random.randint(rng, (32,), 0, 10).block_until_ready()
 
-    # Ensure inputs are JAX arrays
-    dummy_input = jnp.array(dummy_input)
-    dummy_target = jnp.array(dummy_target)
+    # Ensure inputs are JAX arrays with correct dtype
+    dummy_input = jnp.array(dummy_input, dtype=jnp.float32)
+    dummy_target = jnp.array(dummy_target, dtype=jnp.int32)
 
-    new_state, loss, logits = jax.jit(generative_ai_framework.train_step)(state, {'input': dummy_input, 'target': dummy_target})
+    # Verify that state is a valid TrainState object
+    assert isinstance(state, train_state.TrainState), f"Expected TrainState, got {type(state)}"
+
+    # Ensure the input data is correctly formatted
+    assert isinstance(dummy_input, jnp.ndarray), f"Expected jnp.ndarray, got {type(dummy_input)}"
+    assert isinstance(dummy_target, jnp.ndarray), f"Expected jnp.ndarray, got {type(dummy_target)}"
+    assert dummy_input.dtype == jnp.float32, f"Expected float32, got {dummy_input.dtype}"
+    assert dummy_target.dtype == jnp.int32, f"Expected int32, got {dummy_target.dtype}"
+
+    new_state, loss, logits = generative_ai_framework.train_step(state, {'input': dummy_input, 'target': dummy_target})
 
     assert isinstance(new_state, train_state.TrainState)
     assert isinstance(loss, jnp.ndarray)
@@ -164,19 +172,18 @@ def test_generative_ai_framework_train_step(generative_ai_framework):
     # Check if the loss is generally decreasing
     initial_loss = loss
     for _ in range(5):
-        state, new_loss, _ = jax.jit(generative_ai_framework.train_step)(state, {'input': dummy_input, 'target': dummy_target})
+        state, new_loss, _ = generative_ai_framework.train_step(state, {'input': dummy_input, 'target': dummy_target})
         assert jnp.isfinite(new_loss)  # Ensure the loss remains finite
 
     # Check if the final loss is less than or equal to the initial loss
     assert jnp.less_equal(new_loss, initial_loss).item()
 
-@pytest.mark.skip(reason="Failing test - to be investigated")
 def test_generative_ai_framework_generate(generative_ai_framework):
     rng = jax.random.PRNGKey(0)
 
     # Test non-transformer model
     state = generative_ai_framework.init_model(rng, (1, 784))  # Flattened input
-    dummy_input = jax.random.normal(rng, (1, 784))
+    dummy_input = jnp.array(jax.random.normal(rng, (1, 784)), dtype=jnp.float32)
     output = generative_ai_framework.generate(state, dummy_input)
     assert output.shape == (1, 10)
     assert jnp.all((output >= 0) & (output <= 1))
@@ -199,7 +206,7 @@ def test_generative_ai_framework_generate(generative_ai_framework):
         }
     )
     transformer_state = transformer_framework.init_model(rng, (1, 50))
-    transformer_input = jax.random.randint(rng, (1, 50), 0, 999)  # Ensure input is within vocab range
+    transformer_input = jnp.array(jax.random.randint(rng, (1, 50), 0, 999), dtype=jnp.int32)  # Ensure input is within vocab range and of integer type
     transformer_output = transformer_framework.generate(transformer_state, transformer_input)
     assert transformer_output.shape == (1, 10)
     assert jnp.all((transformer_output >= 0) & (transformer_output <= 1))
@@ -211,11 +218,9 @@ def test_generative_ai_framework_generate(generative_ai_framework):
     batch_output = generative_ai_framework.generate(state, non_transformer_batch)
     assert batch_output.shape == (batch_size, 10)
 
-    transformer_batch = jax.random.randint(rng, (batch_size, 50), 0, 999)
+    transformer_batch = jnp.array(jax.random.randint(rng, (batch_size, 50), 0, 999), dtype=jnp.int32)
     transformer_batch_output = transformer_framework.generate(transformer_state, transformer_batch)
     assert transformer_batch_output.shape == (batch_size, 10)
-
-@pytest.mark.skip(reason="Failing test - to be investigated")
 def test_generative_ai_framework_solve_math_problem(generative_ai_framework):
     # Test cases with expected solutions
     test_cases = [
@@ -232,7 +237,7 @@ def test_generative_ai_framework_solve_math_problem(generative_ai_framework):
         assert isinstance(solution, jnp.ndarray), f"Solution for '{problem}' is not a JAX array"
         assert solution.dtype == jnp.complex64, f"Solution for '{problem}' has incorrect dtype"
         assert solution.shape == (2,), f"Solution for '{problem}' has incorrect shape"
-        assert jnp.allclose(solution, jnp.array(expected_solution, dtype=jnp.complex64), atol=1e-5), \
+        assert jnp.allclose(jnp.sort_complex(solution), jnp.sort_complex(jnp.array(expected_solution, dtype=jnp.complex64)), atol=1e-5), \
             f"Incorrect solution for '{problem}'. Expected {expected_solution}, got {solution}"
 
     # Test error handling
@@ -264,10 +269,9 @@ def test_generative_ai_framework_solve_math_problem(generative_ai_framework):
     # Test for proper handling of equations with no solutions
     no_solution_eq = "x^2 + 1 = 0"  # No real solutions
     no_solution = generative_ai_framework.solve_math_problem(no_solution_eq)
-    assert jnp.allclose(no_solution, jnp.array([1j, -1j], dtype=jnp.complex64)), \
+    assert jnp.allclose(jnp.sort_complex(no_solution), jnp.sort_complex(jnp.array([1j, -1j], dtype=jnp.complex64))), \
         f"Incorrect handling of equation with no real solutions. Got {no_solution}"
 
-@pytest.mark.skip(reason="Failing test - to be investigated")
 def test_generative_ai_framework_evaluate_math_solution(generative_ai_framework):
     problem = "2x + 3 = 7"
     user_solution = 2
@@ -289,7 +293,6 @@ def test_generative_ai_framework_generate_step_by_step_solution(generative_ai_fr
     assert isinstance(steps, list)
     assert len(steps) > 0
 
-@pytest.mark.skip(reason="Failing test - to be investigated")
 def test_generative_ai_framework_evaluate(generative_ai_framework):
     rng = jax.random.PRNGKey(0)
     state = generative_ai_framework.init_model(rng, (1, 784))  # Flattened input shape

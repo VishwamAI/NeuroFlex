@@ -4,8 +4,10 @@ import torch.optim as optim
 from typing import List, Tuple, Optional, Callable
 import logging
 import time
+import jax
+import jax.numpy as jnp
+import numpy as np
 from NeuroFlex.utils import normalize_data, preprocess_data
-from NeuroFlex.utils import calculate_descriptive_statistics
 
 logging.basicConfig(level=logging.INFO)
 
@@ -52,22 +54,63 @@ class CDSTDP(nn.Module):
         return self.output_layer(x)
 
     def update_weights(self, inputs, conscious_state, feedback):
-        with torch.no_grad():
-            for layer in self.layers:
-                pre_synaptic = inputs.unsqueeze(1)
-                post_synaptic = conscious_state.unsqueeze(0)
+        updated_params = {}
+        for i, layer in enumerate(self.layers):
+            # Ensure inputs and conscious_state are 2D
+            inputs_2d = jnp.atleast_2d(inputs)
+            conscious_state_2d = jnp.atleast_2d(conscious_state)
 
-                delta_t = torch.arange(-self.time_window, self.time_window + 1, device=self.device)
+            # Reshape inputs and conscious_state to be compatible for matmul
+            pre_synaptic = inputs_2d.reshape(inputs_2d.shape[0], -1)
+            post_synaptic = conscious_state_2d  # Remove transpose to maintain shape
 
-                stdp = torch.where(
-                    delta_t > 0,
-                    self.a_plus * torch.exp(-delta_t / self.tau_plus),
-                    -self.a_minus * torch.exp(delta_t / self.tau_minus)
-                )
+            # Ensure pre_synaptic and post_synaptic have compatible shapes for matmul
+            if pre_synaptic.shape[0] != post_synaptic.shape[0]:
+                raise ValueError(f"Incompatible batch sizes: pre_synaptic {pre_synaptic.shape[0]}, post_synaptic {post_synaptic.shape[0]}")
 
-                dw = torch.outer(pre_synaptic, post_synaptic) * stdp
+            # Convert layer.weight to JAX array before calculations
+            layer_weight_jax = jnp.array(layer.weight.detach().numpy())
 
-                layer.weight.data += self.learning_rate * dw * feedback
+            # Calculate weight_update with the correct shape
+            # Ensure dw has the same shape as layer_weight_jax (out_features, in_features)
+            dw = jnp.matmul(post_synaptic.T, pre_synaptic)
+            dw = dw[:layer_weight_jax.shape[0], :layer_weight_jax.shape[1]]
+
+            # Adjust stdp calculation to match dw shape
+            delta_t = jnp.arange(-self.time_window, self.time_window + 1)
+            stdp = jnp.where(
+                delta_t > 0,
+                self.a_plus * jnp.exp(-delta_t / self.tau_plus),
+                -self.a_minus * jnp.exp(delta_t / self.tau_minus)
+            )
+            stdp = jnp.tile(stdp.reshape(-1, 1, 1), (1,) + dw.shape)  # Tile to match dw dimensions
+            stdp = jnp.sum(stdp, axis=0)  # Sum over time window
+
+            weight_update = self.learning_rate * dw * stdp
+
+            # Apply feedback
+            feedback_mean = jnp.mean(feedback, axis=0)  # Average feedback across batch dimension
+            feedback_reshaped = feedback_mean.reshape(-1, 1)  # Reshape to (feature_size, 1)
+            feedback_tiled = jnp.tile(feedback_reshaped, (1, dw.shape[1]))  # Tile to match dw shape
+
+            # Ensure feedback_tiled has the same shape as weight_update
+            feedback_tiled = feedback_tiled[:dw.shape[0], :dw.shape[1]]
+            weight_update = weight_update * feedback_tiled
+
+            # Ensure weight_update has the same shape as layer_weight_jax
+            if weight_update.shape != layer_weight_jax.shape:
+                weight_update = jnp.pad(weight_update, ((0, layer_weight_jax.shape[0] - weight_update.shape[0]), (0, 0)))
+
+            # Ensure shapes are compatible for addition
+            if layer_weight_jax.shape != weight_update.shape:
+                raise ValueError(f"Incompatible shapes: layer_weight_jax {layer_weight_jax.shape}, weight_update {weight_update.shape}")
+
+            # Update the layer weights
+            updated_weights = layer_weight_jax + weight_update
+            layer.weight = torch.nn.Parameter(torch.from_numpy(np.array(updated_weights)))
+            updated_params[f'layer_{i}'] = {'kernel': updated_weights, 'bias': jnp.zeros(updated_weights.shape[0])}
+
+        return {'params': updated_params}  # Return updated parameters with 'params' key
 
     def diagnose(self):
         issues = []

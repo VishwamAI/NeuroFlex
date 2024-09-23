@@ -217,6 +217,12 @@ class EdgeAIOptimization:
     def evaluate_model(self, model: nn.Module, test_data: torch.Tensor) -> Dict[str, float]:
         """Evaluate the model's performance on the given test data."""
         try:
+            # Set random seeds for reproducibility
+            np.random.seed(42)
+            torch.manual_seed(42)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
             model.eval()
             device = next(model.parameters()).device
             test_data = test_data.to(device)

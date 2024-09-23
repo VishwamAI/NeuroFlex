@@ -169,7 +169,7 @@ class MultiModalLearning(nn.Module):
                 logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
                 embedded = modality['encoder'][0](text_input)
                 lstm_out, (hidden, _) = modality['encoder'][1](embedded.float())
-                encoded_modalities[name] = modality['encoder'][2](hidden[-1].unsqueeze(0))
+                encoded_modalities[name] = modality['encoder'][2](hidden[-1])
             elif name == 'time_series':
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
