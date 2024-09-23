@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 import ml_collections
 import sys
 import jax
+import jax.numpy as jnp
 import copy
 import numpy as np
 
