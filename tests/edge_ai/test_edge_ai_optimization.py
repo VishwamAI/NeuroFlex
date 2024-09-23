@@ -7,9 +7,7 @@ import time
 from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
 from NeuroFlex.constants import (
     PERFORMANCE_THRESHOLD,
-    UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
-    MAX_HEALING_ATTEMPTS,
 )
 
 
