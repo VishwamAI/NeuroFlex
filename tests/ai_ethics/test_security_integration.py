@@ -124,7 +124,7 @@ class TestSecurityIntegration(unittest.TestCase):
             # Simulate training process
             batch_size = 32  # Define a batch size
             for i in range(0, len(train_data), batch_size):
-                batch = train_data[i:i + batch_size]
+                batch = train_data[i : i + batch_size]
                 inputs = np.array([x[0] for x in batch])
                 targets = np.array([x[1] for x in batch])
                 model.update((inputs, targets))
