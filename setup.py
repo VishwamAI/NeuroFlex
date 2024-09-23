@@ -182,6 +182,9 @@ setup(
         "prophet",
         "psutil",
         "aif360",
+        "men",
+        "PyWavelets",
+        "filterpy"
     ],
     extras_require={
         'dev': [
