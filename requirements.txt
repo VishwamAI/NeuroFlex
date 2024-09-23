@@ -157,3 +157,4 @@ aif360
 mne
 PyWavelets
 filterpy
+flake8==6.1.0
