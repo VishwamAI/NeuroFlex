@@ -91,7 +91,6 @@ class TestSecurityIntegration(unittest.TestCase):
         self.assertEqual(report, mock_report)
         mock_agent.return_value.security_check.assert_called_once()
 
-    @unittest.skip("Skipping due to issues with bioinformatics data loading")
     @patch('NeuroFlex.ai_ethics.advanced_security_agent.AdvancedSecurityAgent')
     def test_security_integration_in_training(self, mock_agent):
         mock_agent.return_value.security_check.return_value = None
