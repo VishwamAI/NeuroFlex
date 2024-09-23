@@ -222,7 +222,7 @@ class SelfCuringAlgorithm:
         issues = []
         if not hasattr(self.model, 'is_trained') or not self.model.is_trained:
             issues.append("Model is not trained")
-        if not hasattr(self.model, 'performance') or self.model.performance < 0.8:
+        if not hasattr(self.model, 'performance') or not isinstance(self.model.performance, dict) or self.model.performance.get('accuracy', 0) < 0.8:
             issues.append("Model performance is below threshold")
         if not hasattr(self.model, 'last_update') or (time.time() - self.model.last_update > 86400):
             issues.append("Model hasn't been updated in 24 hours")
