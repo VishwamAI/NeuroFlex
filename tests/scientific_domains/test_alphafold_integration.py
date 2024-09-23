@@ -830,7 +830,7 @@ def test_setup_model(
         with self.assertRaisesRegex(ValueError, "Empty sequence provided"):
             self.alphafold_integration.run_alphamissense_analysis("", "M1K")
         with self.assertRaisesRegex(
-            ValueError, "Invalid amino acid\(s\) found in sequence"
+            ValueError, r"Invalid amino acid\(s\) found in sequence"
         ):
             self.alphafold_integration.run_alphamissense_analysis("INVALID123", "M1K")
         with self.assertRaisesRegex(ValueError, "Invalid variant format"):
