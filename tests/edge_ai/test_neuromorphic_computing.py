@@ -2,13 +2,11 @@ import unittest
 import torch
 import numpy as np
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from NeuroFlex.edge_ai.neuromorphic_computing import NeuromorphicComputing
 from NeuroFlex.constants import (
     PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
-    LEARNING_RATE_ADJUSTMENT,
-    MAX_HEALING_ATTEMPTS,
 )
 
 
