@@ -6,6 +6,9 @@ import openmm.app as app
 import openmm.unit as unit
 import ml_collections
 import sys
+import jax
+import copy
+import numpy as np
 
 sys.path.append("/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages")
 from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
