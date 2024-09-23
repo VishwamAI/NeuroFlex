@@ -206,7 +206,6 @@ def load_bioinformatics_data(file_path, skip_visualization=False):
         logging.error(f"Critical error in load_bioinformatics_data: {str(e)}")
         raise
 
-# Define your model
 class SelfCuringAlgorithm:
     def __init__(self, model):
         self.model = model
@@ -241,31 +240,31 @@ class SelfCuringAlgorithm:
                 self.escape_local_minimum()
 
     def train_model(self):
-        print("Training model...")
+        logging.info("Training model...")
         # Actual training logic would go here
         self.model.is_trained = True
         self.model.last_update = time.time()
         self.update_performance()
 
     def improve_model(self):
-        print("Improving model performance...")
+        logging.info("Improving model performance...")
         # Logic to improve model performance would go here
         self.model.performance = min(self.model.performance * 1.1, 1.0)  # Increase performance by 10%, max 1.0
         self.update_performance()
 
     def update_model(self):
-        print("Updating model...")
+        logging.info("Updating model...")
         # Logic to update the model with new data would go here
         self.model.last_update = time.time()
         self.update_performance()
 
     def handle_gradient_explosion(self):
-        print("Handling gradient explosion...")
+        logging.info("Handling gradient explosion...")
         self.learning_rate *= 0.5  # Reduce learning rate
         # Additional logic to handle gradient explosion (e.g., gradient clipping)
 
     def escape_local_minimum(self):
-        print("Attempting to escape local minimum...")
+        logging.info("Attempting to escape local minimum...")
         self.learning_rate *= 2  # Increase learning rate
         # Additional logic to escape local minimum (e.g., add noise to parameters)
 
@@ -310,6 +309,7 @@ class NeuroFlex:
         self.security_agent = None
         self.optimizer = None
         self.loss_fn = None
+        self.self_curing_algorithm = SelfCuringAlgorithm(self)
 
     def _setup_core_model(self):
         input_shape = self.config.get('INPUT_SHAPE', (28, 28, 1))
@@ -618,102 +618,67 @@ class NeuroFlex:
                                    outputs.detach().cpu().numpy() if self.backend == 'pytorch' else outputs.numpy(),
                                    loss.item())
 
+        # Run self-curing algorithm
+        issues = self.self_curing_algorithm.diagnose()
+        if issues:
+            self.self_curing_algorithm.heal(issues)
+
         return loss.item()
 
-config = {
-    'CORE_MODEL_FEATURES': [64, 32, 10],
-    'USE_CNN': True,
-    'USE_RNN': True,
-    'USE_GAN': True,
-    'FAIRNESS_CONSTRAINT': 0.1,
-    'USE_QUANTUM': True,
-    'USE_ALPHAFOLD': True,
-    'BACKEND': 'pytorch',
-    'TENSORFLOW_MODEL': TensorFlowModel,
-    'PYTORCH_MODEL': PyTorchModel,
-    'QUANTUM_MODEL': QuantumNeuralNetwork,
-    'BIOINFORMATICS_INTEGRATION': BioinformaticsIntegration(),
-    'SCIKIT_BIO_INTEGRATION': ScikitBioIntegration(),  # This now refers to the correct ScikitBioIntegration class
-    'ETE_INTEGRATION': ETEIntegration(),
-    'ALPHAFOLD_INTEGRATION': AlphaFoldIntegration(),
-    'ALPHAFOLD_PARAMS': {'max_recycling': 3}
-}
-
-model = NeuroFlex(config)
-
-# Initialize self-curing algorithm
-self_curing_algorithm = SelfCuringAlgorithm(model)
-
-# Prepare training data (placeholder)
-train_data = None  # Replace with actual training data
-val_data = None    # Replace with actual validation data
-
-# Train your model
-def train_neuroflex_model(model, train_data, val_data):
+def train_neuroflex_model(model, train_data, val_data, num_epochs=10, batch_size=32):
     if model.bioinformatics_data is None:
         raise ValueError("Bioinformatics data not loaded. Call load_bioinformatics_data() first.")
 
-    def train_model(model, train_data, val_data, num_epochs, batch_size, learning_rate, **kwargs):
-        print("Training model...")
+    logging.info("Starting NeuroFlex model training...")
 
-        # Initialize AdvancedSecurityAgent
-        security_agent = model.security_agent
+    for epoch in range(num_epochs):
+        total_loss = 0
+        num_batches = 0
+        for batch_start in range(0, len(train_data), batch_size):
+            # Perform security check before processing each batch
+            model.security_agent.security_check()
 
-        for epoch in range(num_epochs):
-            total_loss = 0
-            num_batches = 0
-            for batch_start in range(0, len(train_data), batch_size):
-                # Perform security check before processing each batch
-                security_agent.security_check()
+            # Process batch
+            batch_end = min(batch_start + batch_size, len(train_data))
+            batch_data = train_data[batch_start:batch_end]
 
-                # Process batch
-                batch_end = min(batch_start + batch_size, len(train_data))
-                batch_data = train_data[batch_start:batch_end]
+            # Prepare inputs and targets
+            inputs = np.array([x[0] for x in batch_data])
+            targets = np.array([x[1] for x in batch_data])
 
-                # Prepare inputs and targets
-                inputs = np.array([x[0] for x in batch_data])
-                targets = np.array([x[1] for x in batch_data])
+            # Reshape inputs to match the expected input shape
+            input_shape = model.config.get('INPUT_SHAPE', (28, 28, 1))
+            inputs = inputs.reshape((-1,) + input_shape)
 
-                # Reshape inputs to match the expected input shape
-                input_shape = model.config.get('INPUT_SHAPE', (28, 28, 1))
-                inputs = inputs.reshape((-1,) + input_shape)
+            # Detect and mitigate threats
+            if model.security_agent.threat_detector.detect_threat(inputs):
+                inputs = model.security_agent.mitigate_threat(inputs)
 
-                # Detect and mitigate threats
-                if security_agent.threat_detector.detect_threat(inputs):
-                    inputs = security_agent.mitigate_threat(inputs)
+            # Update model
+            loss = model.update((inputs, targets))
+            total_loss += loss
+            num_batches += 1
 
-                # Update model
-                loss = model.update((inputs, targets))
-                total_loss += loss
-                num_batches += 1
+        # Calculate average loss for the epoch
+        avg_loss = total_loss / num_batches
+        logging.info(f"Epoch {epoch + 1}/{num_epochs} - Average Loss: {avg_loss:.4f}")
 
-            # Calculate average loss for the epoch
-            avg_loss = total_loss / num_batches
-            print(f"Epoch {epoch + 1}/{num_epochs} - Average Loss: {avg_loss:.4f}")
+        # Evaluate fairness after each epoch
+        fairness_eval = model.security_agent.evaluate_fairness()
+        logging.info(f"Epoch {epoch + 1}/{num_epochs} - Fairness evaluation: {fairness_eval}")
 
-            # Evaluate fairness after each epoch
-            fairness_eval = security_agent.evaluate_fairness()
-            print(f"Epoch {epoch + 1}/{num_epochs} - Fairness evaluation: {fairness_eval}")
+    # Final security check and model health assessment
+    model.security_agent.security_check()
+    health_status = model.security_agent.check_model_health()
+    logging.info(f"Final model health status: {health_status}")
 
-        # Final security check and model health assessment
-        security_agent.security_check()
-        health_status = security_agent.check_model_health()
-        print(f"Final model health status: {health_status}")
+    trained_state = model.core_model.state_dict() if hasattr(model.core_model, 'state_dict') else None
+    return trained_state, model
 
-        trained_state = model.core_model.state_dict() if hasattr(model.core_model, 'state_dict') else None
-        trained_model = model
-        return trained_state, trained_model
-
-    trained_state, trained_model = train_model(
-        model, train_data, val_data,
-        num_epochs=10, batch_size=32, learning_rate=1e-3,
-        bioinformatics_data=model.bioinformatics_data,
-        use_alphafold=model.use_alphafold,
-        use_quantum=model.use_quantum,
-        alphafold_structures=model.bioinformatics_data['alphafold_structures'],
-        quantum_params=model.quantum_model.get_params() if model.quantum_model else None
-    )
-    return trained_state, trained_model
-
-# Note: Call model.load_bioinformatics_data() before training
+# Example usage:
+# config = {...}  # Define your configuration
+# model = NeuroFlex(config)
+# model.load_bioinformatics_data('path/to/your/data.fasta')
+# train_data = [...]  # Prepare your training data
+# val_data = [...]  # Prepare your validation data
 # trained_state, trained_model = train_neuroflex_model(model, train_data, val_data)
