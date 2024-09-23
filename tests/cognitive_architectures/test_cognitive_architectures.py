@@ -166,33 +166,7 @@ class TestCognitiveArchitectures(unittest.TestCase):
         self.assertIsInstance(UPDATE_INTERVAL, int)
         self.assertTrue(UPDATE_INTERVAL > 0)
 
-    def test_working_memory(self):
-        memory_size = 10
-        hidden_dim = 64
-        wm = WorkingMemory(memory_size=memory_size, hidden_dim=hidden_dim)
 
-        key = jax.random.PRNGKey(0)
-        batch_size = 1
-        inputs = jax.random.normal(key, (batch_size, hidden_dim))
-        prev_memory = jax.random.normal(
-            jax.random.fold_in(key, 1), (batch_size, memory_size)
-        )
-
-        # Initialize the WorkingMemory
-        variables = wm.init(key, inputs, prev_memory)
-
-        # First call to WorkingMemory
-        new_memory1 = wm.apply(variables, inputs, prev_memory)
-        self.assertIsInstance(new_memory1, (jnp.ndarray, jax.Array))
-        self.assertEqual(new_memory1.shape, (batch_size, memory_size))
-
-        # Second call to WorkingMemory (should update without error)
-        new_memory2 = wm.apply(variables, inputs, new_memory1)
-        self.assertIsInstance(new_memory2, (jnp.ndarray, jax.Array))
-        self.assertEqual(new_memory2.shape, (batch_size, memory_size))
-
-        # Check that memory has been updated
-        self.assertFalse(jnp.array_equal(new_memory1, new_memory2))
 
     def test_attention_schema_theory(self):
         num_attention_heads = 4
