@@ -169,7 +169,7 @@ class MultiModalLearning(nn.Module):
                 logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
                 embedded = modality['encoder'][0](text_input)
                 lstm_out, (hidden, _) = modality['encoder'][1](embedded.float())
-                encoded_modalities[name] = modality['encoder'][2](hidden[-1])
+                encoded_modalities[name] = modality['encoder'][2](lstm_out[:, -1, :])  # Use last time step output
             elif name == 'time_series':
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
@@ -185,7 +185,7 @@ class MultiModalLearning(nn.Module):
             logger.debug(f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}")
 
         # Ensure all encoded modalities have the same batch size and are 2D tensors
-        encoded_modalities = {name: tensor.view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
+        encoded_modalities = {name: tensor.view(max_batch_size, -1) if isinstance(tensor, torch.Tensor) else torch.tensor(tensor, dtype=torch.float32).view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
 
         if self.fusion_method == 'concatenation':
             fused = torch.cat(list(encoded_modalities.values()), dim=1)
@@ -205,6 +205,10 @@ class MultiModalLearning(nn.Module):
         fused = fused.float()  # Convert to float if not already
 
         logger.debug(f"Final fused tensor shape: {fused.shape}, type: {type(fused)}")
+
+        # Ensure fused is a Tensor before passing to classifier
+        if not isinstance(fused, torch.Tensor):
+            fused = torch.tensor(fused, dtype=torch.float32)
 
         return self.classifier(fused)
 

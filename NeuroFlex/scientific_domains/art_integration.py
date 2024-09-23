@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import tensorflow as tf
+import tensorflow.compat.v1 as tf_compat_v1
 
 class ARTPreprocessorWrapper(Preprocessor):
     def __init__(self, preprocessor):
@@ -36,7 +37,10 @@ class ARTIntegration:
 
     def _create_art_classifier(self):
         if self.framework == 'keras':
-            return KerasClassifier(model=self.model)
+            # Ensure the model is compiled
+            if not self.model.optimizer:
+                self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+            return KerasClassifier(model=self.model, use_logits=False)
         elif self.framework == 'pytorch':
             loss = nn.CrossEntropyLoss()
             input_shape = (28, 28, 1)  # Use the known input shape from the test file

@@ -328,7 +328,6 @@ class TestAdvancedSecurityAgentIntegration(unittest.TestCase):
             agent.security_check()
             mock_address_vulnerabilities.assert_called_once_with(expected_vulnerabilities)
 
-    @unittest.skip("Skipping due to AttributeError: 'AdvancedSecurityAgent' object has no attribute 'generate_security_report'")
     def test_generate_security_report_with_bioinformatics(self):
         agent = AdvancedSecurityAgent([64, 64], 2)
         agent.dna_sequences = [MOCK_DNA_SEQ1, MOCK_DNA_SEQ2]

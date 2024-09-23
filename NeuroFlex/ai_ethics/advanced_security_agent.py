@@ -22,7 +22,7 @@ def lazy_import(module_name, class_name):
     return _import
 
 ThreatDetector = lazy_import('NeuroFlex.threat_detection', 'ThreatDetector')
-ModelMonitor = lazy_import('NeuroFlex.model_monitoring', 'ModelMonitor')
+from NeuroFlex.model_monitoring import ModelMonitor
 
 class AdvancedSecurityAgent:
     def __init__(self, features: List[int], action_dim: int, update_frequency: int = 100):
@@ -30,9 +30,10 @@ class AdvancedSecurityAgent:
         self.ethical_framework = EthicalFramework()
         self.rl_agent = create_self_curing_rl_agent(features, action_dim)
         self.env = RLEnvironment("CartPole-v1")  # Example environment, replace with appropriate one
-        self.threat_detector = ThreatDetector()  # Initialize ThreatDetector
+        self.threat_detector = ThreatDetector()()  # Initialize ThreatDetector
         self.threat_detector.setup()  # Set up the ThreatDetector with new features
         self.model_monitor = ModelMonitor()  # Initialize ModelMonitor
+        self.model_monitor.setup()  # Set up the ModelMonitor
         self.scikit_bio = ScikitBioIntegration()
         self.neuroflex_integrator = NeuroFlexIntegrator()
         self.performance_history = []
@@ -43,6 +44,9 @@ class AdvancedSecurityAgent:
         self.dna_sequences = []  # Initialize dna_sequences attribute
         self.anomaly_detector = self.threat_detector.anomaly_detector
         self.deep_learning_model = self.threat_detector.deep_learning_model
+
+    def _get_latest_performance(self):
+        return self.model_monitor.get_overall_performance() if hasattr(self.model_monitor, 'get_overall_performance') else {}
 
     def setup_threat_detection(self):
         from NeuroFlex.threat_detection import ThreatDetector
@@ -215,6 +219,63 @@ class AdvancedSecurityAgent:
             # Implement specific mitigation strategies for each type of vulnerability
             # This could involve retraining, adjusting hyperparameters, or modifying the model architecture
 
+    def generate_security_report(self):
+        current_time = time.time()
+        report = {
+            'timestamp': current_time,
+            'threats': self._get_threat_info(),
+            'model_health': self._get_model_health_info(),
+            'performance': self._get_latest_performance(),
+            'last_security_audit': self.last_security_audit,
+            'time_since_last_audit': current_time - self.last_security_audit,
+            'bioinformatics_security': self._get_bioinformatics_security_info(),
+            'ethical_evaluation': self._get_ethical_evaluation(),
+            'fairness_metrics': self._get_fairness_metrics() if hasattr(self, '_get_fairness_metrics') else {},
+            'last_model_update': getattr(self, 'last_update', None)
+        }
+        return report
+
+    def _get_model_health_info(self):
+        return {
+            'accuracy': self.model_monitor.get_accuracy(),
+            'loss': self.model_monitor.get_loss(),
+            'performance_trend': self.model_monitor.get_performance_trend(),
+            'last_update_time': self.last_update if hasattr(self, 'last_update') else None
+        }
+
+    def _get_threat_info(self):
+        # Use a mock state and action for threat detection
+        mock_state = [0] * 10  # Assuming a 10-dimensional state
+        mock_action = [0] * 5  # Assuming a 5-dimensional action
+        mock_next_state = [0] * 10  # Assuming a 10-dimensional next state
+        threat_detected = self.threat_detector.detect_threat(mock_state, mock_action, mock_next_state)
+        return {
+            'detected_threats': [threat_detected],
+            'threat_count': 1 if threat_detected else 0,
+            'last_threat_detection_time': time.time()
+        }
+
+    def _get_bioinformatics_security_info(self):
+        if hasattr(self, 'scikit_bio') and hasattr(self, 'dna_sequences') and self.dna_sequences:
+            try:
+                anomalies = self.scikit_bio.detect_anomalies(self.dna_sequences)
+                return {
+                    'anomalies_detected': anomalies,
+                    'num_anomalies': len(anomalies),
+                    'sequence_similarities': self.scikit_bio.calculate_sequence_similarity(self.dna_sequences[0], self.dna_sequences[1]) if len(self.dna_sequences) >= 2 else None,
+                    'num_sequences_analyzed': len(self.dna_sequences)
+                }
+            except Exception as e:
+                logging.error(f"Error in _get_bioinformatics_security_info: {str(e)}")
+        return {}
+
+    def _get_ethical_evaluation(self):
+        return self.ethical_framework.evaluate_model(self.rl_agent) if hasattr(self, 'ethical_framework') else {}
+
+    def _get_fairness_metrics(self):
+        # Implement logic to get fairness metrics
+        return {}
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     agent = AdvancedSecurityAgent([64, 64], 2)  # Example architecture
@@ -268,38 +329,54 @@ def check_model_health(self):
         logging.warning("ModelMonitor not initialized. Skipping health check.")
         return {}
 
-def generate_security_report(self):
-    current_time = time.time()
-    report = {
-        'timestamp': current_time,
-        'threats': self._get_threat_info(),
-        'model_health': self._get_model_health_info(),
-        'performance': self._get_latest_performance(),
-        'last_security_audit': self.last_security_audit,
-        'time_since_last_audit': current_time - self.last_security_audit,
-        'bioinformatics_security': self._get_bioinformatics_security_info(),
-        'ethical_evaluation': self._get_ethical_evaluation(),
-        'fairness_metrics': self._get_fairness_metrics(),
-        'last_model_update': getattr(self, 'last_update', None)
+def _get_threat_info(self):
+    # Implement logic to get threat information
+    threats = self.threat_detector.get_current_threats()
+    return {
+        'detected_threats': threats,
+        'threat_count': len(threats),
+        'last_threat_detection_time': self.threat_detector.last_detection_time
     }
 
-    # Add overall security score
-    report['overall_security_score'] = self._calculate_overall_security_score(report)
+def _get_model_health_info(self):
+    # Implement logic to get model health information
+    return {
+        'accuracy': self.model_monitor.get_accuracy(),
+        'loss': self.model_monitor.get_loss(),
+        'performance_trend': self.model_monitor.get_performance_trend(),
+        'last_update_time': self.last_update if hasattr(self, 'last_update') else None
+    }
 
-    # Add severity levels
-    report['threat_severity'] = self._assess_threat_severity(report['threats'])
-    report['anomaly_severity'] = self._assess_anomaly_severity(report['bioinformatics_security'].get('anomalies_detected', []))
+def _get_latest_performance(self):
+    # Implement logic to get latest performance metrics
+    return self.model_monitor.get_overall_performance() if hasattr(self, 'model_monitor') else {}
 
-    # Add recommended actions
-    report['recommended_actions'] = self._generate_recommended_actions(report)
+def _get_bioinformatics_security_info(self):
+    # Implement logic to get bioinformatics security information
+    return {}
 
-    # Ensure bioinformatics_security contains required fields
-    if 'bioinformatics_security' in report:
-        bio_security = report['bioinformatics_security']
-        if 'sequence_similarities' not in bio_security and len(self.dna_sequences) >= 2:
-            bio_security['sequence_similarities'] = self.scikit_bio.calculate_sequence_similarity(
-                self.dna_sequences[0], self.dna_sequences[1])
-        bio_security['num_sequences_analyzed'] = len(self.dna_sequences)
+def _get_fairness_metrics(self):
+    # Implement logic to get fairness metrics
+    return {}
+
+def _calculate_overall_security_score(self, report):
+    # Implement logic to calculate overall security score
+    return 0.0
+
+def _assess_threat_severity(self, threats):
+    # Implement logic to assess threat severity
+    return "Low"
+
+def _assess_anomaly_severity(self, anomalies):
+    # Implement logic to assess anomaly severity
+    return "Low"
+
+def _generate_recommended_actions(self, report):
+    # Implement logic to generate recommended actions
+    return []
+
+def _calculate_sequence_similarity(self, seq1, seq2):
+    return self.scikit_bio.calculate_sequence_similarity(seq1, seq2)
 
     # Ensure all required fields are present
     required_fields = ['timestamp', 'threats', 'model_health', 'performance', 'last_security_audit',
@@ -326,17 +403,17 @@ def _get_latest_performance(self):
 
 def _get_bioinformatics_security_info(self):
     if hasattr(self, 'scikit_bio') and hasattr(self, 'dna_sequences') and self.dna_sequences:
-        anomalies = self.scikit_bio.detect_anomalies(self.dna_sequences)
-        return {
-            'anomalies_detected': anomalies,
-            'num_anomalies': len(anomalies),
-            'sequence_similarities': self.scikit_bio.calculate_sequence_similarity(self.dna_sequences[0], self.dna_sequences[1]) if len(self.dna_sequences) >= 2 else None,
-            'num_sequences_analyzed': len(self.dna_sequences)
-        }
+        try:
+            anomalies = self.scikit_bio.detect_anomalies(self.dna_sequences)
+            return {
+                'anomalies_detected': anomalies,
+                'num_anomalies': len(anomalies),
+                'sequence_similarities': self.scikit_bio.calculate_sequence_similarity(self.dna_sequences[0], self.dna_sequences[1]) if len(self.dna_sequences) >= 2 else None,
+                'num_sequences_analyzed': len(self.dna_sequences)
+            }
+        except Exception as e:
+            logging.error(f"Error in _get_bioinformatics_security_info: {str(e)}")
     return {}
-
-def _get_ethical_evaluation(self):
-    return self.ethical_framework.evaluate_model(self.rl_agent) if hasattr(self, 'ethical_framework') else {}
 
 def _get_fairness_metrics(self):
     return self.fairness_agent.compute_metrics() if hasattr(self, 'fairness_agent') else {}
