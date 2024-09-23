@@ -13,6 +13,7 @@ import numpy as np
 from typing import List, Dict, Any
 
 from embodied_cognition_module import EmbodiedCognitionModule
+from connectionist_models_module import ConnectionistModelsModule
 
 class SituatedCognitionModule:
     def __init__(self, config: Dict[str, Any]):
@@ -46,7 +47,8 @@ class StandaloneCognitiveModel:
             'learning': LearningModule(config),
             'memory': MemoryModule(config),
             'embodied_cognition': EmbodiedCognitionModule(config),
-            'situated_cognition': SituatedCognitionModule(config)
+            'situated_cognition': SituatedCognitionModule(config),
+            'connectionist_models': ConnectionistModelsModule(config)
         }
         self.mcf = ModularCognitionFramework(self.modules)
 
