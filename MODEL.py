@@ -106,6 +106,7 @@ class NeuroFlex:
         self.use_bci = use_bci
         self.use_edge_ai = use_edge_ai
         self.use_prompt_agent = use_prompt_agent
+        self.performance = None  # Initialize performance attribute
 
         if self.use_unified_transformer:
             self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)

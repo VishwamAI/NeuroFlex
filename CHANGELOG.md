@@ -9,6 +9,7 @@
   - Integrated consciousness-related features into the `NeuroFlex` class.
   - Created a `create_neuroflex_model` function for pre-configured model creation.
 - **Example Usage**: Added a section to demonstrate the updated model's capabilities.
+- **Test Updates**: Modified `test_edge_ai_optimization.py` to reinitialize the model and test data for consistency in the `test_evaluate_model` function.
 
 ### Rationale for Updates
 - **Import Statements**: Ensures compatibility with the full NeuroFlex project by including all relevant modules.
@@ -17,6 +18,7 @@
   - Integrates consciousness simulation to align with advanced cognitive features.
   - Facilitates model creation with pre-configured settings for ease of use.
 - **Example Usage**: Demonstrates the practical application of the updated model, aiding in user understanding.
+- **Test Updates**: Ensures consistent test results by reinitializing the model and test data for each evaluation.
 
 ### Alignment with New Project Structure
 - The updates ensure that `MODEL.py` is fully integrated with the latest features and modules in the NeuroFlex project.

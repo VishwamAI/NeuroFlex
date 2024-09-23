@@ -73,32 +73,36 @@ class TestEdgeAIOptimization(unittest.TestCase):
         torch.backends.cudnn.benchmark = False
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(device)
-        self.test_data = self.test_data.to(device)
 
-        # Create labels for test data (assuming binary classification for simplicity)
-        test_labels = torch.randint(0, 2, (self.test_data.size(0),), device=device)
+        # Reinitialize model and test data for each evaluation
+        def initialize_model_and_data():
+            model = DummyModel().to(device)
+            test_data = torch.randn(100, 10).to(device)
+            return model, test_data
 
-        performance = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
-        self.assertIn('accuracy', performance)
-        self.assertIn('latency', performance)
-        self.assertIsInstance(performance['accuracy'], float)
-        self.assertIsInstance(performance['latency'], float)
-        self.assertGreaterEqual(performance['accuracy'], 0.0)
-        self.assertLessEqual(performance['accuracy'], 1.0)
-        self.assertGreater(performance['latency'], 0.0)
+        model1, test_data1 = initialize_model_and_data()
+        performance1 = self.edge_ai_optimizer.evaluate_model(model1, test_data1)
+        self.assertIn('accuracy', performance1)
+        self.assertIn('latency', performance1)
+        self.assertIsInstance(performance1['accuracy'], float)
+        self.assertIsInstance(performance1['latency'], float)
+        self.assertGreaterEqual(performance1['accuracy'], 0.0)
+        self.assertLessEqual(performance1['accuracy'], 1.0)
+        self.assertGreater(performance1['latency'], 0.0)
 
         # Test consistency across multiple runs
-        performance2 = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
-        self.assertAlmostEqual(performance['accuracy'], performance2['accuracy'], delta=0.2)  # Increased delta
-        self.assertAlmostEqual(performance['latency'], performance2['latency'], delta=0.1)
+        model2, test_data2 = initialize_model_and_data()
+        performance2 = self.edge_ai_optimizer.evaluate_model(model2, test_data2)
+        self.assertAlmostEqual(performance1['accuracy'], performance2['accuracy'], delta=0.2)  # Increased delta
+        self.assertAlmostEqual(performance1['latency'], performance2['latency'], delta=0.1)
 
         # Ensure the optimizer's performance is updated correctly
-        self.assertAlmostEqual(self.edge_ai_optimizer.performance, performance['accuracy'], delta=0.2)  # Increased delta
+        self.assertAlmostEqual(self.edge_ai_optimizer.performance, performance1['accuracy'], delta=0.2)  # Increased delta
 
         # Test performance simulation consistency
-        simulated_performance1 = self.edge_ai_optimizer._simulate_performance(self.model)
-        simulated_performance2 = self.edge_ai_optimizer._simulate_performance(self.model)
+        model3, _ = initialize_model_and_data()
+        simulated_performance1 = self.edge_ai_optimizer._simulate_performance(model3)
+        simulated_performance2 = self.edge_ai_optimizer._simulate_performance(model3)
         self.assertAlmostEqual(simulated_performance1, simulated_performance2, delta=0.2)  # Increased delta
 
         # Reset seeds to ensure no side effects on other tests
