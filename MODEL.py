@@ -1,26 +1,23 @@
-
 import time
 import torch
-import NeuroFlex
-from . import ddpm
 import numpy as np
-from NeuroFlex import NeuroFlex, train_model
-from NeuroFlex.jax_module import JAXModel
-from NeuroFlex.tensorflow_module import TensorFlowModel
-from NeuroFlex.pytorch_module import PyTorchModel
-from NeuroFlex.bioinformatics_integration import BioinformaticsIntegration
-from NeuroFlex.scikit_bio_integration import ScikitBioIntegration
-from NeuroFlex.ete_integration import ETEIntegration
-from NeuroFlex.alphafold_integration import AlphaFoldIntegration
-from NeuroFlex.xarray_integration import XarrayIntegration
-from NeuroFlex.quantum_nn_module import QuantumNeuralNetwork
-from NeuroFlex.tokenisation import tokenize_text
-from NeuroFlex.Transformers.unified_transformer import UnifiedTransformer, get_unified_transformer
-from NeuroFlex.robustness import adversarial_attack_detection, model_drift_detection
-from NeuroFlex.fairness import fairness_metrics, bias_mitigation
-from NeuroFlex.ethics import ethical_ai_guidelines
+from NeuroFlex import train_model
+from NeuroFlex.core_neural_networks import *
+from NeuroFlex.advanced_models import *
+from NeuroFlex.generative_models import *
+from NeuroFlex.Transformers import *
+from NeuroFlex.quantum_neural_networks import *
+from NeuroFlex.bci_integration import *
+from NeuroFlex.cognitive_architectures import *
+from NeuroFlex.scientific_domains import *
+from NeuroFlex.edge_ai import *
+from NeuroFlex.Prompt_Agent import *
+from NeuroFlex.utils import *
+from NeuroFlex.ai_ethics import *
+from NeuroFlex.core_neural_networks.jax.jax_module import JAXModel
+from NeuroFlex.core_neural_networks.tensorflow.tensorflow_module import TensorFlowModel
+from NeuroFlex.core_neural_networks.pytorch.pytorch_module import PyTorchModel
 
-# Define your model
 class SelfCuringAlgorithm:
     def __init__(self, model):
         self.model = model
@@ -34,7 +31,6 @@ class SelfCuringAlgorithm:
         if not hasattr(self.model, 'last_update') or (time.time() - self.model.last_update > 86400):
             issues.append("Model hasn't been updated in 24 hours")
 
-        # New security diagnostics
         if adversarial_attack_detection(self.model):
             issues.append("Potential adversarial attack detected")
         if model_drift_detection(self.model):
@@ -57,37 +53,32 @@ class SelfCuringAlgorithm:
 
     def train_model(self):
         print("Training model...")
-        # Actual training logic would go here
         self.model.is_trained = True
         self.model.last_update = time.time()
 
     def improve_model(self):
         print("Improving model performance...")
-        # Logic to improve model performance would go here
-        self.model.performance = 0.9  # Placeholder improvement
+        self.model.performance = 0.9
 
     def update_model(self):
         print("Updating model...")
-        # Logic to update the model with new data would go here
         self.model.last_update = time.time()
 
     def mitigate_adversarial_attack(self):
         print("Mitigating potential adversarial attack...")
         # Implement adversarial training or other mitigation strategies
-        pass
 
     def correct_model_drift(self):
         print("Correcting model drift...")
         # Implement model recalibration or retraining on recent data
-        pass
-
 class NeuroFlex:
     def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
                  use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
                  pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
                  ete_integration=None, alphafold_integration=None, alphafold_params=None,
                  fairness_threshold=0.8, ethical_guidelines=None, use_unified_transformer=False,
-                 unified_transformer_params=None):
+                 unified_transformer_params=None, use_consciousness_simulation=False,
+                 use_bci=False, use_edge_ai=False, use_prompt_agent=False):
         self.features = features
         self.use_cnn = use_cnn
         self.use_rnn = use_rnn
@@ -110,206 +101,177 @@ class NeuroFlex:
         self.use_unified_transformer = use_unified_transformer
         self.unified_transformer = None
         self.unified_transformer_params = unified_transformer_params or {}
+        self.use_consciousness_simulation = use_consciousness_simulation
+        self.consciousness_simulation = None
+        self.use_bci = use_bci
+        self.use_edge_ai = use_edge_ai
+        self.use_prompt_agent = use_prompt_agent
+        self.performance = None  # Initialize performance attribute
 
         if self.use_unified_transformer:
             self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)
 
+        if self.use_consciousness_simulation:
+            self.consciousness_simulation = ConsciousnessSimulation()
+
+        if self.use_bci:
+            self.bci_processor = BCIProcessor()
+
+        if self.use_edge_ai:
+            self.edge_ai_optimizer = EdgeAIOptimizer()
+
+        if self.use_prompt_agent:
+            self.prompt_agent = PromptAgent()
+
     def process_text(self, text):
-        """
-        Process the input text by tokenizing using UnifiedTransformer if available,
-        otherwise fall back to the default tokenization method.
-
-        Args:
-            text (str): The input text to be processed.
-
-        Returns:
-            List[int] or List[str]: A list of token ids or tokens from the processed text.
-        """
         if self.unified_transformer:
             return self.unified_transformer.tokenize(text)
         else:
             return tokenize_text(text)
 
     def check_fairness(self, predictions, sensitive_attributes):
-        """
-        Check if the model's predictions satisfy the fairness constraints.
-
-        Args:
-            predictions (numpy.ndarray): Model predictions.
-            sensitive_attributes (numpy.ndarray): Sensitive attributes of the data.
-
-        Returns:
-            bool: True if fairness constraints are satisfied, False otherwise.
-        """
-        # Implement fairness metric calculation (e.g., demographic parity, equal opportunity)
         fairness_score = self._calculate_fairness_score(predictions, sensitive_attributes)
         return fairness_score >= self.fairness_threshold
 
     def _calculate_fairness_score(self, predictions, sensitive_attributes):
-        # Placeholder for fairness metric calculation
         # Implement actual fairness metric calculation here
-        return 1.0
+        return fairness_metrics(predictions, sensitive_attributes)
 
     def apply_ethical_guidelines(self, decision):
-        """
-        Apply ethical guidelines to the model's decision.
-
-        Args:
-            decision: The model's decision or output.
-
-        Returns:
-            The decision after applying ethical guidelines.
-        """
         for guideline, action in self.ethical_guidelines.items():
             decision = action(decision)
         return decision
 
-model = NeuroFlex(
-    features=[64, 32, 10],
-    use_cnn=True,
-    use_rnn=True,
-    use_gan=True,
-    fairness_constraint=0.1,
-    use_quantum=True,
-    use_alphafold=True,
-    backend='jax',
-    jax_model=JAXModel,
-    tensorflow_model=TensorFlowModel,
-    pytorch_model=PyTorchModel,
-    quantum_model=QuantumNeuralNetwork,
-    bioinformatics_integration=BioinformaticsIntegration(),
-    scikit_bio_integration=ScikitBioIntegration(),
-    ete_integration=ETEIntegration(),
-    alphafold_integration=AlphaFoldIntegration(),
-    alphafold_params={'max_recycling': 3}
-)
+    def train(self, train_data, val_data, num_epochs=10, batch_size=32, learning_rate=1e-3):
+        return train_model(
+            self, train_data, val_data,
+            num_epochs=num_epochs, batch_size=batch_size, learning_rate=learning_rate,
+            use_alphafold=self.use_alphafold,
+            use_quantum=self.use_quantum,
+            transformer=self.unified_transformer
+        )
 
-# Prepare bioinformatics data
-bio_integration = BioinformaticsIntegration()
-scikit_bio_integration = ScikitBioIntegration()
-ete_integration = ETEIntegration()
-alphafold_integration = AlphaFoldIntegration()
-xarray_integration = XarrayIntegration()
+    def fine_tune_transformer(self, task, num_labels):
+        if self.unified_transformer:
+            self.unified_transformer.fine_tune(task=task, num_labels=num_labels)
 
-sequences = bio_integration.read_sequence_file("path/to/sequence/file.fasta")
-processed_sequences = bio_integration.process_sequences(sequences)
-sequence_summaries = bio_integration.sequence_summary(processed_sequences)
+    def predict(self, input_data):
+        if self.backend == 'jax':
+            return self.jax_model.predict(input_data)
+        elif self.backend == 'tensorflow':
+            return self.tensorflow_model.predict(input_data)
+        elif self.backend == 'pytorch':
+            return self.pytorch_model.predict(input_data)
+        elif self.use_quantum:
+            return self.quantum_model.predict(input_data)
+        else:
+            raise ValueError("No valid backend or model specified for prediction")
 
-# Prepare ScikitBio data
-dna_sequences = [str(seq.seq) for seq in processed_sequences if bio_integration._is_dna(seq.seq)]
-alignments = []
-for i in range(len(dna_sequences)):
-    for j in range(i+1, len(dna_sequences)):
-        alignment = scikit_bio_integration.align_dna_sequences(dna_sequences[i], dna_sequences[j])
-        if alignment[0] is not None:
-            alignments.append(alignment)
-msa = scikit_bio_integration.msa_maker(dna_sequences)
-gc_contents = [scikit_bio_integration.dna_gc_content(seq) for seq in dna_sequences]
+    def generate_text(self, input_text, max_length=100):
+        if self.unified_transformer:
+            tokenized_input = self.process_text(input_text)
+            input_ids = torch.tensor([tokenized_input])
+            return self.unified_transformer.generate(input_ids, max_length=max_length)
+        else:
+            raise ValueError("Unified Transformer is not initialized")
 
-# Prepare ETE data
-newick_string = "(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"
-tree = ete_integration.create_tree(newick_string)
-ete_integration.visualize_tree(tree, "output_tree.png")
-tree_stats = ete_integration.get_tree_statistics(tree)
+    def few_shot_learning(self, support_set, query):
+        if self.unified_transformer:
+            return self.unified_transformer.few_shot_learning(support_set, query)
+        else:
+            raise ValueError("Unified Transformer is not initialized")
 
-# Prepare AlphaFold data
-alphafold_integration.setup_model({'max_recycling': 3})  # Add appropriate model parameters
-protein_sequences = [seq for seq in processed_sequences if not bio_integration._is_dna(seq.seq)]
-alphafold_structures = []
-alphafold_plddt_scores = []
-alphafold_pae_scores = []
-for seq in protein_sequences:
-    alphafold_integration.prepare_features(str(seq.seq))
-    structure = alphafold_integration.predict_structure()
-    alphafold_structures.append(structure)
-    plddt_scores = alphafold_integration.get_plddt_scores()
-    pae_scores = alphafold_integration.get_predicted_aligned_error()
-    alphafold_plddt_scores.append(plddt_scores)
-    alphafold_pae_scores.append(pae_scores)
+    def simulate_consciousness(self, input_data):
+        if self.consciousness_simulation:
+            return self.consciousness_simulation.simulate(input_data)
+        else:
+            raise ValueError("Consciousness Simulation is not initialized")
 
-# Print average scores
-print(f"Average pLDDT score: {np.mean([np.mean(scores) for scores in alphafold_plddt_scores])}")
-print(f"Average predicted aligned error: {np.mean([np.mean(scores) for scores in alphafold_pae_scores])}")
+    def process_bci_data(self, bci_data):
+        if self.use_bci:
+            return self.bci_processor.process(bci_data)
+        else:
+            raise ValueError("BCI processing is not enabled")
 
-# Combine bioinformatics data
-bioinformatics_data = {
-    'sequence_summaries': sequence_summaries,
-    'alignments': alignments,
-    'msa': msa,
-    'gc_contents': gc_contents,
-    'phylogenetic_tree': tree,
-    'tree_statistics': tree_stats,
-    'alphafold_structures': alphafold_structures
-}
+    def optimize_for_edge(self, model):
+        if self.use_edge_ai:
+            return self.edge_ai_optimizer.optimize(model)
+        else:
+            raise ValueError("Edge AI optimization is not enabled")
 
-# Create Xarray datasets
-xarray_integration.create_dataset('gc_content',
-                                  {'gc': np.array(gc_contents)},
-                                  {'sequence': np.arange(len(gc_contents))})
+    def generate_prompt(self, context):
+        if self.use_prompt_agent:
+            return self.prompt_agent.generate(context)
+        else:
+            raise ValueError("Prompt Agent is not enabled")
 
-xarray_integration.create_dataset('tree_stats',
-                                  tree_stats,
-                                  {'stat': list(tree_stats.keys())})
+    def analyze_protein_structure(self, sequence):
+        if self.use_alphafold:
+            return self.alphafold_integration.predict_structure(sequence, **self.alphafold_params)
+        else:
+            raise ValueError("AlphaFold integration is not enabled")
 
-# Perform operations on datasets
-gc_mean = xarray_integration.apply_operation('gc_content', 'mean')
-tree_stats_max = xarray_integration.apply_operation('tree_stats', 'max')
+    def perform_bioinformatics_analysis(self, data):
+        if self.bioinformatics_integration:
+            return self.bioinformatics_integration.analyze(data)
+        else:
+            raise ValueError("Bioinformatics integration is not initialized")
 
-# Merge datasets
-merged_dataset = xarray_integration.merge_datasets(['gc_content', 'tree_stats'])
+    def build_phylogenetic_tree(self, sequences):
+        if self.ete_integration:
+            return self.ete_integration.build_tree(sequences)
+        else:
+            raise ValueError("ETE integration is not initialized")
 
-# Save merged dataset
-xarray_integration.save_dataset('merged_bio_data', 'path/to/save/merged_bio_data.nc')
+def create_neuroflex_model():
+    return NeuroFlex(
+        features=[64, 32, 10],
+        use_cnn=True,
+        use_rnn=True,
+        use_gan=True,
+        fairness_constraint=0.1,
+        use_quantum=True,
+        use_alphafold=True,
+        backend='jax',
+        jax_model=JAXModel,
+        tensorflow_model=TensorFlowModel,
+        pytorch_model=PyTorchModel,
+        quantum_model=QuantumNeuralNetwork,
+        bioinformatics_integration=BioinformaticsIntegration(),
+        scikit_bio_integration=ScikitBioIntegration(),
+        ete_integration=ETEIntegration(),
+        alphafold_integration=AlphaFoldIntegration(),
+        alphafold_params={'max_recycling': 3},
+        use_unified_transformer=True,
+        unified_transformer_params={
+            'vocab_size': 30000,
+            'd_model': 512,
+            'num_heads': 8,
+            'num_layers': 6,
+            'd_ff': 2048,
+            'max_seq_length': 512,
+            'dropout': 0.1
+        }
+    )
 
-# Prepare training data (placeholder)
-train_data = None  # Replace with actual training data
-val_data = None    # Replace with actual validation data
+# Example usage
+if __name__ == "__main__":
+    model = create_neuroflex_model()
 
-# Initialize the UnifiedTransformer
-vocab_size = 30000  # Adjust this based on your tokenizer
-unified_transformer = get_unified_transformer(
-    backend='pytorch',
-    vocab_size=vocab_size,
-    d_model=512,
-    num_heads=8,
-    num_layers=6,
-    d_ff=2048,
-    max_seq_length=512,
-    dropout=0.1
-)
+    # Train the model (replace with actual data)
+    train_data = None
+    val_data = None
+    trained_model = model.train(train_data, val_data)
 
-# Train your model
-trained_state, trained_model = train_model(
-    model, train_data, val_data,
-    num_epochs=10, batch_size=32, learning_rate=1e-3,
-    bioinformatics_data=bioinformatics_data,
-    use_alphafold=True,
-    use_quantum=True,
-    alphafold_structures=alphafold_structures,
-    transformer=unified_transformer
-)
+    # Fine-tune for classification
+    model.fine_tune_transformer(task='classification', num_labels=2)
 
-# Fine-tune the transformer for a specific task (e.g., classification)
-unified_transformer.fine_tune(task='classification', num_labels=2)  # Adjust num_labels as needed
+    # Generate text
+    generated_text = model.generate_text("This is an example input for text generation.")
+    print("Generated text:", generated_text)
 
-# Example of using the transformer for a specific task
-input_ids = torch.randint(0, vocab_size, (1, 512))  # Replace with actual input data
-attention_mask = torch.ones_like(input_ids)
-output = unified_transformer.task_specific_forward(input_ids, attention_mask, task='classification')
-
-# Example of using the transformer for text generation
-input_text = "This is an example input for text generation."
-tokenized_input = model.process_text(input_text)
-input_ids = torch.tensor([tokenized_input])
-generated_text = unified_transformer.generate(input_ids, max_length=100)
-print("Generated text:", generated_text)
-
-# Example of few-shot learning with the transformer
-support_set = [
-    torch.randint(0, vocab_size, (1, 20)),  # Example 1
-    torch.randint(0, vocab_size, (1, 20)),  # Example 2
-    torch.randint(0, vocab_size, (1, 20))   # Example 3
-]
-query = torch.randint(0, vocab_size, (1, 10))
-few_shot_output = unified_transformer.few_shot_learning(support_set, query)
-print("Few-shot learning output:", few_shot_output)
+    # Few-shot learning example
+    support_set = [torch.randint(0, 30000, (1, 20)) for _ in range(3)]
+    query = torch.randint(0, 30000, (1, 10))
+    few_shot_output = model.few_shot_learning(support_set, query)
+    print("Few-shot learning output:", few_shot_output)
