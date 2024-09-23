@@ -7,10 +7,9 @@ import numpy as np
 import time
 import pytest
 import random
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, mock_open
 from NeuroFlex.advanced_models.multi_modal_learning import MultiModalLearning, logger
 from NeuroFlex.constants import (
-    PERFORMANCE_THRESHOLD,
     UPDATE_INTERVAL,
     LEARNING_RATE_ADJUSTMENT,
     MAX_HEALING_ATTEMPTS,
