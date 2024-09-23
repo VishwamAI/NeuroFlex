@@ -1,10 +1,7 @@
 import unittest
 import jax
 import jax.numpy as jnp
-from jax import Array
-import pytest
 from NeuroFlex.cognitive_architectures.custom_cognitive_model import (
-    CustomCognitiveModel,
     create_custom_cognitive_model,
     AttentionMechanism,
     WorkingMemory,
