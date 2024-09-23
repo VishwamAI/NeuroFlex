@@ -1,4 +1,5 @@
 [flake8]
 ignore = E8,E402,W503
-max-line-length = 88     # Adjust line length as needed
+max-line-length = 88
+# Adjust line length as needed
 exclude = .git,__pycache__,dist,build  # Exclude directories as needed
