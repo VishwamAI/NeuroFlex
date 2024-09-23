@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 from NeuroFlex.scientific_domains.art_integration import (
     ARTIntegration,
-    ARTPreprocessorWrapper,
 )
 
 

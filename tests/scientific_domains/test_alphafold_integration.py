@@ -1,18 +1,11 @@
 import unittest
 import pytest
-import jax
-import jax.numpy as jnp
-import numpy as np
-import sys
-import re
-import random
 from unittest.mock import patch, MagicMock
 import openmm
 import openmm.app as app
 import openmm.unit as unit
 import ml_collections
-import importlib
-import copy
+import sys
 
 sys.path.append("/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages")
 from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration

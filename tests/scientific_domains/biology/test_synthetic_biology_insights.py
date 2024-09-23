@@ -2,8 +2,6 @@ import unittest
 import pytest
 from unittest.mock import patch, MagicMock
 import numpy as np
-from Bio.Seq import Seq
-import networkx as nx
 from NeuroFlex.scientific_domains.biology.synthetic_biology_insights import (
     SyntheticBiologyInsights,
 )

@@ -2,7 +2,6 @@ import pytest
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-import optax
 import numpy as np
 from flax.training import train_state
 from NeuroFlex.generative_models.generative_ai import (
