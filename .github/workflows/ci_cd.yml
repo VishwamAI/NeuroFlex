@@ -10,9 +10,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python 3.8
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.8
       - name: Install linter
@@ -21,14 +21,14 @@ jobs:
           pip install flake8
       - name: Run linter
         run: |
-          flake8 --ignore E8,E402,W503 --max-line-length 88 .
+          flake8 --ignore E402,W503 --max-line-length 88 .
   test:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python 3.8
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.8
       - name: Install dependencies
