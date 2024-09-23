@@ -1,7 +1,6 @@
 import pytest
 import pandas as pd
 import numpy as np
-import jax.numpy as jnp
 from NeuroFlex.ai_ethics.aif360_integration import AIF360Integration
 from NeuroFlex.ai_ethics.rl_module import RLEnvironment, ReplayBuffer
 from NeuroFlex.ai_ethics.explainable_ai import ExplainableAI
