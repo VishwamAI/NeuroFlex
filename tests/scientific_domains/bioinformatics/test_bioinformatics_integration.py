@@ -1,5 +1,4 @@
 import unittest
-import pytest
 from unittest.mock import patch, mock_open
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord

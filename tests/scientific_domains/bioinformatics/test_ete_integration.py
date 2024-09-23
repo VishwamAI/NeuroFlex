@@ -1,5 +1,4 @@
 import unittest
-import pytest
 from unittest.mock import patch, MagicMock
 from NeuroFlex.scientific_domains.bioinformatics.ete_integration import ETEIntegration
 from ete3 import Tree
