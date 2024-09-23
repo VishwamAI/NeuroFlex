@@ -5,8 +5,6 @@ import unittest
 import torch
 import numpy as np
 import time
-import pytest
-import random
 from unittest.mock import patch, mock_open
 from NeuroFlex.advanced_models.multi_modal_learning import MultiModalLearning, logger
 from NeuroFlex.constants import (
