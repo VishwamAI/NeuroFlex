@@ -17,6 +17,7 @@ from NeuroFlex.ai_ethics.robustness import adversarial_attack_detection, model_d
 from NeuroFlex.ai_ethics.fairness import fairness_metrics, bias_mitigation
 from NeuroFlex.ai_ethics.ethical_framework import ethical_ai_guidelines
 from NeuroFlex.generative_models.ddpm import DDPM
+from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
 
 class SelfCuringAlgorithm:
     def __init__(self, model):
@@ -71,14 +72,13 @@ class SelfCuringAlgorithm:
     def correct_model_drift(self):
         print("Correcting model drift...")
         # Implement model recalibration or retraining on recent data
-
 class NeuroFlex:
     def __init__(self, features, use_cnn=False, use_rnn=False, use_gan=False, fairness_constraint=None,
                  use_quantum=False, use_alphafold=False, backend='jax', jax_model=None, tensorflow_model=None,
                  pytorch_model=None, quantum_model=None, bioinformatics_integration=None, scikit_bio_integration=None,
                  ete_integration=None, alphafold_integration=None, alphafold_params=None,
                  fairness_threshold=0.8, ethical_guidelines=None, use_unified_transformer=False,
-                 unified_transformer_params=None):
+                 unified_transformer_params=None, use_consciousness_simulation=False):
         self.features = features
         self.use_cnn = use_cnn
         self.use_rnn = use_rnn
@@ -101,9 +101,14 @@ class NeuroFlex:
         self.use_unified_transformer = use_unified_transformer
         self.unified_transformer = None
         self.unified_transformer_params = unified_transformer_params or {}
+        self.use_consciousness_simulation = use_consciousness_simulation
+        self.consciousness_simulation = None
 
         if self.use_unified_transformer:
             self.unified_transformer = UnifiedTransformer(**self.unified_transformer_params)
+
+        if self.use_consciousness_simulation:
+            self.consciousness_simulation = ConsciousnessSimulation()
 
     def process_text(self, text):
         if self.unified_transformer:
@@ -154,6 +159,12 @@ class NeuroFlex:
             return self.unified_transformer.few_shot_learning(support_set, query)
         else:
             raise ValueError("Unified Transformer is not initialized")
+
+    def simulate_consciousness(self, input_data):
+        if self.consciousness_simulation:
+            return self.consciousness_simulation.simulate(input_data)
+        else:
+            raise ValueError("Consciousness Simulation is not initialized")
 
 def create_neuroflex_model():
     return NeuroFlex(
