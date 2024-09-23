@@ -34,6 +34,19 @@ class ThreatDetector:
         self.logger.info("Setting up ThreatDetector...")
         self._setup_anomaly_detector()
         self._setup_deep_learning_model()
+        self._fit_anomaly_detector()
+
+    def _fit_anomaly_detector(self):
+        """
+        Fit the anomaly detector with initial data.
+        """
+        # Generate some initial data for fitting
+        state_dim = 10  # Assuming state dimension is 10
+        action_dim = 5  # Assuming action dimension is 5
+        next_state_dim = 10  # Assuming next state dimension is 10
+        total_dim = state_dim + action_dim + next_state_dim
+        initial_data = np.random.rand(100, total_dim)
+        self.anomaly_detector.fit(initial_data)
 
     def _setup_anomaly_detector(self):
         """
@@ -46,7 +59,7 @@ class ThreatDetector:
         Initialize and compile the deep learning model for threat detection.
         """
         self.deep_learning_model = Sequential([
-            LSTM(64, input_shape=(None, 3), return_sequences=True),
+            LSTM(64, input_shape=(1, 25), return_sequences=True),
             LSTM(32),
             Dense(16, activation='relu'),
             Dense(1, activation='sigmoid')
@@ -95,7 +108,9 @@ class ThreatDetector:
         if self.deep_learning_model is not None:
             combined_data = np.concatenate([state, action, next_state])
             scaled_data = self.scaler.transform(combined_data.reshape(1, -1))
-            threat_probability = self.deep_learning_model.predict(scaled_data)
+            # Reshape the input data to match LSTM's expected dimensions
+            reshaped_data = scaled_data.reshape(1, 1, -1)  # (batch_size, timesteps, features)
+            threat_probability = self.deep_learning_model.predict(reshaped_data)
             if threat_probability > 0.7:  # Adjust this threshold as needed
                 threat_detected = True
                 self.logger.warning(f"Deep learning model detected potential threat: probability {threat_probability}")

@@ -90,16 +90,18 @@ class LSTMNetwork(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        lstm_cell = nn.LSTMCell()
-        batch_size, seq_len, _ = x.shape
-        carry = lstm_cell.initialize_carry(jax.random.PRNGKey(0), (batch_size,), self.hidden_size)
-
-        outputs = []
-        for i in range(seq_len):
-            carry, y = lstm_cell(carry, x[:, i, :])
-            outputs.append(y)
-
-        return nn.Dense(features=self.output_size)(outputs[-1])
+        ScanLSTM = nn.scan(
+            nn.OptimizedLSTMCell,
+            variable_broadcast="params",
+            split_rngs={"params": False},
+            in_axes=1,
+            out_axes=1
+        )
+        lstm = ScanLSTM(self.hidden_size)
+        batch_size, seq_len, input_size = x.shape
+        carry = lstm.initialize_carry(jax.random.PRNGKey(0), (batch_size,), self.hidden_size)
+        carry, outputs = lstm(carry, x)
+        return nn.Dense(features=self.output_size)(outputs[:, -1, :])
 
 class TemporalConvNet(nn.Module):
     input_size: int

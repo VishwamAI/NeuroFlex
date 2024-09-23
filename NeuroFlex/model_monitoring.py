@@ -27,6 +27,17 @@ class ModelMonitor:
         self.logger = logging.getLogger(__name__)
         self.performance_history = deque(maxlen=performance_window)
         self.health_history = []
+        self.accuracy = None
+        self.loss = None
+
+    def get_accuracy(self):
+        return self.accuracy
+
+    def get_loss(self):
+        return self.loss
+
+    def get_performance_trend(self):
+        return self._calculate_trend()
 
     def setup(self):
         """Set up the ModelMonitor."""
