@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import torch
-from curiosity_driven_exploration import CuriosityDrivenAgent, train_curiosity_driven_agent
+from NeuroFlex.reinforcement_learning.curiosity_driven_exploration import CuriosityDrivenAgent, train_curiosity_driven_agent
 
 def test_curiosity_driven_exploration():
     # Create a simple environment
