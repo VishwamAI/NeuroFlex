@@ -1,4 +1,6 @@
-# NeuroFlex: Advanced Neural Network Framework (v0.1.3)
+# NeuroFlex: Advanced Neural Network Framework
+
+[![NeuroFlex CI/CD](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml/badge.svg)](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml)
 
 NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and TensorFlow, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project integrates state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
