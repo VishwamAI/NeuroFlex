@@ -7,6 +7,7 @@ Recent updates:
 - Enhanced support for TensorFlow and PyTorch submodules
 - Improved model creation and initialization functions
 - Added support for advanced thinking models like CDSTDP
+- Updated version to match main NeuroFlex version
 """
 
 from .jax.pytorch_module_converted import PyTorchModel
@@ -35,11 +36,12 @@ __all__ = [
     'get_core_nn_version',
     'SUPPORTED_FRAMEWORKS',
     'initialize_core_nn',
-    'create_model'
+    'create_model',
+    'validate_model_config'
 ]
 
 def get_core_nn_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_FRAMEWORKS = ['TensorFlow', 'PyTorch', 'JAX']
 
@@ -48,6 +50,9 @@ def initialize_core_nn():
     # Add any necessary initialization code here
 
 def create_model(framework, model_type, *args, **kwargs):
+    if framework.lower() not in [f.lower() for f in SUPPORTED_FRAMEWORKS]:
+        raise ValueError(f"Unsupported framework: {framework}")
+
     if framework.lower() == 'tensorflow':
         # Import and use TensorFlow-specific functions
         from .tensorflow import create_tensorflow_model
@@ -56,7 +61,22 @@ def create_model(framework, model_type, *args, **kwargs):
         # Import and use PyTorch-specific functions
         from .pytorch import create_pytorch_model
         return create_pytorch_model(*args, **kwargs)
-    else:
-        raise ValueError(f"Unsupported framework: {framework}")
+    elif framework.lower() == 'jax':
+        # TODO: Implement JAX model creation
+        raise NotImplementedError("JAX model creation not yet implemented")
+
+def validate_model_config(config):
+    """
+    Validate the configuration for a neural network model.
+    """
+    required_keys = ['framework', 'model_type', 'input_shape', 'output_dim', 'hidden_layers']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['framework'] not in SUPPORTED_FRAMEWORKS:
+        raise ValueError(f"Unsupported framework: {config['framework']}")
+
+    return True
 
 # Add any other utility functions or constants as needed

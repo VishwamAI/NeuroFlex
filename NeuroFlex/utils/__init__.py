@@ -7,6 +7,7 @@ Recent updates:
 - Enhanced data normalization and JSON handling functions
 - Improved support for descriptive statistics and BCI data analysis
 - Added utility functions for directory management and list manipulation
+- Updated version to match main NeuroFlex version
 """
 
 # __init__.py for utils module
@@ -43,11 +44,12 @@ __all__ = [
     'get_utils_version',
     'SUPPORTED_UTILS',
     'initialize_utils',
-    'create_util_function'
+    'create_util_function',
+    'validate_util_config'
 ]
 
 def get_utils_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_UTILS = [
     "load_data",
@@ -65,9 +67,13 @@ SUPPORTED_UTILS = [
 
 def initialize_utils():
     print("Initializing Utils Module...")
+    print(f"Utils version: {get_utils_version()}")
     # Add any necessary initialization code here
 
 def create_util_function(util_name, *args, **kwargs):
+    if util_name not in SUPPORTED_UTILS:
+        raise ValueError(f"Unsupported util function: {util_name}")
+
     if util_name == "load_data":
         return load_data(*args, **kwargs)
     elif util_name == "save_data":
@@ -90,7 +96,19 @@ def create_util_function(util_name, *args, **kwargs):
         return analyze_bci_data(*args, **kwargs)
     elif util_name == "get_activation_function":
         return get_activation_function(*args, **kwargs)
-    else:
-        raise ValueError(f"Unsupported util function: {util_name}")
+
+def validate_util_config(config):
+    """
+    Validate the configuration for a utility function.
+    """
+    required_keys = ['util_name', 'parameters']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['util_name'] not in SUPPORTED_UTILS:
+        raise ValueError(f"Unsupported util function: {config['util_name']}")
+
+    return True
 
 # Add any other Utils-specific utility functions or constants as needed

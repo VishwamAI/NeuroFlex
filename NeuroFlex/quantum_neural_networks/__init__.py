@@ -10,6 +10,7 @@ Recent updates:
 - Integrated self-healing mechanisms and adaptive learning
 - Implemented performance monitoring and diagnosis
 - Enhanced quantum circuit with advanced encoding and variational layers
+- Updated version to match main NeuroFlex version
 """
 
 from .quantum_nn_module import QuantumNeuralNetwork
@@ -29,11 +30,12 @@ __all__ = [
     'get_quantum_nn_version',
     'SUPPORTED_QUANTUM_MODELS',
     'initialize_quantum_nn',
-    'create_quantum_nn'
+    'create_quantum_nn',
+    'validate_quantum_nn_config'
 ]
 
 def get_quantum_nn_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_QUANTUM_MODELS = [
     "QuantumNeuralNetwork"
@@ -44,9 +46,24 @@ def initialize_quantum_nn():
     # Add any necessary initialization code here
 
 def create_quantum_nn(model_type, *args, **kwargs):
+    if model_type not in SUPPORTED_QUANTUM_MODELS:
+        raise ValueError(f"Unsupported quantum model type: {model_type}")
+
     if model_type == "QuantumNeuralNetwork":
         return QuantumNeuralNetwork(*args, **kwargs)
-    else:
-        raise ValueError(f"Unsupported quantum model type: {model_type}")
+
+def validate_quantum_nn_config(config):
+    """
+    Validate the configuration for a quantum neural network model.
+    """
+    required_keys = ['model_type', 'n_qubits', 'n_layers']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['model_type'] not in SUPPORTED_QUANTUM_MODELS:
+        raise ValueError(f"Unsupported quantum model type: {config['model_type']}")
+
+    return True
 
 # Add any other Quantum Neural Networks-specific utility functions or constants as needed

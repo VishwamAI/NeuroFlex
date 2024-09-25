@@ -7,6 +7,7 @@ Recent updates:
 - Enhanced bioinformatics integration with new tools
 - Improved support for synthetic biology insights
 - Added integration with Google and IBM AI services
+- Updated version to match main NeuroFlex version
 """
 
 from .math_solvers import MathSolver
@@ -30,11 +31,12 @@ __all__ = [
     'get_scientific_domains_version',
     'SUPPORTED_SCIENTIFIC_DOMAINS',
     'initialize_scientific_domains',
-    'create_scientific_domain_model'
+    'create_scientific_domain_model',
+    'validate_scientific_domain_config'
 ]
 
 def get_scientific_domains_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_SCIENTIFIC_DOMAINS = [
     "Mathematics",
@@ -51,6 +53,9 @@ def initialize_scientific_domains():
     # Add any necessary initialization code here
 
 def create_scientific_domain_model(domain, *args, **kwargs):
+    if domain not in SUPPORTED_SCIENTIFIC_DOMAINS:
+        raise ValueError(f"Unsupported scientific domain: {domain}")
+
     if domain == "Mathematics":
         return MathSolver(*args, **kwargs)
     elif domain == "Bioinformatics":
@@ -65,7 +70,19 @@ def create_scientific_domain_model(domain, *args, **kwargs):
         return IBMIntegration(*args, **kwargs)
     elif domain == "Xarray":
         return XarrayIntegration(*args, **kwargs)
-    else:
-        raise ValueError(f"Unsupported scientific domain: {domain}")
+
+def validate_scientific_domain_config(config):
+    """
+    Validate the configuration for a scientific domain model.
+    """
+    required_keys = ['domain', 'parameters']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['domain'] not in SUPPORTED_SCIENTIFIC_DOMAINS:
+        raise ValueError(f"Unsupported scientific domain: {config['domain']}")
+
+    return True
 
 # Add any other Scientific Domains-specific utility functions or constants as needed
