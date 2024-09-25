@@ -8,6 +8,7 @@ Recent updates:
 - Integrated self-healing mechanisms and adaptive learning
 - Implemented GWT-inspired consciousness simulation
 - Enhanced extended cognitive architectures with BCI processing
+- Updated version to match main NeuroFlex version
 """
 
 from .cognitive_architecture import CognitiveArchitecture, create_consciousness, create_feedback_mechanism
@@ -41,11 +42,12 @@ __all__ = [
     'get_cognitive_architectures_version',
     'SUPPORTED_COGNITIVE_MODELS',
     'initialize_cognitive_architectures',
-    'create_cognitive_model'
+    'create_cognitive_model',
+    'validate_cognitive_model_config'
 ]
 
 def get_cognitive_architectures_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_COGNITIVE_MODELS = [
     "CognitiveArchitecture",
@@ -59,6 +61,9 @@ def initialize_cognitive_architectures():
     # Add any necessary initialization code here
 
 def create_cognitive_model(model_type, *args, **kwargs):
+    if model_type not in SUPPORTED_COGNITIVE_MODELS:
+        raise ValueError(f"Unsupported cognitive model type: {model_type}")
+
     if model_type == "CognitiveArchitecture":
         return CognitiveArchitecture(*args, **kwargs)
     elif model_type == "ConsciousnessSimulation":
@@ -67,7 +72,19 @@ def create_cognitive_model(model_type, *args, **kwargs):
         return ExtendedCognitiveArchitecture(*args, **kwargs)
     elif model_type == "CDSTDP":
         return CDSTDP(*args, **kwargs)
-    else:
-        raise ValueError(f"Unsupported cognitive model type: {model_type}")
+
+def validate_cognitive_model_config(config):
+    """
+    Validate the configuration for a cognitive model.
+    """
+    required_keys = ['model_type', 'input_size', 'hidden_size', 'output_size']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['model_type'] not in SUPPORTED_COGNITIVE_MODELS:
+        raise ValueError(f"Unsupported cognitive model type: {config['model_type']}")
+
+    return True
 
 # Add any other Cognitive Architectures-specific utility functions or constants as needed

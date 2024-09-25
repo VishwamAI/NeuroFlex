@@ -35,14 +35,15 @@ __all__ = [
 ]
 
 def get_edge_ai_version():
-    return "1.0.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_EDGE_AI_TECHNIQUES = [
     "Model Compression",
     "Quantization",
     "Pruning",
     "Knowledge Distillation",
-    "Federated Learning"
+    "Federated Learning",
+    "Neuromorphic Computing"  # Added as it's part of this module
 ]
 
 def initialize_edge_ai():
@@ -55,6 +56,8 @@ def create_edge_ai_model(technique, *args, **kwargs):
             return EdgeAIOptimization.compress_model(*args, **kwargs)
         elif technique == "Quantization":
             return EdgeAIOptimization.quantize_model(*args, **kwargs)
+        elif technique == "Neuromorphic Computing":
+            return NeuromorphicComputing.create_neuromorphic_model(*args, **kwargs)
         # Add more techniques as needed
     else:
         raise ValueError(f"Unsupported Edge AI technique: {technique}")

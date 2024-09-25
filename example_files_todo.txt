@@ -1,0 +1,9 @@
+# Example Files To-Do List
+
+- [x] /home/ubuntu/NeuroFlex/examples/neuroflex/main.py
+
+# Instructions
+- Update each example file to ensure it uses the latest NeuroFlex model and development standards.
+- Verify that each example demonstrates the intended functionality clearly and effectively.
+- Ensure consistency with the recent updates made to the __init__.py files and other modules.
+- Check off each file as it is updated.

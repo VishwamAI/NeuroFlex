@@ -19,6 +19,7 @@ Recent updates:
 - Integrated curiosity-driven exploration methods
   - Implemented Intrinsic Curiosity Module (ICM) for better exploration
   - Added novelty detection mechanisms to encourage exploration of new states
+- Updated version to match main NeuroFlex version
 """
 
 from .rl_module import RLAgent, RLEnvironment, PrioritizedReplayBuffer, train_rl_agent
@@ -36,11 +37,14 @@ __all__ = [
     'get_rl_version',
     'SUPPORTED_RL_ALGORITHMS',
     'create_epsilon_greedy_policy',
-    'initialize_rl_module'
+    'initialize_rl_module',
+    'create_multi_agent_environment',
+    'train_multi_agent',
+    'validate_rl_config'
 ]
 
 def get_rl_version():
-    return "1.1.0"
+    return "0.1.3"  # Updated to match main NeuroFlex version
 
 SUPPORTED_RL_ALGORITHMS = ['DQN', 'PPO', 'A2C', 'DDPG', 'SAC', 'TD3']
 
@@ -81,5 +85,19 @@ def train_multi_agent(agents, env, num_episodes):
     # Placeholder for multi-agent training logic
     # This should be implemented based on specific multi-agent RL algorithms
     pass
+
+def validate_rl_config(config):
+    """
+    Validate the configuration for a reinforcement learning algorithm.
+    """
+    required_keys = ['algorithm', 'learning_rate', 'discount_factor']
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required configuration key: {key}")
+
+    if config['algorithm'] not in SUPPORTED_RL_ALGORITHMS:
+        raise ValueError(f"Unsupported RL algorithm: {config['algorithm']}")
+
+    return True
 
 # Add any other Reinforcement Learning-specific utility functions or constants as needed

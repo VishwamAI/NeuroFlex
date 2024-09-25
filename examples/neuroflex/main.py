@@ -5,6 +5,8 @@ from jax import jit
 import flax.linen as nn
 import gym
 from NeuroFlex.core_neural_networks.advanced_nn import data_augmentation, NeuroFlexNN, create_train_state, select_action
+from NeuroFlex.utils import validate_util_config
+from NeuroFlex.config import get_neuroflex_version
 
 
 class TestDataAugmentation(unittest.TestCase):
@@ -121,5 +123,26 @@ class TestReinforcementLearning(unittest.TestCase):
         self.assertTrue(0 <= int(action) < self.action_space)
 
 
+class TestUtilsAndConfig(unittest.TestCase):
+    def test_validate_util_config(self):
+        valid_config = {
+            'util_name': 'load_data',
+            'parameters': {'file_path': 'data.csv'}
+        }
+        self.assertTrue(validate_util_config(valid_config))
+
+        invalid_config = {
+            'util_name': 'invalid_util',
+            'parameters': {}
+        }
+        with self.assertRaises(ValueError):
+            validate_util_config(invalid_config)
+
+    def test_neuroflex_version(self):
+        version = get_neuroflex_version()
+        self.assertEqual(version, "0.1.3")  # Update this if the version changes
+
+
 if __name__ == '__main__':
+    print(f"Running tests for NeuroFlex version: {get_neuroflex_version()}")
     unittest.main()
