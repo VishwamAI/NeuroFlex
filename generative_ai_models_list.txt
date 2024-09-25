@@ -1,0 +1,7 @@
+The following generative AI models are used in the NeuroFlex project:
+
+1. TransformerModel
+2. GenerativeAIModel
+3. GAN
+
+These models are implemented in the `generative_ai.py` file and are part of the generative models module.
