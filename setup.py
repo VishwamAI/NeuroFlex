@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="neuroflex",
-    version="0.1.3",  # Updated version to 0.1.3
+    version="0.1.4",  # Updated version to 0.1.3
     author="kasinadhsarma",
     author_email="kasinadhsarma@gmail.com",
     description="An advanced neural network framework with interpretability, generalization, robustness, and fairness features",
