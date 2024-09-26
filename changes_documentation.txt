@@ -40,6 +40,8 @@ This document outlines the changes made to the NeuroFlex repository to address i
 
 - **Enhanced Logging for Line Search Warnings:** By providing more detailed logging, we can better understand the context of line search warnings and address any underlying issues more effectively. This improvement helps ensure that the optimization process is robust and reliable.
 
+- **Refined Test Logic for Time Series Analysis:** The test logic in `test_analyze_warnings` was refined to better handle and document warnings related to ARIMA and SARIMA models. This involved adjusting the test setup and assertions to ensure that expected warnings are captured and documented, improving the reliability of the tests.
+
 - **Fixed Seed for Consistency:** Setting a fixed seed ensures that the test data is consistent across evaluations, which is crucial for reliable and reproducible test results. This change helps prevent inconsistencies in test outcomes due to variations in randomly generated data.
 
 - **Testing and Verification:** Continuous testing and verification were essential to ensure that the changes made were effective in resolving the issues and that the project remained stable and functional.
