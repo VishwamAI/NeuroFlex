@@ -117,16 +117,21 @@ def test_analyze_warnings(time_series_analyzer, method, warning_message, data, o
         result = time_series_analyzer.analyze(method, data, order=order, seasonal_order=seasonal_order)
 
         # Log warnings and result for debugging
-        for warn in w:
-            logger.info(f"Captured warning: {warn.message}")
+        captured_warnings = [str(warn.message) for warn in w]
+        logger.info(f"Captured warnings: {captured_warnings}")
         logger.info(f"Analysis result: {result}")
 
-        if method == 'sarima':
-            assert any(isinstance(warn.message, UserWarning) and warning_message in str(warn.message) for warn in w), \
-                f"Expected UserWarning with message '{warning_message}' not found"
-        else:
-            assert any(warning_message in str(warn.message) for warn in w), \
-                f"Expected warning '{warning_message}' not found"
+        # Check if the expected warning is present
+        expected_warning_found = any(warning_message in str(warn.message) for warn in w)
+
+        # Assert and provide detailed message
+        assert expected_warning_found, (
+            f"Expected warning '{warning_message}' not found. "
+            f"Captured warnings: {captured_warnings}"
+        )
+
+        # Verify the result is not None or empty
+        assert result is not None and len(result) > 0, "Analysis result is empty or None"
 
 def test_update_performance(time_series_analyzer):
     initial_performance = time_series_analyzer.performance

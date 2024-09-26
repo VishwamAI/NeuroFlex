@@ -165,6 +165,12 @@ class TestMultiModalLearning(unittest.TestCase):
         val_inputs = {k: torch.randn(val_batch_size, *v.shape[1:]) for k, v in inputs.items()}
         val_labels = torch.randint(0, 10, (val_batch_size,))
 
+        # Ensure all inputs are tensors
+        inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in inputs.items()}
+        val_inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in val_inputs.items()}
+        labels = labels if isinstance(labels, torch.Tensor) else torch.tensor(labels)
+        val_labels = val_labels if isinstance(val_labels, torch.Tensor) else torch.tensor(val_labels)
+
         initial_params = [p.clone().detach() for p in self.model.parameters()]
 
         epochs = 10
@@ -202,9 +208,7 @@ class TestMultiModalLearning(unittest.TestCase):
         # Check forward pass
         logger.info("Debug: Performing forward pass")
         try:
-            # Ensure inputs are tensors
-            tensor_inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in inputs.items()}
-            output = self.model.forward(tensor_inputs)
+            output = self.model.forward(inputs)
             logger.info(f"Debug: Forward pass output shape: {output.shape}")
         except Exception as e:
             logger.error(f"Error during forward pass: {str(e)}")
