@@ -238,6 +238,10 @@ class MultiModalLearning(nn.Module):
 
         logger.debug(f"Final fused tensor shape: {fused.shape}, type: {type(fused)}")
 
+        # Ensure input to classifier is a tensor
+        if not isinstance(fused, torch.Tensor):
+            fused = torch.tensor(fused, dtype=torch.float32)
+
         return self.classifier(fused)
 
     def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5, batch_size: int = 32):
