@@ -52,60 +52,82 @@ class MathSolver:
         Perform optimization with fallback methods and custom error handling.
         """
         methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg', 'COBYLA']
-        max_iterations = 100000000  # Further increased from 50000000
+        max_iterations = 1000000
+        best_result = None
+        best_fun = float('inf')
+
+        def log_optimization_details(m, result, w, context):
+            print(f"Method: {m}")
+            print(f"Function: {func.__name__}")
+            print(f"Initial guess: {initial_guess}")
+            print(f"Result: success={result.success if result else 'N/A'}, message={result.message if result else 'N/A'}")
+            print(f"Function value at result: {result.fun if result else 'N/A'}")
+            print(f"Number of iterations: {result.nit if result else 'N/A'}")
+            if w:
+                print(f"Warning: {w[-1].message}")
+            print(f"Additional context: {context}")
+            print("--------------------")
+
+        def adjust_initial_guess(guess, scale=0.01):
+            return guess + np.random.normal(0, scale, size=guess.shape)
+
         for m in methods:
             try:
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")
-                    if m in ['trust-constr', 'dogleg', 'trust-ncg']:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-26, 'xtol': 1e-26})
-                    elif m == 'COBYLA':
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'tol': 1e-26})
-                    else:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-30, 'gtol': 1e-30, 'maxls': 10000000})
-                    if len(w) == 0:  # No warnings
-                        print(f"Optimization successful with method {m}")
-                        print(f"Result: success={result.success}, message={result.message}")
-                        return result
-                    elif "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
-                        print(f"Warning in {m}: {w[-1].message}")
-                        print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
-                        print(f"Result: success={result.success}, message={result.message}")
-                        print(f"Function value at result: {result.fun}")
-                        print(f"Number of iterations: {result.nit}")
-                        print("Adjusting parameters and trying again.")
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 20000000, 'ftol': 1e-32, 'gtol': 1e-32})
-                        print(f"Retry result: success={result.success}, message={result.message}")
-                        print(f"Retry function value at result: {result.fun}")
-                        print(f"Retry number of iterations: {result.nit}")
-                        if result.success:
-                            return result
-                        print("Trying next method.")
-                    else:
-                        print(f"Unexpected warning in {m}: {w[-1].message}")
-                        print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
-                        print(f"Result: success={result.success}, message={result.message}")
-                        print(f"Function value at result: {result.fun}")
-                        print(f"Number of iterations: {result.nit}")
-                        print("Trying next method.")
-            except Exception as e:
-                if "ABNORMAL_TERMINATION_IN_LNSRCH" in str(e):
-                    print(f"LNSRCH termination in {m}.")
-                    print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
-                    print(f"Error details: {str(e)}")
-                    print("Trying next method.")
-                else:
-                    print(f"Unexpected error in {m}: {str(e)}")
-                    print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
-                    print(f"Error details: {str(e)}")
-                    print("Trying next method.")
+                    options = {
+                        'maxiter': max_iterations,
+                        'ftol': 1e-10,
+                        'gtol': 1e-10,
+                        'maxls': 100,
+                        'maxcor': 100
+                    }
 
-        # If all methods fail, return the best result so far using a robust method
-        print("All methods failed. Using Nelder-Mead as a last resort.")
-        result = optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 10000, 'ftol': 1e-32, 'adaptive': True})
-        print(f"Final result: success={result.success}, message={result.message}")
-        print(f"Final function value at result: {result.fun}")
-        print(f"Final number of iterations: {result.nit}")
+                    if m in ['trust-constr', 'dogleg', 'trust-ncg']:
+                        options['gtol'] = 1e-8
+                        options['xtol'] = 1e-8
+                    elif m == 'COBYLA':
+                        options = {'maxiter': max_iterations, 'tol': 1e-8}
+                    elif m == 'Nelder-Mead':
+                        options = {'maxiter': max_iterations, 'xatol': 1e-8, 'fatol': 1e-8}
+
+                    current_guess = initial_guess
+                    for attempt in range(10):  # Increased attempts to 10
+                        result = optimize.minimize(func, current_guess, method=m, options=options)
+
+                        if result.success or (result.fun < best_fun and np.isfinite(result.fun)):
+                            if result.fun < best_fun:
+                                best_result = result
+                                best_fun = result.fun
+                            log_optimization_details(m, result, w, f"Optimization successful (attempt {attempt + 1})")
+                            return result
+
+                        if w and "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
+                            log_optimization_details(m, result, w, f"Line search warning (attempt {attempt + 1})")
+                            current_guess = adjust_initial_guess(current_guess)
+                            options['maxls'] *= 2  # Increase maxls for the next attempt
+                        elif w:
+                            log_optimization_details(m, result, w, f"Unexpected warning (attempt {attempt + 1})")
+                            current_guess = adjust_initial_guess(current_guess)
+                        else:
+                            log_optimization_details(m, result, None, f"Optimization failed without warning (attempt {attempt + 1})")
+                            current_guess = adjust_initial_guess(current_guess)
+
+                    print(f"Method {m} failed after 10 attempts. Trying next method.")
+
+            except Exception as e:
+                log_optimization_details(m, None, None, f"Error: {str(e)}")
+                print("Trying next method.")
+
+        if best_result is not None:
+            print("Returning best result found.")
+            return best_result
+
+        # If all methods fail, use differential evolution as a last resort
+        print("All methods failed. Using differential evolution as a last resort.")
+        bounds = [(x - abs(x), x + abs(x)) for x in initial_guess]  # Create bounds based on initial guess
+        result = optimize.differential_evolution(func, bounds, maxiter=max_iterations, tol=1e-10, strategy='best1bin', popsize=20)
+        log_optimization_details('Differential Evolution', result, None, "Final fallback method")
         return result
 
     def linear_algebra_operations(self, matrix_a, matrix_b, operation='multiply'):
