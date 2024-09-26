@@ -51,13 +51,16 @@ class MathSolver:
         """
         Perform optimization with fallback methods and custom error handling.
         """
-        methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG']
-        max_iterations = 5000
+        methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg']
+        max_iterations = 50000
         for m in methods:
             try:
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")
-                    result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-8, 'gtol': 1e-8})
+                    if m in ['trust-constr', 'dogleg', 'trust-ncg']:
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-10, 'xtol': 1e-10})
+                    else:
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-14, 'gtol': 1e-14, 'maxls': 1000})
                     if len(w) == 0:  # No warnings
                         return result
                     elif "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
@@ -65,7 +68,7 @@ class MathSolver:
                         print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
                         print(f"Result: success={result.success}, message={result.message}")
                         print("Adjusting parameters and trying again.")
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 100, 'ftol': 1e-10, 'gtol': 1e-10})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 2000, 'ftol': 1e-16, 'gtol': 1e-16})
                         if result.success:
                             return result
                         print("Trying next method.")
@@ -85,7 +88,7 @@ class MathSolver:
                     print("Trying next method.")
 
         # If all methods fail, return the best result so far using a robust method
-        return optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 4, 'ftol': 1e-12, 'adaptive': True})
+        return optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 5, 'ftol': 1e-16, 'adaptive': True})
 
     def linear_algebra_operations(self, matrix_a, matrix_b, operation='multiply'):
         """

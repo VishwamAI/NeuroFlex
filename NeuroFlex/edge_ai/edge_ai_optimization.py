@@ -263,8 +263,8 @@ class EdgeAIOptimization:
             latency = (end_time - start_time) / 10  # Average latency in seconds
 
             performance = {'accuracy': accuracy, 'latency': latency}
-            # Removed: self._update_performance(accuracy, model)
-            # Removed: self.performance = accuracy
+            # Call _update_performance to ensure the performance attribute is updated correctly
+            self._update_performance(accuracy, model)
             logger.info(f"Model state after evaluation: {self._get_model_state(model)}")
             return performance
         except Exception as e:
@@ -314,12 +314,24 @@ class EdgeAIOptimization:
             for attempt in range(MAX_HEALING_ATTEMPTS):
                 logger.info(f"Healing attempt {attempt + 1}/{MAX_HEALING_ATTEMPTS}")
 
-                for strategy in self.healing_strategies:
+                # Prioritize learning rate adjustment
+                old_lr = self.learning_rate
+                new_lr = self._adjust_learning_rate(model)
+                logger.info(f"Learning rate adjusted from {old_lr:.8f} to {new_lr:.8f}")
+                self.learning_rate = new_lr
+                self.initialize_optimizer(model)
+                logger.info(f"Optimizer reinitialized with new learning rate: {self.learning_rate:.8f}")
+
+                # Apply strategies in a specific order
+                strategies_order = [
+                    self._reinitialize_layers,
+                    self._apply_regularization,
+                    self._increase_model_capacity
+                ]
+
+                for strategy in strategies_order:
                     logger.info(f"Applying strategy: {strategy.__name__}")
-                    if strategy.__name__ in ['_reinitialize_layers', '_increase_model_capacity', '_apply_regularization']:
-                        strategy(model)
-                    else:
-                        strategy(model)
+                    strategy(model)
                     new_performance = self._simulate_performance(model)
                     if not self.performance_history or new_performance != self.performance_history[-1]:
                         self.performance_history.append(new_performance)
@@ -339,15 +351,10 @@ class EdgeAIOptimization:
                         self._apply_best_config(best_config, model)
                         return
 
-                # Adjust learning rate after all strategies have been applied
-                old_lr = self.learning_rate
-                new_lr = self._adjust_learning_rate(model)
-                logger.info(f"Learning rate adjusted from {old_lr:.8f} to {new_lr:.8f}")
-                # Synchronize learning rate and reinitialize optimizer
-                self.learning_rate = new_lr
-                self.initialize_optimizer(model)
-                logger.info(f"Optimizer reinitialized with new learning rate: {self.learning_rate:.8f}")
-                logger.info(f"Model optimizer learning rate: {model.optimizer.param_groups[0]['lr']:.8f}")
+                    # Early stopping if no improvement
+                    if len(self.performance_history) > 2 and new_performance <= self.performance_history[-2]:
+                        logger.info("No improvement in performance. Moving to next attempt.")
+                        break
 
             if best_performance > initial_performance:
                 logger.info(f"Self-healing improved performance from {initial_performance:.4f} to {best_performance:.4f}. Setting best found configuration.")
@@ -477,11 +484,12 @@ class EdgeAIOptimization:
         torch.manual_seed(42)
 
         # Generate more representative input data
-        batch_size = 32
+        batch_size = 128  # Increased batch size for better representation
         dummy_input = torch.randn(batch_size, model.input_size).to(next(model.parameters()).device)
         dummy_target = torch.randint(0, 2, (batch_size,)).to(next(model.parameters()).device)
 
         # Compute loss and accuracy
+        model.eval()  # Set model to evaluation mode
         with torch.no_grad():
             output = model(dummy_input)
             loss = nn.functional.cross_entropy(output, dummy_target)
@@ -491,20 +499,21 @@ class EdgeAIOptimization:
         loss_improvement = max(0, self.performance - loss.item())
         accuracy_improvement = max(0, accuracy - self.performance)
 
-        # Adjust the weight of improvements to favor positive changes
-        performance_change = (loss_improvement * 0.8 + accuracy_improvement * 0.2)
+        # Adjust the weight of improvements to favor accuracy
+        performance_change = (loss_improvement * 0.3 + accuracy_improvement * 0.7)
 
-        # Apply a scaling factor to make improvements more significant
-        scaling_factor = 2.0
+        # Apply a dynamic scaling factor based on current performance
+        scaling_factor = 1.0 + (1.0 - self.performance)  # Higher scaling for lower performance
         performance_change *= scaling_factor
 
         # Ensure the performance change is positive but not unrealistically large
-        performance_change = min(max(0, performance_change), 0.15)
+        performance_change = min(max(0, performance_change), 0.1)
 
         simulated_performance = self.performance + performance_change
 
-        # Add small random fluctuation
-        simulated_performance += np.random.uniform(-0.002, 0.008)
+        # Add small random fluctuation based on current performance
+        fluctuation_range = 0.01 * (1.0 - self.performance)  # Smaller fluctuations for higher performance
+        simulated_performance += np.random.uniform(-fluctuation_range, fluctuation_range)
 
         return max(0.0, min(1.0, simulated_performance))  # Ensure performance is between 0 and 1
 
