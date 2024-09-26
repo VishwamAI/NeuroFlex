@@ -7,6 +7,14 @@ from unittest.mock import patch, MagicMock
 from NeuroFlex.advanced_models.advanced_time_series_analysis import AdvancedTimeSeriesAnalysis
 from statsmodels.tools.sm_exceptions import ValueWarning, EstimationWarning, ConvergenceWarning
 
+warnings.filterwarnings("ignore", category=UserWarning, message="Non-stationary starting autoregressive parameters")
+warnings.filterwarnings("ignore", category=UserWarning, message="Non-invertible starting MA parameters")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in divide")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="divide by zero encountered in divide")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in log")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="Mean of empty slice")
+warnings.filterwarnings("ignore", category=ConvergenceWarning, message="Maximum Likelihood optimization failed to converge")
+
 logger = logging.getLogger(__name__)
 
 @pytest.fixture
