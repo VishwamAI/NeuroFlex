@@ -37,6 +37,7 @@ from typing import List, Dict, Any, Union, Optional
 import logging
 from torch.utils.data import DataLoader
 import time
+import random
 from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -240,29 +241,31 @@ class EdgeAIOptimization:
         """Evaluate the model's performance on the given test data."""
         try:
             # Set random seeds for reproducibility
-            np.random.seed(42)
             torch.manual_seed(42)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
             logger.info(f"Model state before evaluation: {self._get_model_state(model)}")
+            logger.info(f"Test data shape: {test_data.shape}")
             model.eval()
             device = next(model.parameters()).device
             test_data = test_data.to(device)
 
             with torch.no_grad():
+                start_time = time.perf_counter()
                 outputs = model(test_data)
-                _, predicted = torch.max(outputs, 1)
-                accuracy = (predicted == torch.zeros(test_data.size(0), device=device)).sum().item() / test_data.size(0)
+                end_time = time.perf_counter()
 
-            # Measure latency
-            start_time = time.perf_counter()
-            for _ in range(10):  # Run multiple times for more accurate measurement
-                model(test_data)
-            end_time = time.perf_counter()
-            latency = (end_time - start_time) / 10  # Average latency in seconds
+                logger.info(f"Model outputs shape: {outputs.shape}")
+                logger.info(f"Model outputs sample: {outputs[:5]}")
+
+                _, predicted = torch.max(outputs, 1)
+                logger.info(f"Predicted labels: {predicted[:10]}")
+                accuracy = (predicted == torch.zeros(test_data.size(0), device=device)).sum().item() / test_data.size(0)
+                latency = end_time - start_time
 
             performance = {'accuracy': accuracy, 'latency': latency}
+            logger.info(f"Calculated accuracy: {accuracy}")
             # Call _update_performance to ensure the performance attribute is updated correctly
             self._update_performance(accuracy, model)
             logger.info(f"Model state after evaluation: {self._get_model_state(model)}")
@@ -295,6 +298,23 @@ class EdgeAIOptimization:
         if self.learning_rate != previous_lr:
             logger.info(f"Learning rate changed from {previous_lr:.6f} to {self.learning_rate:.6f}")
 
+    def _calculate_performance_trend(self):
+        """Calculate the trend of performance changes over recent attempts."""
+        if len(self.performance_history) < 2:
+            return 0  # Not enough data to calculate trend
+
+        recent_performances = self.performance_history[-10:]  # Consider last 10 performances
+        if len(recent_performances) < 2:
+            return 0  # Not enough recent data
+
+        # Calculate the slope of the trend line
+        x = list(range(len(recent_performances)))
+        y = recent_performances
+        n = len(x)
+        m = (n * sum(x[i] * y[i] for i in range(n)) - sum(x) * sum(y)) / (n * sum(x[i]**2 for i in range(n)) - sum(x)**2)
+
+        return m  # Return the slope as the trend indicator
+
     def _self_heal(self, model: nn.Module):
         """Implement self-healing mechanisms."""
         if hasattr(self, '_is_healing') and self._is_healing:
@@ -310,33 +330,51 @@ class EdgeAIOptimization:
             'model_state': self._get_model_state(model)
         }
 
+        logger.info(f"Initial state - Performance: {initial_performance:.4f}, Learning rate: {self.learning_rate:.8f}")
+        logger.info(f"Model architecture: {model}")
+        logger.info(f"Optimizer state: {self.optimizer.state_dict()}")
+
         try:
             for attempt in range(MAX_HEALING_ATTEMPTS):
                 logger.info(f"Healing attempt {attempt + 1}/{MAX_HEALING_ATTEMPTS}")
 
-                # Prioritize learning rate adjustment
+                # Adaptive learning rate adjustment
                 old_lr = self.learning_rate
-                new_lr = self._adjust_learning_rate(model)
+                new_lr = self._dynamic_learning_rate_adjustment(model, attempt)
+                lr_change_factor = 1.1 if attempt < MAX_HEALING_ATTEMPTS // 2 else 1.05
+                new_lr = max(min(new_lr, old_lr * lr_change_factor), old_lr / lr_change_factor)
                 logger.info(f"Learning rate adjusted from {old_lr:.8f} to {new_lr:.8f}")
                 self.learning_rate = new_lr
                 self.initialize_optimizer(model)
                 logger.info(f"Optimizer reinitialized with new learning rate: {self.learning_rate:.8f}")
+                logger.info(f"Updated optimizer state: {self.optimizer.state_dict()}")
 
-                # Apply strategies in a specific order
-                strategies_order = [
-                    self._reinitialize_layers,
-                    self._apply_regularization,
-                    self._increase_model_capacity
-                ]
+                # Adaptive strategy selection based on performance trend
+                strategies = []
+                performance_trend = self._calculate_performance_trend()
+                logger.info(f"Current performance trend: {performance_trend:.4f}")
 
-                for strategy in strategies_order:
+                if performance_trend < -0.05:  # Significant decline
+                    strategies = [self._reinitialize_layers, self._increase_model_capacity, self._apply_regularization]
+                elif -0.05 <= performance_trend < 0:  # Slight decline
+                    strategies = [self._apply_regularization, self._adjust_learning_rate, self._reinitialize_layers]
+                elif 0 <= performance_trend < 0.05:  # Slight improvement
+                    strategies = [self._adjust_learning_rate, self._apply_regularization]
+                else:  # Significant improvement
+                    strategies = [self._adjust_learning_rate, self._increase_model_capacity]
+
+                logger.info(f"Selected strategies: {[strategy.__name__ for strategy in strategies]}")
+
+                for strategy in strategies:
                     logger.info(f"Applying strategy: {strategy.__name__}")
                     strategy(model)
                     new_performance = self._simulate_performance(model)
-                    if not self.performance_history or new_performance != self.performance_history[-1]:
-                        self.performance_history.append(new_performance)
+                    self.performance_history.append(new_performance)
                     self.performance = new_performance  # Update the current performance
                     logger.info(f"Strategy: {strategy.__name__}, New performance: {new_performance:.4f}")
+                    logger.info(f"Performance change: {new_performance - initial_performance:.4f}")
+                    logger.info(f"Updated model state: {self._get_model_state(model)}")
+                    logger.info(f"Current performance history: {self.performance_history}")
 
                     if new_performance > best_performance:
                         best_performance = new_performance
@@ -345,16 +383,36 @@ class EdgeAIOptimization:
                             'model_state': self._get_model_state(model)
                         }
                         logger.info(f"New best performance: {best_performance:.4f}")
+                        logger.info(f"Best config - Learning rate: {best_config['learning_rate']:.8f}")
+                    else:
+                        logger.info(f"Performance did not improve. Current best: {best_performance:.4f}")
 
                     if new_performance >= PERFORMANCE_THRESHOLD:
                         logger.info(f"Self-healing successful. Performance threshold reached.")
                         self._apply_best_config(best_config, model)
                         return
 
-                    # Early stopping if no improvement
-                    if len(self.performance_history) > 2 and new_performance <= self.performance_history[-2]:
-                        logger.info("No improvement in performance. Moving to next attempt.")
+                    # Adaptive early stopping
+                    if self._should_stop_early(attempt):
+                        logger.info(f"Decided to stop early after {attempt + 1} attempts.")
                         break
+
+                # Apply a small deterministic perturbation
+                self._apply_deterministic_perturbation(model, attempt)
+                logger.info("Applied deterministic perturbation")
+
+                # Evaluate performance after all strategies and perturbation
+                final_performance = self._simulate_performance(model)
+                logger.info(f"Performance after perturbation: {final_performance:.4f}")
+                if final_performance > best_performance:
+                    best_performance = final_performance
+                    best_config = {
+                        'learning_rate': self.learning_rate,
+                        'model_state': self._get_model_state(model)
+                    }
+                    logger.info(f"New best performance after perturbation: {best_performance:.4f}")
+                else:
+                    logger.info(f"Perturbation did not improve performance. Current best: {best_performance:.4f}")
 
             if best_performance > initial_performance:
                 logger.info(f"Self-healing improved performance from {initial_performance:.4f} to {best_performance:.4f}. Setting best found configuration.")
@@ -366,6 +424,24 @@ class EdgeAIOptimization:
             self._is_healing = False
 
         logger.warning("Self-healing unsuccessful after maximum attempts.")
+        logger.info(f"Final model state: {self._get_model_state(model)}")
+        logger.info(f"Final optimizer state: {self.optimizer.state_dict()}")
+        logger.info(f"Final performance history: {self.performance_history}")
+
+    def _apply_deterministic_perturbation(self, model, attempt):
+        """Apply a small deterministic perturbation to model parameters."""
+        with torch.no_grad():
+            for param in model.parameters():
+                param.add_(torch.sin(torch.tensor(attempt)) * param * 0.01)
+        logger.info("Applied deterministic perturbation to model parameters.")
+
+    def _should_stop_early(self, attempt: int) -> bool:
+        """Determine if the self-healing process should be terminated early."""
+        if attempt >= MAX_HEALING_ATTEMPTS // 2:
+            trend = self._calculate_performance_trend()
+            if trend <= 0:
+                return True
+        return False
 
     def _get_model_state(self, model: nn.Module):
         # Get model state
@@ -436,6 +512,16 @@ class EdgeAIOptimization:
         logger.info(f"Final learning rate after adjustment: {self.learning_rate:.8f}")
         logger.info(f"Learning rate changed: {self.learning_rate != previous_lr}")
         return new_lr  # Return the new learning rate
+
+    def _dynamic_learning_rate_adjustment(self, model: nn.Module, attempt: int):
+        """Dynamically adjust the learning rate based on the healing attempt."""
+        base_lr = self.learning_rate
+        decay_factor = 0.9 ** attempt
+        new_lr = base_lr * decay_factor
+        new_lr = max(min(new_lr, 0.1), 1e-5)  # Clamp between 1e-5 and 0.1
+        new_lr = round(new_lr, 8)  # Round to 8 decimal places for consistency
+        logger.info(f"Dynamically adjusted learning rate from {base_lr:.8f} to {new_lr:.8f}")
+        return new_lr
 
     def _reinitialize_layers(self, model: nn.Module) -> bool:
         """Reinitialize the layers of the model to potentially improve performance."""
