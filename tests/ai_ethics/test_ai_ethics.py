@@ -1,3 +1,4 @@
+import warnings
 import pytest
 import pandas as pd
 import numpy as np
@@ -7,6 +8,9 @@ from NeuroFlex.ai_ethics.rl_module import RLEnvironment, ReplayBuffer
 from NeuroFlex.ai_ethics.explainable_ai import ExplainableAI
 from NeuroFlex.ai_ethics.ethical_framework import EthicalFramework, Guideline
 from NeuroFlex.ai_ethics.self_fixing_algorithms import SelfCuringRLAgent
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # AIF360 Integration Tests
 def test_aif360_integration():

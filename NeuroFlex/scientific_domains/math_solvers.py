@@ -52,7 +52,7 @@ class MathSolver:
         Perform optimization with fallback methods and custom error handling.
         """
         methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg', 'COBYLA']
-        max_iterations = 1000000000
+        max_iterations = 1000000
         best_result = None
         best_fun = float('inf')
 
@@ -68,7 +68,7 @@ class MathSolver:
             print(f"Additional context: {context}")
             print("--------------------")
 
-        def adjust_initial_guess(guess, scale=0.1):
+        def adjust_initial_guess(guess, scale=0.01):
             return guess + np.random.normal(0, scale, size=guess.shape)
 
         for m in methods:
@@ -77,21 +77,22 @@ class MathSolver:
                     warnings.simplefilter("always")
                     options = {
                         'maxiter': max_iterations,
-                        'ftol': 1e-55,
-                        'gtol': 1e-55,
-                        'maxls': 200000000
+                        'ftol': 1e-10,
+                        'gtol': 1e-10,
+                        'maxls': 100,
+                        'maxcor': 100
                     }
 
                     if m in ['trust-constr', 'dogleg', 'trust-ncg']:
-                        options['gtol'] = 1e-50
-                        options['xtol'] = 1e-50
+                        options['gtol'] = 1e-8
+                        options['xtol'] = 1e-8
                     elif m == 'COBYLA':
-                        options = {'maxiter': max_iterations, 'tol': 1e-50}
-                    elif m == 'L-BFGS-B':
-                        options['maxcor'] = 250
+                        options = {'maxiter': max_iterations, 'tol': 1e-8}
+                    elif m == 'Nelder-Mead':
+                        options = {'maxiter': max_iterations, 'xatol': 1e-8, 'fatol': 1e-8}
 
                     current_guess = initial_guess
-                    for attempt in range(3):  # Try up to 3 times with adjusted initial guesses
+                    for attempt in range(10):  # Increased attempts to 10
                         result = optimize.minimize(func, current_guess, method=m, options=options)
 
                         if result.success or (result.fun < best_fun and np.isfinite(result.fun)):
@@ -101,14 +102,18 @@ class MathSolver:
                             log_optimization_details(m, result, w, f"Optimization successful (attempt {attempt + 1})")
                             return result
 
-                        if "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
+                        if w and "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
                             log_optimization_details(m, result, w, f"Line search warning (attempt {attempt + 1})")
                             current_guess = adjust_initial_guess(current_guess)
-                        else:
+                            options['maxls'] *= 2  # Increase maxls for the next attempt
+                        elif w:
                             log_optimization_details(m, result, w, f"Unexpected warning (attempt {attempt + 1})")
-                            break  # Move to next method if it's not a line search issue
+                            current_guess = adjust_initial_guess(current_guess)
+                        else:
+                            log_optimization_details(m, result, None, f"Optimization failed without warning (attempt {attempt + 1})")
+                            current_guess = adjust_initial_guess(current_guess)
 
-                    print(f"Method {m} failed after 3 attempts. Trying next method.")
+                    print(f"Method {m} failed after 10 attempts. Trying next method.")
 
             except Exception as e:
                 log_optimization_details(m, None, None, f"Error: {str(e)}")
@@ -121,7 +126,7 @@ class MathSolver:
         # If all methods fail, use differential evolution as a last resort
         print("All methods failed. Using differential evolution as a last resort.")
         bounds = [(x - abs(x), x + abs(x)) for x in initial_guess]  # Create bounds based on initial guess
-        result = optimize.differential_evolution(func, bounds, maxiter=max_iterations, tol=1e-55)
+        result = optimize.differential_evolution(func, bounds, maxiter=max_iterations, tol=1e-10, strategy='best1bin', popsize=20)
         log_optimization_details('Differential Evolution', result, None, "Final fallback method")
         return result
 
