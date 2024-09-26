@@ -52,17 +52,17 @@ class MathSolver:
         Perform optimization with fallback methods and custom error handling.
         """
         methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg', 'COBYLA']
-        max_iterations = 20000000  # Increased from 10000000
+        max_iterations = 100000000  # Further increased from 50000000
         for m in methods:
             try:
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")
                     if m in ['trust-constr', 'dogleg', 'trust-ncg']:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-22, 'xtol': 1e-22})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-26, 'xtol': 1e-26})
                     elif m == 'COBYLA':
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'tol': 1e-22})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'tol': 1e-26})
                     else:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-26, 'gtol': 1e-26, 'maxls': 2000000})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-30, 'gtol': 1e-30, 'maxls': 10000000})
                     if len(w) == 0:  # No warnings
                         print(f"Optimization successful with method {m}")
                         print(f"Result: success={result.success}, message={result.message}")
@@ -74,7 +74,7 @@ class MathSolver:
                         print(f"Function value at result: {result.fun}")
                         print(f"Number of iterations: {result.nit}")
                         print("Adjusting parameters and trying again.")
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 4000000, 'ftol': 1e-28, 'gtol': 1e-28})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 20000000, 'ftol': 1e-32, 'gtol': 1e-32})
                         print(f"Retry result: success={result.success}, message={result.message}")
                         print(f"Retry function value at result: {result.fun}")
                         print(f"Retry number of iterations: {result.nit}")
@@ -102,7 +102,7 @@ class MathSolver:
 
         # If all methods fail, return the best result so far using a robust method
         print("All methods failed. Using Nelder-Mead as a last resort.")
-        result = optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 2000, 'ftol': 1e-28, 'adaptive': True})
+        result = optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 10000, 'ftol': 1e-32, 'adaptive': True})
         print(f"Final result: success={result.success}, message={result.message}")
         print(f"Final function value at result: {result.fun}")
         print(f"Final number of iterations: {result.nit}")

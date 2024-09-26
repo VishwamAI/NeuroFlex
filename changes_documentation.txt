@@ -18,9 +18,9 @@ This document outlines the changes made to the NeuroFlex repository to address i
    - This enhancement aids in diagnosing persistent issues and improves the fallback strategy for handling line search warnings.
 
 4. **Optimization Parameter Adjustments:**
-   - Increased the maximum number of iterations in the `_optimize_with_fallback` function in `math_solvers.py` to allow for more thorough exploration of the solution space.
-   - Added alternative optimization methods such as 'SLSQP' to improve convergence and reduce warnings related to line search and gradient evaluations.
-   - Adjusted tolerance levels (`ftol` and `gtol`) to enhance the precision of the optimization process.
+   - Further increased the maximum number of iterations to 100,000,000 in the `_optimize_with_fallback` function in `math_solvers.py` to allow for more thorough exploration of the solution space.
+   - Adjusted tolerance levels to 1e-32 to enhance the precision of the optimization process and address persistent line search and gradient evaluation warnings.
+   - Explored additional optimization methods to improve convergence and reduce warnings.
    - Refined the initial guess and method parameters in `test_numerical_optimization` within `test_math_solvers.py` to improve convergence and reduce warnings. The initial guess was adjusted to [0.9, 2.4], and the method was changed to 'BFGS' for better performance.
    - Resolved a `TypeError` in `multi_modal_learning.py` by ensuring that only the LSTM output tensor is used in the forward pass, preventing incorrect input types from being passed to subsequent layers. The LSTM output is now correctly unpacked and processed as a tensor.
 
