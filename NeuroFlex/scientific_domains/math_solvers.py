@@ -52,25 +52,32 @@ class MathSolver:
         Perform optimization with fallback methods and custom error handling.
         """
         methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg', 'COBYLA']
-        max_iterations = 200000  # Increased from 100000
+        max_iterations = 10000000  # Increased from 5000000
         for m in methods:
             try:
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always")
                     if m in ['trust-constr', 'dogleg', 'trust-ncg']:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-10, 'xtol': 1e-10})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'gtol': 1e-20, 'xtol': 1e-20})
                     elif m == 'COBYLA':
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'tol': 1e-10})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'tol': 1e-20})
                     else:
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-14, 'gtol': 1e-14, 'maxls': 5000})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations, 'ftol': 1e-24, 'gtol': 1e-24, 'maxls': 1000000})
                     if len(w) == 0:  # No warnings
+                        print(f"Optimization successful with method {m}")
+                        print(f"Result: success={result.success}, message={result.message}")
                         return result
                     elif "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
                         print(f"Warning in {m}: {w[-1].message}")
                         print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
                         print(f"Result: success={result.success}, message={result.message}")
+                        print(f"Function value at result: {result.fun}")
+                        print(f"Number of iterations: {result.nit}")
                         print("Adjusting parameters and trying again.")
-                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 10000, 'ftol': 1e-16, 'gtol': 1e-16})
+                        result = optimize.minimize(func, initial_guess, method=m, options={'maxiter': max_iterations * 2, 'maxls': 2000000, 'ftol': 1e-26, 'gtol': 1e-26})
+                        print(f"Retry result: success={result.success}, message={result.message}")
+                        print(f"Retry function value at result: {result.fun}")
+                        print(f"Retry number of iterations: {result.nit}")
                         if result.success:
                             return result
                         print("Trying next method.")
@@ -78,19 +85,28 @@ class MathSolver:
                         print(f"Unexpected warning in {m}: {w[-1].message}")
                         print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
                         print(f"Result: success={result.success}, message={result.message}")
+                        print(f"Function value at result: {result.fun}")
+                        print(f"Number of iterations: {result.nit}")
                         print("Trying next method.")
             except Exception as e:
                 if "ABNORMAL_TERMINATION_IN_LNSRCH" in str(e):
                     print(f"LNSRCH termination in {m}.")
                     print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                    print(f"Error details: {str(e)}")
                     print("Trying next method.")
                 else:
                     print(f"Unexpected error in {m}: {str(e)}")
                     print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                    print(f"Error details: {str(e)}")
                     print("Trying next method.")
 
         # If all methods fail, return the best result so far using a robust method
-        return optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 20, 'ftol': 1e-16, 'adaptive': True})
+        print("All methods failed. Using Nelder-Mead as a last resort.")
+        result = optimize.minimize(func, initial_guess, method='Nelder-Mead', options={'maxiter': max_iterations * 1000, 'ftol': 1e-26, 'adaptive': True})
+        print(f"Final result: success={result.success}, message={result.message}")
+        print(f"Final function value at result: {result.fun}")
+        print(f"Final number of iterations: {result.nit}")
+        return result
 
     def linear_algebra_operations(self, matrix_a, matrix_b, operation='multiply'):
         """

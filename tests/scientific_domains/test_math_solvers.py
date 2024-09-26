@@ -25,9 +25,9 @@ class TestMathSolver(unittest.TestCase):
         def func(x):
             return (x[0] - 1)**2 + (x[1] - 2.5)**2
 
-        result = self.math_solver.numerical_optimization(func, [0.5, 2.0], method='Nelder-Mead')
-        self.assertAlmostEqual(result.x[0], 1.0, places=4)
-        self.assertAlmostEqual(result.x[1], 2.5, places=4)
+        result = self.math_solver.numerical_optimization(func, [0.9, 2.4], method='BFGS')
+        self.assertAlmostEqual(result.x[0], 1.0, places=6)
+        self.assertAlmostEqual(result.x[1], 2.5, places=6)
 
     def test_linear_algebra_operations(self):
         matrix_a = np.array([[1, 2], [3, 4]])

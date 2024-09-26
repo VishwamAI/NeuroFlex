@@ -202,12 +202,13 @@ class TestMultiModalLearning(unittest.TestCase):
         # Check forward pass
         logger.info("Debug: Performing forward pass")
         try:
-            output = self.model.forward(inputs)
+            # Ensure inputs are tensors
+            tensor_inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in inputs.items()}
+            output = self.model.forward(tensor_inputs)
             logger.info(f"Debug: Forward pass output shape: {output.shape}")
         except Exception as e:
             logger.error(f"Error during forward pass: {str(e)}")
             raise
-
         self.assertEqual(output.shape, (batch_size, 10))
 
         # Verify performance improvements
