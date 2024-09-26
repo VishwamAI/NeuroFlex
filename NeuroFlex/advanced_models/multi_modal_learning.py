@@ -195,10 +195,8 @@ class MultiModalLearning(nn.Module):
                 text_input = inputs[name].long().clamp(0, 29999)  # Clamp to valid range
                 logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
                 embedded = modality['encoder'][0](text_input)
-                lstm_out = modality['encoder'][1](embedded.float())[0]  # Only use the output tensor
+                lstm_out, _ = modality['encoder'][1](embedded.float())  # Unpack LSTM output
                 lstm_out = lstm_out[:, -1, :]  # Use last time step output
-                if not isinstance(lstm_out, torch.Tensor):
-                    raise TypeError(f"LSTM output is not a tensor. Type: {type(lstm_out)}")
                 logger.debug(f"LSTM output shape: {lstm_out.shape}, type: {type(lstm_out)}")
                 lstm_out = lstm_out.contiguous().view(lstm_out.size(0), -1)  # Ensure correct shape
                 logger.debug(f"Reshaped LSTM output shape: {lstm_out.shape}, type: {type(lstm_out)}")
