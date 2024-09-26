@@ -32,6 +32,10 @@ def edge_ai_optimizer():
 
 class TestEdgeAIOptimization(unittest.TestCase):
     def setUp(self):
+        # Set fixed seed for reproducibility
+        torch.manual_seed(42)
+        np.random.seed(42)
+        random.seed(42)
         self.model = DummyModel()
         self.edge_ai_optimizer = EdgeAIOptimization()
         self.edge_ai_optimizer.initialize_optimizer(self.model)
