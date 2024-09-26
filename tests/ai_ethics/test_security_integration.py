@@ -5,9 +5,15 @@ import os
 import shutil
 import numpy as np
 import skbio
+import warnings
+from Bio.Seq import BiopythonWarning
+from skbio.util import EfficiencyWarning
 from NeuroFlex.core_neural_networks.model import NeuroFlex, train_neuroflex_model
 from NeuroFlex.ai_ethics.advanced_security_agent import AdvancedSecurityAgent
 from NeuroFlex.ai_ethics.scikit_bio_integration import ScikitBioIntegration
+
+warnings.filterwarnings("ignore", category=BiopythonWarning)
+warnings.filterwarnings("ignore", category=EfficiencyWarning)
 
 class TestSecurityIntegration(unittest.TestCase):
 
