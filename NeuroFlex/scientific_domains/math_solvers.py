@@ -60,14 +60,24 @@ class MathSolver:
                     if len(w) == 0:  # No warnings
                         return result
                     elif "line search cannot locate an adequate point after maxls" in str(w[-1].message).lower():
-                        print(f"Warning in {m}: {w[-1].message}. Trying next method.")
+                        print(f"Warning in {m}: {w[-1].message}")
+                        print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                        print(f"Result: success={result.success}, message={result.message}")
+                        print("Trying next method.")
                     else:
-                        print(f"Unexpected warning in {m}: {w[-1].message}. Trying next method.")
+                        print(f"Unexpected warning in {m}: {w[-1].message}")
+                        print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                        print(f"Result: success={result.success}, message={result.message}")
+                        print("Trying next method.")
             except Exception as e:
                 if "ABNORMAL_TERMINATION_IN_LNSRCH" in str(e):
-                    print(f"LNSRCH termination in {m}. Trying next method.")
+                    print(f"LNSRCH termination in {m}.")
+                    print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                    print("Trying next method.")
                 else:
-                    print(f"Unexpected error in {m}: {str(e)}. Trying next method.")
+                    print(f"Unexpected error in {m}: {str(e)}")
+                    print(f"Context: func={func.__name__}, initial_guess={initial_guess}")
+                    print("Trying next method.")
 
         # If all methods fail, return the best result so far
         return optimize.minimize(func, initial_guess, method='Nelder-Mead')
