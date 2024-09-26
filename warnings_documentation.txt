@@ -62,9 +62,12 @@ This document provides an overview of the warnings observed during the test run 
 - Adjusted optimization parameters in `math_solvers.py` to improve convergence and reduce warnings.
 - Suppressed specific warnings in test files where appropriate.
 - Documented warnings for future reference and potential resolution.
+- Implemented logging to capture detailed information about optimization processes.
+- Refined test logic to ensure consistent input types and shapes.
 
 ## Next Steps
 - Investigate the specific functions and methods triggering these warnings.
 - Review the optimization logic in `math_solvers.py` for potential improvements.
 - Consider alternative optimization strategies or parameter adjustments.
 - Test changes in isolated environments to ensure no new issues are introduced.
+- Continue monitoring for any new warnings or issues that may arise.
