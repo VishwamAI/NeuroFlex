@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import time
+import random
 from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
 from NeuroFlex.constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
 
@@ -69,6 +70,7 @@ class TestEdgeAIOptimization(unittest.TestCase):
         # Set fixed seeds for reproducibility
         np.random.seed(42)
         torch.manual_seed(42)
+        random.seed(42)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
@@ -79,8 +81,10 @@ class TestEdgeAIOptimization(unittest.TestCase):
         # Create labels for test data (all zeros to match evaluation logic)
         test_labels = torch.zeros(self.test_data.size(0), device=device)
 
-        # Log initial learning rate
+        # Log initial learning rate and model state
         print(f"Initial learning rate: {self.edge_ai_optimizer.learning_rate}")
+        print(f"Initial model state: {self.model.state_dict().keys()}")
+        print(f"Test data shape: {self.test_data.shape}, device: {self.test_data.device}")
 
         performance = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
         self.assertIn('accuracy', performance)
@@ -94,6 +98,7 @@ class TestEdgeAIOptimization(unittest.TestCase):
         # Log performance and learning rate after first evaluation
         print(f"Performance after first evaluation: {performance['accuracy']}")
         print(f"Learning rate after first evaluation: {self.edge_ai_optimizer.learning_rate}")
+        print(f"Model state after first evaluation: {self.model.state_dict().keys()}")
 
         # Test consistency across multiple runs
         performance2 = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
@@ -103,6 +108,7 @@ class TestEdgeAIOptimization(unittest.TestCase):
         # Log performance and learning rate after second evaluation
         print(f"Performance after second evaluation: {performance2['accuracy']}")
         print(f"Learning rate after second evaluation: {self.edge_ai_optimizer.learning_rate}")
+        print(f"Model state after second evaluation: {self.model.state_dict().keys()}")
 
         # Ensure the optimizer's performance is updated correctly
         print(f"Optimizer performance: {self.edge_ai_optimizer.performance}, Evaluated accuracy: {performance['accuracy']}")

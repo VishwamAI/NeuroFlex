@@ -111,9 +111,25 @@ class EdgeAIOptimization:
 
             # Configure quantization
             if backend == 'fbgemm':
-                qconfig = torch.quantization.get_default_qconfig('fbgemm')
+                qconfig = torch.quantization.QConfig(
+                    activation=torch.quantization.observer.MinMaxObserver.with_args(
+                        qscheme=torch.per_tensor_affine, dtype=torch.quint8,
+                        quant_min=0, quant_max=255
+                    ),
+                    weight=torch.quantization.observer.MinMaxObserver.with_args(
+                        dtype=torch.qint8, quant_min=-128, quant_max=127
+                    )
+                )
             elif backend == 'qnnpack':
-                qconfig = torch.quantization.get_default_qconfig('qnnpack')
+                qconfig = torch.quantization.QConfig(
+                    activation=torch.quantization.observer.MinMaxObserver.with_args(
+                        qscheme=torch.per_tensor_affine, dtype=torch.quint8,
+                        quant_min=0, quant_max=255
+                    ),
+                    weight=torch.quantization.observer.MinMaxObserver.with_args(
+                        dtype=torch.qint8, quant_min=-128, quant_max=127
+                    )
+                )
             else:
                 raise ValueError(f"Unsupported backend: {backend}")
 
@@ -242,11 +258,16 @@ class EdgeAIOptimization:
         try:
             # Set random seeds for reproducibility
             torch.manual_seed(42)
+            np.random.seed(42)
+            random.seed(42)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
             logger.info(f"Model state before evaluation: {self._get_model_state(model)}")
             logger.info(f"Test data shape: {test_data.shape}")
+            logger.info(f"Test data sample: {test_data[:5]}")
+            logger.info(f"Test data hash: {hash(test_data.cpu().numpy().tobytes())}")
+
             model.eval()
             device = next(model.parameters()).device
             test_data = test_data.to(device)
@@ -258,17 +279,21 @@ class EdgeAIOptimization:
 
                 logger.info(f"Model outputs shape: {outputs.shape}")
                 logger.info(f"Model outputs sample: {outputs[:5]}")
+                logger.info(f"Model outputs statistics: min={outputs.min().item()}, max={outputs.max().item()}, mean={outputs.mean().item()}, std={outputs.std().item()}")
 
                 _, predicted = torch.max(outputs, 1)
                 logger.info(f"Predicted labels: {predicted[:10]}")
+                logger.info(f"Predicted labels statistics: {torch.unique(predicted, return_counts=True)}")
                 accuracy = (predicted == torch.zeros(test_data.size(0), device=device)).sum().item() / test_data.size(0)
                 latency = end_time - start_time
 
             performance = {'accuracy': accuracy, 'latency': latency}
             logger.info(f"Calculated accuracy: {accuracy}")
+            logger.info(f"Calculated latency: {latency}")
             # Call _update_performance to ensure the performance attribute is updated correctly
             self._update_performance(accuracy, model)
             logger.info(f"Model state after evaluation: {self._get_model_state(model)}")
+            logger.info(f"Performance history: {self.performance_history}")
             return performance
         except Exception as e:
             logger.error(f"Error during model evaluation: {str(e)}")
