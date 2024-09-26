@@ -38,8 +38,11 @@ class TestAdvancedMathSolver(unittest.TestCase):
         self.assertAlmostEqual(solution['integral'], expected_integral, places=5)
 
     def test_solve_optimization(self):
+        def objective_function(x):
+            return x**2 + 2*x + 1
+
         problem_data = {
-            'function': 'x**2 + 2*x + 1',
+            'function': objective_function,
             'initial_guess': [0]
         }
         solution = self.solver.solve('optimization', problem_data)

@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from standalone_model import StandaloneCognitiveModel, configure_model
+from NeuroFlex.cognition.standalone_model import StandaloneCognitiveModel, configure_model
 
 class TestAdvancedFeatures(unittest.TestCase):
     def setUp(self):
