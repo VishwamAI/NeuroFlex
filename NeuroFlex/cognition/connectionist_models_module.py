@@ -44,7 +44,7 @@ class ConnectionistModelsModule:
     def _get_activation_function(self):
         activation = self.config.get('activation', 'sigmoid')
         if activation == 'sigmoid':
-            return lambda x: 1 / (1 + np.exp(-x))
+            return lambda x: np.clip(1 / (1 + np.exp(-np.clip(x, -709, 709))), 1e-7, 1 - 1e-7)
         elif activation == 'relu':
             return lambda x: np.maximum(0, x)
         else:

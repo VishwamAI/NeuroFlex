@@ -22,7 +22,7 @@
 
 import random
 import math
-from standalone_model import PerceptionModule, ReasoningModule, LearningModule, MemoryModule
+from NeuroFlex.cognition.standalone_model import PerceptionModule, ReasoningModule, LearningModule, MemoryModule
 class DojoFramework:
     def __init__(self, config):
         self.config = config
