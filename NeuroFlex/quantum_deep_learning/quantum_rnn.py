@@ -6,24 +6,59 @@ class QuantumRNN:
         self.num_qubits = num_qubits
         self.num_layers = num_layers
         self.dev = qml.device("default.qubit", wires=num_qubits)
-        self.params = np.random.uniform(low=-np.pi, high=np.pi, size=(num_layers, num_qubits, 3))
+        self.param_init_fn = lambda key, shape: np.random.uniform(low=-np.pi, high=np.pi, size=shape)
+        self.params = self.param_init_fn(None, (num_layers, num_qubits, 2))
 
-    @qml.qnode(device=qml.device("default.qubit", wires=1))
+    def init(self, key, input_shape):
+        self.key = key
+        self.input_shape = input_shape
+        # Initialize params for 3D input shape (batch_size, time_steps, features)
+        self.params = self.param_init_fn(key, (self.num_layers, self.num_qubits, 2))
+        return self.params
+
     def qubit_layer(self, params, input_val):
-        qml.RX(input_val, wires=0)
-        qml.RY(params[0], wires=0)
-        qml.RZ(params[1], wires=0)
-        return qml.expval(qml.PauliZ(0))
+        dev = qml.device("default.qubit", wires=self.num_qubits)
+        @qml.qnode(dev)
+        def _qubit_circuit(params, input_val):
+            input_val = np.atleast_2d(input_val)
+            for b in range(input_val.shape[0]):  # Iterate over batch
+                for i in range(self.num_qubits):
+                    qml.RX(input_val[b, i % input_val.shape[1]], wires=i)
+                    qml.RY(params[i][0], wires=i)
+                    qml.RZ(params[i][1], wires=i)
+            return [qml.expval(qml.PauliZ(i)) for i in range(self.num_qubits)]
+        return np.array([_qubit_circuit(params, iv) for iv in input_val])
 
     def quantum_rnn_layer(self, inputs, params, hidden_state):
-        outputs = []
-        for t in range(len(inputs)):
-            qml.RX(hidden_state, wires=0)
-            qml.RY(inputs[t], wires=1)
-            qml.CNOT(wires=[0, 1])
-            hidden_state = self.qubit_layer(params, inputs[t])
-            outputs.append(hidden_state)
-        return np.array(outputs), hidden_state
+        batch_size, time_steps, input_features = inputs.shape
+        hidden_features = self.num_qubits  # Number of features in hidden state
+
+        # Initialize hidden_state if it's the first pass
+        if isinstance(hidden_state, int) and hidden_state == 0:
+            hidden_state = np.zeros((batch_size, hidden_features))
+
+        outputs = np.zeros((batch_size, time_steps, hidden_features))
+
+        for t in range(time_steps):
+            input_t = inputs[:, t, :]
+            # Ensure hidden_state has the same batch size as input_t
+            if hidden_state.shape[0] != batch_size:
+                hidden_state = np.broadcast_to(hidden_state, (batch_size, hidden_features))
+
+            # Combine hidden state and input, ensuring dimensions match
+            combined_input = np.concatenate([hidden_state, input_t], axis=1)
+
+            # Adjust combined_input if necessary to match num_qubits
+            if combined_input.shape[1] > self.num_qubits:
+                combined_input = combined_input[:, :self.num_qubits]
+            elif combined_input.shape[1] < self.num_qubits:
+                pad_width = self.num_qubits - combined_input.shape[1]
+                combined_input = np.pad(combined_input, ((0, 0), (0, pad_width)), mode='constant')
+
+            hidden_state = self.qubit_layer(params=params, input_val=combined_input)
+            outputs[:, t, :] = hidden_state
+
+        return outputs, hidden_state
 
     def forward(self, inputs):
         hidden_state = 0
@@ -31,6 +66,10 @@ class QuantumRNN:
         for layer in range(self.num_layers):
             x, hidden_state = self.quantum_rnn_layer(x, self.params[layer], hidden_state)
         return x
+
+    def apply(self, params, inputs):
+        self.params = params
+        return self.forward(inputs)
 
     def loss(self, inputs, targets):
         predictions = self.forward(inputs)

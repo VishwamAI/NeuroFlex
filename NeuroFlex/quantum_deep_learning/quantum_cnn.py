@@ -8,11 +8,16 @@ class QuantumCNN:
         self.dev = qml.device("default.qubit", wires=num_qubits)
         self.params = np.random.uniform(low=-np.pi, high=np.pi, size=(num_layers, num_qubits, 3))
 
+    def init(self, key, input_shape):
+        self.key = key
+        self.input_shape = input_shape
+        return self.params
+
     @qml.qnode(device=qml.device("default.qubit", wires=1))
-    def qubit_layer(self, params):
-        qml.RX(params[0], wires=0)
-        qml.RY(params[1], wires=0)
-        qml.RZ(params[2], wires=0)
+    def qubit_layer(self, params, input_val):
+        qml.RX(input_val, wires=0)
+        qml.RY(params[0], wires=0)
+        qml.RZ(params[1], wires=0)
         return qml.expval(qml.PauliZ(0))
 
     def quantum_conv_layer(self, inputs, params):
@@ -21,7 +26,7 @@ class QuantumCNN:
             qml.RX(inputs[i], wires=0)
             qml.RY(inputs[i+1], wires=1)
             qml.CNOT(wires=[0, 1])
-            outputs.append(self.qubit_layer(params))
+            outputs.append(self.qubit_layer(params, inputs[i]))
         return np.array(outputs)
 
     def forward(self, inputs):
@@ -29,6 +34,10 @@ class QuantumCNN:
         for layer in range(self.num_layers):
             x = self.quantum_conv_layer(x, self.params[layer])
         return x
+
+    def apply(self, params, inputs):
+        self.params = params
+        return self.forward(inputs)
 
     def loss(self, inputs, targets):
         predictions = self.forward(inputs)
