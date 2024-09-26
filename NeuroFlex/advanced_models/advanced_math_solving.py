@@ -106,11 +106,13 @@ class AdvancedMathSolver:
         """Solve optimization problems."""
         if 'function' in problem_data and 'initial_guess' in problem_data:
             def f(x):
-                return eval(problem_data['function'])
+                # Use a safer alternative to eval
+                return problem_data['function'](x)
 
             x0 = problem_data['initial_guess']
-            result = optimize.minimize(f, x0)
-            return {'optimal_x': result.x, 'optimal_value': result.fun}
+            # Use BFGS method with increased max iterations
+            result = optimize.minimize(f, x0, method='BFGS', options={'maxiter': 1000})
+            return {'optimal_x': result.x, 'optimal_value': result.fun, 'success': result.success, 'message': result.message}
         else:
             raise ValueError("Unsupported optimization problem")
 

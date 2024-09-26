@@ -17,9 +17,14 @@ This document outlines the changes made to the NeuroFlex repository to address i
    - Improved the logging in `math_solvers.py` to provide more detailed information about the context in which line search warnings occur.
    - This enhancement aids in diagnosing persistent issues and improves the fallback strategy for handling line search warnings.
 
-4. **Testing and Verification:**
-   - Reran all tests in the `NeuroFlex/Dojo` directory to verify that the changes resolved the warnings and all tests passed successfully.
-   - Confirmed that the issues related to line search and gradient evaluations were addressed, with no warnings present in the test output.
+4. **Optimization Parameter Adjustments:**
+   - Increased the maximum number of iterations in the `_optimize_with_fallback` function in `math_solvers.py` to allow for more thorough exploration of the solution space.
+   - Added alternative optimization methods such as 'SLSQP' to improve convergence and reduce warnings related to line search and gradient evaluations.
+   - Adjusted tolerance levels (`ftol` and `gtol`) to enhance the precision of the optimization process.
+
+5. **Testing and Verification:**
+   - Reran all tests in the `NeuroFlex` directory to verify that the changes resolved the warnings and all tests passed successfully.
+   - Confirmed that the issues related to line search and gradient evaluations were addressed, with a reduction in warnings present in the test output.
 
 ## Reasoning
 

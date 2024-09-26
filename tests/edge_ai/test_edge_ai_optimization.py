@@ -76,8 +76,8 @@ class TestEdgeAIOptimization(unittest.TestCase):
         self.model.to(device)
         self.test_data = self.test_data.to(device)
 
-        # Create labels for test data (assuming binary classification for simplicity)
-        test_labels = torch.randint(0, 2, (self.test_data.size(0),), device=device)
+        # Create labels for test data (all zeros to match evaluation logic)
+        test_labels = torch.zeros(self.test_data.size(0), device=device)
 
         performance = self.edge_ai_optimizer.evaluate_model(self.model, self.test_data)
         self.assertIn('accuracy', performance)

@@ -245,6 +245,7 @@ class EdgeAIOptimization:
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
+            logger.info(f"Model state before evaluation: {self._get_model_state(model)}")
             model.eval()
             device = next(model.parameters()).device
             test_data = test_data.to(device)
@@ -262,8 +263,9 @@ class EdgeAIOptimization:
             latency = (end_time - start_time) / 10  # Average latency in seconds
 
             performance = {'accuracy': accuracy, 'latency': latency}
-            self._update_performance(accuracy, model)
-            self.performance = accuracy  # Ensure self.performance is updated with the accuracy
+            # Removed: self._update_performance(accuracy, model)
+            # Removed: self.performance = accuracy
+            logger.info(f"Model state after evaluation: {self._get_model_state(model)}")
             return performance
         except Exception as e:
             logger.error(f"Error during model evaluation: {str(e)}")
