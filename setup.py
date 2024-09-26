@@ -9,7 +9,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/VishwamAI/neuroflex",
-    packages=find_packages(exclude=["tests*"]),
+    packages=find_packages(include=["NeuroFlex", "NeuroFlex.*"], exclude=["tests*"]),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -182,7 +182,7 @@ setup(
         "prophet",
         "psutil",
         "aif360",
-        "men",
+
         "PyWavelets",
         "filterpy"
     ],
