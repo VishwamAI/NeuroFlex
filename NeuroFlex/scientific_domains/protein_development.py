@@ -51,6 +51,8 @@ class ProteinDevelopment:
         try:
             model_config = config.model_config('model_3_ptm')  # Using the latest AlphaFold 3 model
             model_params = data.get_model_haiku_params(model_name='model_3_ptm', data_dir='/path/to/alphafold/data')
+            if model_params is None:
+                raise ValueError("Missing AlphaFold data files")
             self.alphafold_model = model.RunModel(model_config, model_params)
         except FileNotFoundError as e:
             raise ValueError(f"AlphaFold data files not found: {str(e)}")
