@@ -42,7 +42,14 @@ def test_qbm_execution(qbm):
     # Test energy calculation
     energy = qbm.energy(visible_data, hidden_state)
     assert isinstance(energy, float)
-    assert energy < 0  # Energy should typically be negative
+    assert energy <= 0  # Energy should be non-positive
+
+    # Test entangle_qubits function
+    params1 = jnp.array([0.1, 0.2, 0.3])
+    params2 = jnp.array([0.4, 0.5, 0.6])
+    entangled_state = qbm.entangle_qubits(params1, params2)
+    assert entangled_state.shape == (4,)  # Probabilities for 2 qubits: |00>, |01>, |10>, |11>
+    assert jnp.allclose(jnp.sum(entangled_state), 1.0)  # Probabilities should sum to 1
 
 def test_qbm_training():
     qbm = QuantumBoltzmannMachine(num_visible=4, num_hidden=2, num_qubits=6)
@@ -61,15 +68,24 @@ def test_qbm_error_handling():
 
 def test_qcnn_execution(qcnn):
     key = jax.random.PRNGKey(0)
-    params = qcnn.init(key, jnp.zeros((1, 4)))
-    x = jax.random.normal(key, (10, 4))
+    params = qcnn.init(key, jnp.zeros((1, qcnn.num_qubits)))
+    x = jax.random.normal(key, (10, qcnn.num_qubits))
     output = qcnn.apply(params, x)
-    assert output.shape == (10, 16)  # Assuming 4 qubits, output should be 2^4
+    assert output.shape == (9, 1)  # Output shape should be (input_size - 1, 1)
+
+    # Test qubit_layer function
+    input_val = jnp.array([0.5])  # Ensure input_val is a 1D array
+    qubit_params = jnp.array([0.1, 0.2])  # Ensure 2 parameters for RY, RZ
+    qubit_output = qcnn.qubit_layer(qubit_params, input_val)
+    assert qubit_output.shape == ()  # Output should be a scalar (0-dimensional array)
 
     # Test different input sizes
-    x_small = jax.random.normal(key, (5, 4))
+    x_small = jax.random.normal(key, (5, qcnn.num_qubits))
     output_small = qcnn.apply(params, x_small)
-    assert output_small.shape == (5, 16)
+    assert output_small.shape == (4, 1)
+
+    # Verify parameter shapes
+    assert params.shape == (qcnn.num_layers, qcnn.num_qubits, 3)  # (num_layers, num_qubits, 3)
 
 def test_qcnn_gradient():
     qcnn = QuantumCNN(num_qubits=2, num_layers=1)

@@ -1,4 +1,6 @@
 import numpy as np
+import jax
+import jax.numpy as jnp
 import pennylane as qml
 
 class QuantumRNN:
@@ -20,43 +22,53 @@ class QuantumRNN:
         dev = qml.device("default.qubit", wires=self.num_qubits)
         @qml.qnode(dev)
         def _qubit_circuit(params, input_val):
-            input_val = np.atleast_2d(input_val)
+            input_val = jnp.atleast_2d(input_val)
             for b in range(input_val.shape[0]):  # Iterate over batch
                 for i in range(self.num_qubits):
                     qml.RX(input_val[b, i % input_val.shape[1]], wires=i)
                     qml.RY(params[i][0], wires=i)
                     qml.RZ(params[i][1], wires=i)
             return [qml.expval(qml.PauliZ(i)) for i in range(self.num_qubits)]
-        return np.array([_qubit_circuit(params, iv) for iv in input_val])
+        return jnp.array([_qubit_circuit(params, jnp.atleast_2d(iv)) for iv in input_val])
 
     def quantum_rnn_layer(self, inputs, params, hidden_state):
-        batch_size, time_steps, input_features = inputs.shape
+        # Handle both 2D and 3D input shapes
+        if inputs.ndim == 2:
+            batch_size, input_features = inputs.shape
+            time_steps = 1
+            inputs = jnp.reshape(inputs, (batch_size, time_steps, input_features))
+        elif inputs.ndim == 3:
+            batch_size, time_steps, input_features = inputs.shape
+        else:
+            raise ValueError(f"Expected 2D or 3D input, got shape {inputs.shape}")
+
         hidden_features = self.num_qubits  # Number of features in hidden state
 
         # Initialize hidden_state if it's the first pass
         if isinstance(hidden_state, int) and hidden_state == 0:
-            hidden_state = np.zeros((batch_size, hidden_features))
+            hidden_state = jnp.zeros((batch_size, hidden_features))
 
-        outputs = np.zeros((batch_size, time_steps, hidden_features))
-
-        for t in range(time_steps):
-            input_t = inputs[:, t, :]
-            # Ensure hidden_state has the same batch size as input_t
-            if hidden_state.shape[0] != batch_size:
-                hidden_state = np.broadcast_to(hidden_state, (batch_size, hidden_features))
+        def scan_fn(carry, x):
+            hidden_state = carry
+            input_t = x
 
             # Combine hidden state and input, ensuring dimensions match
-            combined_input = np.concatenate([hidden_state, input_t], axis=1)
+            combined_input = jnp.concatenate([hidden_state, input_t], axis=1)
 
             # Adjust combined_input if necessary to match num_qubits
             if combined_input.shape[1] > self.num_qubits:
                 combined_input = combined_input[:, :self.num_qubits]
             elif combined_input.shape[1] < self.num_qubits:
                 pad_width = self.num_qubits - combined_input.shape[1]
-                combined_input = np.pad(combined_input, ((0, 0), (0, pad_width)), mode='constant')
+                combined_input = jnp.pad(combined_input, ((0, 0), (0, pad_width)), mode='constant')
 
-            hidden_state = self.qubit_layer(params=params, input_val=combined_input)
-            outputs[:, t, :] = hidden_state
+            # Ensure input_val shape matches the expected shape for qubit_layer
+            input_val = jnp.reshape(combined_input, (-1, self.num_qubits))
+            new_hidden_state = self.qubit_layer(params=params, input_val=input_val)
+            return new_hidden_state, new_hidden_state
+
+        hidden_state, outputs = jax.lax.scan(scan_fn, hidden_state, jnp.transpose(inputs, (1, 0, 2)))
+        outputs = jnp.transpose(outputs, (1, 0, 2))
 
         return outputs, hidden_state
 
