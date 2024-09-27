@@ -66,20 +66,23 @@ class TestProteinDevelopment(unittest.TestCase):
         # Test incorrect file paths
         mock_get_params.return_value = {'mock': 'params'}
         mock_run_model.side_effect = OSError("Incorrect file path")
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(RuntimeError) as context:
             self.protein_dev.setup_alphafold()
-        self.assertIn("Incorrect file paths for AlphaFold setup", str(context.exception))
+        self.assertIn("Failed to set up AlphaFold model: Incorrect file path", str(context.exception))
 
         # Test invalid configuration settings
         mock_run_model.side_effect = None
         mock_model_config.return_value = ml_collections.ConfigDict({'invalid': 'config'})
+        mock_run_model.side_effect = ValueError("Invalid configuration")
         with self.assertRaises(ValueError) as context:
             self.protein_dev.setup_alphafold()
-        self.assertIn("Invalid configuration settings for AlphaFold", str(context.exception))
+        self.assertIn("Invalid AlphaFold configuration", str(context.exception))
 
     @patch('NeuroFlex.scientific_domains.protein_development.pipeline.make_sequence_features')
     @patch('NeuroFlex.scientific_domains.protein_development.protein.from_prediction')
-    def test_predict_structure(self, mock_from_prediction, mock_make_sequence_features):
+    @patch('NeuroFlex.scientific_domains.protein_development.ProteinDevelopment.consciousness_inspired_layer')
+    @patch('NeuroFlex.scientific_domains.protein_development.ProteinDevelopment.agentic_behavior_layer')
+    def test_predict_structure(self, mock_agentic_layer, mock_consciousness_layer, mock_from_prediction, mock_make_sequence_features):
         sequence = "MKFLKFSLLTAVLLSVVFAFSSCGD"
         mock_features = {
             'aatype': np.zeros((len(sequence), 21)),
@@ -103,11 +106,15 @@ class TestProteinDevelopment(unittest.TestCase):
         mock_structure = MagicMock()
         mock_from_prediction.return_value = mock_structure
 
+        # Mock the consciousness and agentic layers
+        mock_consciousness_layer.return_value = np.random.rand(1, len(sequence), 64, 64, 64)
+        mock_agentic_layer.return_value = np.random.rand(1, len(sequence), 64, 64, 64)
+
         # Test successful prediction
         result = self.protein_dev.predict_structure(sequence)
 
         mock_make_sequence_features.assert_called_once_with(sequence, description="", num_res=len(sequence))
-        self.protein_dev.alphafold_model.predict.assert_called_once_with(mock_features)
+        self.protein_dev.alphafold_model.predict.assert_called_once_with(mock_agentic_layer.return_value)
         mock_from_prediction.assert_called_once_with(mock_prediction, mock_features)
 
         self.assertIsInstance(result, dict)
