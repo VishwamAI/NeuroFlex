@@ -111,6 +111,7 @@ PyYAML
 qiskit>=1.0.0
 qiskit-aer>=0.12.0
 qiskit-algorithms>=0.2.0
+qiskit-machine-learning
 regex
 requests
 rich
