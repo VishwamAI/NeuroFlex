@@ -1,5 +1,5 @@
 import unittest
-from standalone_model import StandaloneCognitiveModel, configure_model, SituatedCognitionModule
+from NeuroFlex.cognition.standalone_model import StandaloneCognitiveModel, configure_model, SituatedCognitionModule
 
 class TestSituatedCognition(unittest.TestCase):
     def setUp(self):

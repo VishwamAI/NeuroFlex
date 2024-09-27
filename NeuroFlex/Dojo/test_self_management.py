@@ -1,5 +1,5 @@
 import unittest
-from dojo_framework import DojoFramework, ResourceManager, TaskScheduler, Optimizer, configure_dojo
+from NeuroFlex.Dojo.dojo_framework import DojoFramework, ResourceManager, TaskScheduler, Optimizer, configure_dojo
 
 class TestSelfManagement(unittest.TestCase):
     def setUp(self):

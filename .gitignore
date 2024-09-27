@@ -8,3 +8,10 @@ neuroflex-env/
 performance_history.png
 results.xml
 neuroflexenv/
+edge_ai_test_output.log
+full_test_output.log
+multi_modal_learning_test_output.log
+specific_test_output.log
+test_output.log
+test_warnings.log
+warnings_analysis.txt

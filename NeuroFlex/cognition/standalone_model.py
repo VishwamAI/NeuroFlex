@@ -35,9 +35,9 @@ import numpy as np
 from typing import List, Dict, Any
 from line_profiler import profile
 
-from embodied_cognition_module import EmbodiedCognitionModule
-from connectionist_models_module import ConnectionistModelsModule
-from bayesian_inference_module import BayesianInferenceModule
+from NeuroFlex.cognition.embodied_cognition_module import EmbodiedCognitionModule
+from NeuroFlex.cognition.connectionist_models_module import ConnectionistModelsModule
+from NeuroFlex.cognition.bayesian_inference_module import BayesianInferenceModule
 
 class SituatedCognitionModule:
     def __init__(self, config: Dict[str, Any]):

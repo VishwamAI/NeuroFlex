@@ -1,5 +1,5 @@
 import unittest
-from dojo_framework import DojoFramework, configure_dojo
+from NeuroFlex.Dojo.dojo_framework import DojoFramework, configure_dojo
 
 class TestErrorHandling(unittest.TestCase):
     def setUp(self):

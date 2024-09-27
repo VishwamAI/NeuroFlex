@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from connectionist_models_module import ConnectionistModelsModule, configure_connectionist_models
+from NeuroFlex.cognition.connectionist_models_module import ConnectionistModelsModule, configure_connectionist_models
 
 class TestConnectionistModels(unittest.TestCase):
     def setUp(self):

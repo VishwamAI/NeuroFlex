@@ -1,0 +1,73 @@
+# Warnings Documentation
+
+## Overview
+This document provides an overview of the warnings observed during the test run of the NeuroFlex project. It includes details about the specific warnings, their potential causes, and any solutions implemented or considered.
+
+## Warnings Observed
+
+### Line Search Warnings
+- **Message**: Line search cannot locate an adequate point after MAXLS function and gradient evaluations.
+- **Potential Causes**:
+  1. Error in function or gradient evaluation
+  2. Rounding error dominates computation
+- **Patterns Observed**:
+  - Occurs consistently across multiple tests
+  - Often associated with unconstrained problems
+
+### Gradient Evaluation Warnings
+- **Message**: More than 10 function and gradient evaluations in the last line search. Termination may possibly be caused by a bad search direction.
+- **Potential Causes**:
+  1. Inefficient gradient evaluation logic
+  2. Suboptimal search direction
+- **Patterns Observed**:
+  - Appears in tests involving optimization
+  - Linked to specific optimization methods
+
+### Biopython Warnings
+- **Message**: Partial codon, len(sequence) not a multiple of three.
+- **Potential Causes**:
+  - Sequence length issues
+- **Patterns Observed**:
+  - Occurs in multiple test cases
+
+### Efficiency Warnings
+- **Message**: Using skbio's python implementation of Needleman-Wunsch alignment.
+- **Potential Causes**:
+  - Performance inefficiency
+- **Patterns Observed**:
+  - Occurs in multiple test cases
+
+### Future Warnings
+- **Message**: From version 1.3 whiten='unit-variance' will be used by default.
+- **Potential Causes**:
+  - Deprecated parameter usage
+- **Patterns Observed**:
+  - Occurs in multiple test cases
+
+### Convergence Warnings
+- **Message**: FastICA did not converge. Consider increasing tolerance or the maximum number of iterations.
+- **Potential Causes**:
+  - Insufficient iterations or tolerance
+- **Patterns Observed**:
+  - Occurs in multiple test cases
+
+### User Warnings
+- **Message**: Level value of 5 is too high: all coefficients will experience boundary effects.
+- **Potential Causes**:
+  - High level value in wavelet transform
+- **Patterns Observed**:
+  - Occurs in multiple test cases
+
+## Solutions Implemented
+- Adjusted optimization parameters in `math_solvers.py` to improve convergence and reduce warnings.
+- Suppressed specific warnings in test files where appropriate.
+- Documented warnings for future reference and potential resolution.
+- Implemented logging to capture detailed information about optimization processes.
+- Refined test logic to ensure consistent input types and shapes.
+
+## Next Steps
+- Investigate the specific functions and methods triggering these warnings.
+- Review the optimization logic in `math_solvers.py` for potential improvements.
+- Consider alternative optimization strategies or parameter adjustments.
+- Test changes in isolated environments to ensure no new issues are introduced.
+- Continue monitoring for any new warnings or issues that may arise.

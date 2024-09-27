@@ -1,6 +1,6 @@
 import unittest
-from standalone_model import StandaloneCognitiveModel, configure_model
-from embodied_cognition_module import EmbodiedCognitionModule
+from NeuroFlex.cognition.standalone_model import StandaloneCognitiveModel, configure_model
+from NeuroFlex.cognition.embodied_cognition_module import EmbodiedCognitionModule
 
 class TestStandaloneModel(unittest.TestCase):
     def setUp(self):

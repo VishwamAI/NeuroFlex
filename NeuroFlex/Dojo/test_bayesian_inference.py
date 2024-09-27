@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from bayesian_inference_module import BayesianInferenceModule, configure_bayesian_inference
+from NeuroFlex.cognition.bayesian_inference_module import BayesianInferenceModule, configure_bayesian_inference
 
 class TestBayesianInference(unittest.TestCase):
     def setUp(self):
