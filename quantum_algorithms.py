@@ -1,5 +1,5 @@
 import numpy as np
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile, execute
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit.providers.aer import Aer
 from qiskit.circuit.library import ZZFeatureMap
 from qiskit.algorithms.optimizers import COBYLA
@@ -90,7 +90,8 @@ class QuantumEncryption:
             qc.h(i)
         qc.measure(range(self.key_size), range(self.key_size))
 
-        job = execute(qc, Aer.get_backend('qasm_simulator'), shots=1)
+        backend = Aer.get_backend('qasm_simulator')
+        job = backend.run(qc, shots=1)
         result = job.result().get_counts(qc)
         key = list(result.keys())[0]
         return [int(bit) for bit in key]
