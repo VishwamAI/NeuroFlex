@@ -56,6 +56,27 @@ class TestProteinDevelopment(unittest.TestCase):
             self.protein_dev.setup_alphafold()
         self.assertIn("Failed to set up AlphaFold model", str(context.exception))
 
+        # Test missing data files
+        mock_get_params.side_effect = None
+        mock_get_params.return_value = None
+        with self.assertRaises(ValueError) as context:
+            self.protein_dev.setup_alphafold()
+        self.assertIn("Missing AlphaFold data files", str(context.exception))
+
+        # Test incorrect file paths
+        mock_get_params.return_value = {'mock': 'params'}
+        mock_run_model.side_effect = OSError("Incorrect file path")
+        with self.assertRaises(ValueError) as context:
+            self.protein_dev.setup_alphafold()
+        self.assertIn("Incorrect file paths for AlphaFold setup", str(context.exception))
+
+        # Test invalid configuration settings
+        mock_run_model.side_effect = None
+        mock_model_config.return_value = ml_collections.ConfigDict({'invalid': 'config'})
+        with self.assertRaises(ValueError) as context:
+            self.protein_dev.setup_alphafold()
+        self.assertIn("Invalid configuration settings for AlphaFold", str(context.exception))
+
     @patch('NeuroFlex.scientific_domains.protein_development.pipeline.make_sequence_features')
     @patch('NeuroFlex.scientific_domains.protein_development.protein.from_prediction')
     def test_predict_structure(self, mock_from_prediction, mock_make_sequence_features):

@@ -30,6 +30,7 @@ from alphafold.model import config, modules, features, modules_multimer
 from alphafold.model.config import CONFIG, CONFIG_MULTIMER, CONFIG_DIFFS
 from alphafold.common import protein, confidence, residue_constants
 from alphafold.data import pipeline, templates, msa_identifiers, parsers
+from alphafold.data.pipeline import make_sequence_features
 from alphafold.data.tools import hhblits, jackhmmer, hhsearch, hmmsearch
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -114,19 +115,31 @@ class AlphaFoldIntegration:
         Raises:
             ValueError: If the sequence is invalid.
         """
+        logging.info(f"Preparing features for sequence of length {len(sequence)}")
         if not sequence or not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            logging.error("Invalid amino acid sequence provided")
             raise ValueError("Invalid amino acid sequence provided.")
 
-        sequence_features = self.features_module.make_sequence_features(
-            sequence=sequence,
-            description="query",
-            num_res=len(sequence)
-        )
-        msa = self._run_msa(sequence)
-        msa_features = self.features_module.make_msa_features(msas=[msa])
-        template_features = self._search_templates(sequence)
+        try:
+            sequence_features = self.features_module.make_sequence_features(
+                sequence=sequence,
+                description="query",
+                num_res=len(sequence)
+            )
+            logging.info("Sequence features prepared successfully")
 
-        self.feature_dict = {**sequence_features, **msa_features, **template_features}
+            msa = self._run_msa(sequence)
+            msa_features = self.features_module.make_msa_features(msas=[msa])
+            logging.info("MSA features prepared successfully")
+
+            template_features = self._search_templates(sequence)
+            logging.info("Template features prepared successfully")
+
+            self.feature_dict = {**sequence_features, **msa_features, **template_features}
+            logging.info("All features combined into feature dictionary")
+        except Exception as e:
+            logging.error(f"Error during feature preparation: {str(e)}")
+            raise
 
     def _search_templates(self, sequence: str) -> Dict[str, Any]:
         """Search for templates and prepare features."""
@@ -517,13 +530,19 @@ class AlphaFoldIntegration:
             np.ndarray: Array of pLDDT scores.
 
         Raises:
-            ValueError: If the model or features are not set up.
+            ValueError: If the model or features are not set up, or if logits are empty or contain NaN values.
         """
         if not self.is_model_ready():
             raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
         prediction_result = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
         logits = prediction_result['predicted_lddt']['logits']
+
+        if logits.size == 0:
+            raise ValueError("Empty logits array")
+        if np.isnan(logits).any():
+            raise ValueError("NaN values in logits")
+
         plddt_scores = self.confidence_module.compute_plddt(logits)
         return np.array(plddt_scores).flatten()
 
@@ -836,6 +855,10 @@ class AlphaFoldIntegration:
             raise ValueError("Invalid input type for variant. Expected str, got {type(variant).__name__}.")
         if not sequence:
             raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if len(sequence) < 2:
+            raise ValueError("Sequence is too short. Please provide a sequence with at least 2 amino acids.")
+        if len(sequence) > 1000:
+            raise ValueError("Sequence is too long. Please provide a sequence with at most 1000 amino acids.")
         if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
             raise ValueError("Invalid amino acid(s) found in sequence.")
 

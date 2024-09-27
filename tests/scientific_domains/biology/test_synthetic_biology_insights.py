@@ -10,9 +10,11 @@ class TestSyntheticBiologyInsights(unittest.TestCase):
     def setUp(self):
         self.synbio = SyntheticBiologyInsights()
 
-    def test_design_genetic_circuit(self):
+    @patch('NeuroFlex.scientific_domains.biology.synthetic_biology_insights.SyntheticBiologyInsights._validate_components')
+    def test_design_genetic_circuit(self, mock_validate_components):
         circuit_name = "test_circuit"
         components = ["pTac", "B0034", "GFP", "T1"]
+        mock_validate_components.return_value = components
 
         result = self.synbio.design_genetic_circuit(circuit_name, components)
 
@@ -22,9 +24,37 @@ class TestSyntheticBiologyInsights(unittest.TestCase):
         self.assertIsInstance(result["gc_content"], float)
         self.assertTrue(0 <= result["gc_content"] <= 100)
 
-    def test_design_genetic_circuit_invalid_components(self):
+        # Test with empty components
+        mock_validate_components.return_value = []
+        with self.assertRaises(ValueError):
+            self.synbio.design_genetic_circuit("empty_circuit", [])
+
+        # Test with very large component list
+        large_components = ["component_" + str(i) for i in range(1000)]
+        mock_validate_components.return_value = large_components
+        large_result = self.synbio.design_genetic_circuit("large_circuit", large_components)
+        self.assertEqual(len(large_result["components"]), 1000)
+
+        # Test with invalid data type
+        mock_validate_components.side_effect = TypeError
+        with self.assertRaises(TypeError):
+            self.synbio.design_genetic_circuit("invalid_type", 123)
+
+    @patch('NeuroFlex.scientific_domains.biology.synthetic_biology_insights.SyntheticBiologyInsights._validate_components')
+    def test_design_genetic_circuit_invalid_components(self, mock_validate_components):
+        mock_validate_components.return_value = []
         with self.assertRaises(ValueError):
             self.synbio.design_genetic_circuit("invalid_circuit", ["invalid_component"])
+
+        # Test with mixed valid and invalid components
+        mock_validate_components.return_value = []
+        with self.assertRaises(ValueError):
+            self.synbio.design_genetic_circuit("mixed_circuit", ["pTac", "invalid", "GFP"])
+
+        # Test with non-string component
+        mock_validate_components.side_effect = TypeError
+        with self.assertRaises(TypeError):
+            self.synbio.design_genetic_circuit("non_string_circuit", ["pTac", 123, "GFP"])
 
     @pytest.mark.skip(reason="Skipping due to known issue")
     @patch('networkx.DiGraph')
