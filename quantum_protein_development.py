@@ -23,11 +23,22 @@ class QuantumProteinFolding:
         self.params = qml.numpy.array(np.random.uniform(low=-np.pi, high=np.pi, size=(num_layers, num_qubits, 2)), requires_grad=True)
 
     def quantum_protein_layer(self, inputs, params):
-        outputs = []
-        for i in range(0, len(inputs)):
-            qml.RX(inputs[i], wires=0)
-            outputs.append(qubit_layer(params=params[i % self.num_qubits], input_val=inputs[i]))
-        return np.array(outputs)
+        @qml.qnode(self.dev)
+        def quantum_circuit(inputs, params):
+            for i in range(len(inputs)):
+                wire_i = i % self.num_qubits
+                next_wire = (i + 1) % self.num_qubits
+                # Dendrite processing
+                qml.RX(inputs[i], wires=wire_i)
+                qml.RY(params[wire_i, 0], wires=wire_i)
+
+                # Soma processing
+                qml.RZ(params[wire_i, 1], wires=wire_i)
+                qml.CNOT(wires=[wire_i, next_wire])
+
+            return [qml.expval(qml.PauliZ(i % self.num_qubits)) for i in range(len(inputs))]
+
+        return np.array(quantum_circuit(inputs, params))
 
     def forward(self, amino_acid_sequence):
         x = np.array(amino_acid_sequence)

@@ -77,3 +77,17 @@ sample = qgm.generate_sample()
 - **Coherence Measure**: Indicates the degree of coherence in the system, with higher values suggesting more coherent quantum states.
 
 These simulations provide a framework for exploring quantum theories of consciousness and their potential implications for cognitive science. The new quantum models offer additional tools for leveraging quantum mechanics in machine learning and data generation.
+
+## Recent Changes and Findings
+
+### Changes to Quantum Protein Layer
+- Adjusted wire indices in the `quantum_protein_layer` method to ensure they stay within the valid range of available qubits.
+- Successfully resolved the `WireError` and ensured all tests passed.
+
+### Integration of Quantum Neurobiology Concepts
+- Integrated concepts from quantum neurobiology into the quantum protein development framework.
+- Enhanced the `quantum_protein_layer` method to incorporate quantum-like models of information processing, focusing on dendrites, soma, and synapses.
+
+### Research Findings
+- Explored advanced quantum biology and neuroscience concepts, focusing on potential quantum effects in the brain and the application of quantum information science to neuroscience.
+- Gathered insights on quantum models for neurotransmitter behavior and synaptic plasticity, which can enhance the current quantum protein development work.
