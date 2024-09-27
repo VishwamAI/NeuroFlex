@@ -42,6 +42,13 @@ try:
         logging.warning(f"This module was tested with PennyLane 0.37.0. You are using version {pennylane_version}. Some features may not work as expected.")
 except importlib.metadata.PackageNotFoundError:
     logging.warning("Unable to determine PennyLane version. Make sure it's installed correctly.")
+# Check PennyLane version
+try:
+    pennylane_version = importlib.metadata.version("pennylane")
+    if pennylane_version != "0.37.0":
+        logging.warning(f"This module was tested with PennyLane 0.37.0. You are using version {pennylane_version}. Some features may not work as expected.")
+except importlib.metadata.PackageNotFoundError:
+    logging.warning("Unable to determine PennyLane version. Make sure it's installed correctly.")
 
 class QuantumNeuralNetwork:
     """

@@ -190,7 +190,7 @@ class AlphaFoldIntegration:
                 except Exception as e:
                     logging.warning(f"Failed to remove temporary file: {str(e)}")
 
-    def setup_model(self, model_params: Dict[str, Any] = None, use_cpu: bool = False):
+    def setup_model(self, model_params: Dict[str, Any] = None, use_cpu: bool = False, use_quantum: bool = False):
         """Set up the AlphaFold model with given parameters."""
         try:
             logging.info("Starting AlphaFold model setup")
@@ -198,6 +198,7 @@ class AlphaFoldIntegration:
                 model_params = {'max_recycling': 3, 'model_name': 'model_1'}
             logging.info(f"Setting up AlphaFold model with parameters: {model_params}")
             logging.info(f"Using CPU: {use_cpu}")
+            logging.info(f"Using Quantum: {use_quantum}")
 
             # Initialize the config
             model_name = model_params.get('model_name', 'model_1')
@@ -228,6 +229,15 @@ class AlphaFoldIntegration:
                     'subbatch_size': 1,  # Reduce subbatch size for CPU
                 })
                 logging.info("Applied CPU-specific configurations")
+
+            # Quantum-specific configurations
+            if use_quantum:
+                config.global_config.update({
+                    'use_quantum': True,
+                    'quantum_circuit_depth': 2,
+                    'quantum_measurement_shots': 1000,
+                })
+                logging.info("Applied Quantum-specific configurations")
 
             config.update(model_params)
             self.config = config
@@ -369,6 +379,11 @@ class AlphaFoldIntegration:
             # Initialize feature_dict with an empty dictionary
             self.feature_dict = {}
             logging.info("Initialized feature_dict with an empty dictionary")
+
+            # Initialize quantum circuit if quantum mode is enabled
+            if use_quantum:
+                self.quantum_circuit = self._initialize_quantum_circuit()
+                logging.info("Quantum circuit initialized")
 
             # Verify that the model is set up correctly
             logging.info("Verifying model setup")

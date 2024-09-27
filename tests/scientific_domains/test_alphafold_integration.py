@@ -29,6 +29,10 @@ mock_alphafold.model.config = MagicMock()
 mock_alphafold.data.pipeline = MagicMock()
 mock_alphafold.data.tools = MagicMock()
 
+# Mock quantum integration components
+mock_quantum_circuit = MagicMock()
+mock_quantum_optimizer = MagicMock()
+
 # Patch the entire alphafold module and its submodules
 patch.dict('sys.modules', {
     'alphafold': mock_alphafold,
@@ -40,6 +44,8 @@ patch.dict('sys.modules', {
     'alphafold.model.config': mock_alphafold.model.config,
     'alphafold.data.pipeline': mock_alphafold.data.pipeline,
     'alphafold.data.tools': mock_alphafold.data.tools,
+    'quantum_circuit': mock_quantum_circuit,
+    'quantum_optimizer': mock_quantum_optimizer,
 }).start()
 
 class TestAlphaFoldIntegration(unittest.TestCase):
@@ -50,7 +56,9 @@ class TestAlphaFoldIntegration(unittest.TestCase):
             'alphafold.model': mock_alphafold.model,
             'alphafold.data': mock_alphafold.data,
             'alphafold.common': mock_alphafold.common,
-            'alphafold.relax': mock_alphafold.relax
+            'alphafold.relax': mock_alphafold.relax,
+            'quantum_circuit': mock_quantum_circuit,
+            'quantum_optimizer': mock_quantum_optimizer
         })
         cls.patcher.start()
 
