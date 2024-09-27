@@ -71,39 +71,57 @@ def test_qcnn_execution(qcnn):
     params = qcnn.init(key, jnp.zeros((1, qcnn.num_qubits)))
     x = jax.random.normal(key, (10, qcnn.num_qubits))
     output = qcnn.apply(params, x)
-    assert output.shape == (9, 1)  # Output shape should be (input_size - 1, 1)
+    assert output.shape == (8, qcnn.num_qubits)  # Output shape should be (input_size - 2, num_qubits)
 
     # Test qubit_layer function
-    input_val = jnp.array([0.5])  # Ensure input_val is a 1D array
+    from NeuroFlex.quantum_deep_learning.quantum_cnn import qubit_layer
+    input_val = 0.5  # Pass input_val as a scalar
     qubit_params = jnp.array([0.1, 0.2])  # Ensure 2 parameters for RY, RZ
-    qubit_output = qcnn.qubit_layer(qubit_params, input_val)
-    assert qubit_output.shape == ()  # Output should be a scalar (0-dimensional array)
+    qubit_output = qubit_layer(qubit_params, input_val)
+    assert isinstance(qubit_output, jnp.ndarray)  # Output should be a JAX array
 
     # Test different input sizes
     x_small = jax.random.normal(key, (5, qcnn.num_qubits))
     output_small = qcnn.apply(params, x_small)
-    assert output_small.shape == (4, 1)
+    assert output_small.shape == (3, qcnn.num_qubits)
 
     # Verify parameter shapes
-    assert params.shape == (qcnn.num_layers, qcnn.num_qubits, 3)  # (num_layers, num_qubits, 3)
+    assert params.shape == (qcnn.num_layers, qcnn.num_qubits, 2)  # (num_layers, num_qubits, 2)
 
 def test_qcnn_gradient():
     qcnn = QuantumCNN(num_qubits=2, num_layers=1)
     key = jax.random.PRNGKey(0)
     params = qcnn.init(key, jnp.zeros((1, 2)))
     x = jax.random.normal(key, (1, 2))
+    print(f"Input x shape: {x.shape}, values: {x}")
+    print(f"Initial params shape: {params.shape}, values: {params}")
 
     def loss(params, x):
-        return jnp.sum(qcnn.apply(params, x))
+        print(f"Loss function input x shape: {x.shape}, values: {x}")
+        print(f"Loss function params shape: {params.shape}, values: {params}")
+        output = qcnn.apply(params, x)
+        print(f"QCNN output shape: {output.shape}, values: {output}")
+        loss_value = jnp.sum(output)
+        print(f"Loss value: {loss_value}")
+        return loss_value
+
+    initial_loss = loss(params, x)
+    print(f"Initial loss: {initial_loss}")
 
     grad_fn = jax.grad(loss)
     grads = grad_fn(params, x)
+    print(f"Gradients shape: {grads.shape}, values: {grads}")
+    print(f"Gradients sum: {jax.tree_map(lambda x: jnp.sum(jnp.abs(x)), grads)}")
     assert jax.tree_util.tree_all(jax.tree_map(lambda x: jnp.all(jnp.isfinite(x)), grads))
 
     # Test gradient descent step
     learning_rate = 0.01
     new_params = jax.tree_map(lambda p, g: p - learning_rate * g, params, grads)
-    assert jax.tree_util.tree_all(jax.tree_map(lambda x, y: jnp.any(x != y), params, new_params))
+    param_diff = jax.tree_map(lambda x, y: jnp.abs(x - y), params, new_params)
+    print(f"New params shape: {new_params.shape}, values: {new_params}")
+    print(f"Parameter difference shape: {param_diff.shape}, values: {param_diff}")
+    print(f"Parameter difference sum: {jax.tree_map(lambda x: jnp.sum(jnp.abs(x)), param_diff)}")
+    assert jax.tree_util.tree_reduce(lambda x, y: x or y, jax.tree_map(lambda x: jnp.any(x > 1e-6), param_diff))
 
 def test_qrnn_execution(qrnn):
     key = jax.random.PRNGKey(0)

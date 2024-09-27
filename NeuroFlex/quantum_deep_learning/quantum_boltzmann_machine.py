@@ -77,19 +77,31 @@ class QuantumBoltzmannMachine:
 
     def train(self, data, num_epochs, learning_rate):
         for epoch in range(num_epochs):
+            total_energy = 0
             for visible_data in data:
                 hidden_data = self.sample_hidden(visible_data)
                 visible_model = self.sample_visible(hidden_data)
                 hidden_model = self.sample_hidden(visible_model)
 
-                # Update parameters
-                for i in range(self.num_visible + self.num_hidden):
-                    grad = visible_data[i % self.num_visible] * hidden_data[i % self.num_hidden] - \
-                           visible_model[i % self.num_visible] * hidden_model[i % self.num_hidden]
-                    self.params[i] += learning_rate * grad
+                # Calculate gradients
+                gradients = np.zeros_like(self.params)
+                for i in range(self.num_visible):
+                    for j in range(self.num_hidden):
+                        data_term = visible_data[i] * hidden_data[j]
+                        model_term = visible_model[i] * hidden_model[j]
+                        grad = data_term - model_term
+                        gradients[i] += grad
+                        gradients[self.num_visible + j] += grad
 
+                # Update parameters
+                self.params -= learning_rate * gradients
+
+                # Calculate energy for this sample
+                total_energy += self.energy(visible_data, hidden_data)
+
+            avg_energy = total_energy / len(data)
             if epoch % 10 == 0:
-                print(f"Epoch {epoch}, Energy: {self.energy(visible_data, hidden_data)}")
+                print(f"Epoch {epoch}, Average Energy: {avg_energy}")
 
     def generate_sample(self, num_steps):
         visible_state = np.random.randint(2, size=self.num_visible)
