@@ -52,7 +52,7 @@ class MathSolver:
         Perform optimization with fallback methods and custom error handling.
         """
         methods = [method, 'L-BFGS-B', 'TNC', 'SLSQP', 'Nelder-Mead', 'Powell', 'CG', 'trust-constr', 'dogleg', 'trust-ncg', 'COBYLA']
-        max_iterations = 1000000
+        max_iterations = 5000000  # Further increased max iterations
         best_result = None
         best_fun = float('inf')
 
@@ -68,7 +68,7 @@ class MathSolver:
             print(f"Additional context: {context}")
             print("--------------------")
 
-        def adjust_initial_guess(guess, scale=0.01):
+        def adjust_initial_guess(guess, scale=0.2):  # Further increased scale for more diversity
             return guess + np.random.normal(0, scale, size=guess.shape)
 
         for m in methods:
@@ -77,22 +77,22 @@ class MathSolver:
                     warnings.simplefilter("always")
                     options = {
                         'maxiter': max_iterations,
-                        'ftol': 1e-10,
-                        'gtol': 1e-10,
-                        'maxls': 100,
-                        'maxcor': 100
+                        'ftol': 1e-14,  # Further tightened tolerance
+                        'gtol': 1e-14,  # Further tightened tolerance
+                        'maxls': 500,   # Further increased max line search steps
+                        'maxcor': 500   # Further increased max corrections
                     }
 
                     if m in ['trust-constr', 'dogleg', 'trust-ncg']:
-                        options['gtol'] = 1e-8
-                        options['xtol'] = 1e-8
+                        options['gtol'] = 1e-12
+                        options['xtol'] = 1e-12
                     elif m == 'COBYLA':
-                        options = {'maxiter': max_iterations, 'tol': 1e-8}
+                        options = {'maxiter': max_iterations, 'tol': 1e-12}
                     elif m == 'Nelder-Mead':
-                        options = {'maxiter': max_iterations, 'xatol': 1e-8, 'fatol': 1e-8}
+                        options = {'maxiter': max_iterations, 'xatol': 1e-12, 'fatol': 1e-12}
 
                     current_guess = initial_guess
-                    for attempt in range(10):  # Increased attempts to 10
+                    for attempt in range(20):  # Further increased attempts to 20
                         result = optimize.minimize(func, current_guess, method=m, options=options)
 
                         if result.success or (result.fun < best_fun and np.isfinite(result.fun)):
@@ -113,7 +113,7 @@ class MathSolver:
                             log_optimization_details(m, result, None, f"Optimization failed without warning (attempt {attempt + 1})")
                             current_guess = adjust_initial_guess(current_guess)
 
-                    print(f"Method {m} failed after 10 attempts. Trying next method.")
+                    print(f"Method {m} failed after 20 attempts. Trying next method.")
 
             except Exception as e:
                 log_optimization_details(m, None, None, f"Error: {str(e)}")
@@ -125,8 +125,8 @@ class MathSolver:
 
         # If all methods fail, use differential evolution as a last resort
         print("All methods failed. Using differential evolution as a last resort.")
-        bounds = [(x - abs(x), x + abs(x)) for x in initial_guess]  # Create bounds based on initial guess
-        result = optimize.differential_evolution(func, bounds, maxiter=max_iterations, tol=1e-10, strategy='best1bin', popsize=20)
+        bounds = [(x - 3*abs(x), x + 3*abs(x)) for x in initial_guess]  # Further widened bounds
+        result = optimize.differential_evolution(func, bounds, maxiter=max_iterations, tol=1e-14, strategy='best1bin', popsize=50)
         log_optimization_details('Differential Evolution', result, None, "Final fallback method")
         return result
 
