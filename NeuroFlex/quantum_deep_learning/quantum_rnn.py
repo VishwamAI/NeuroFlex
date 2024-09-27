@@ -1,4 +1,6 @@
 import numpy as np
+import jax
+import jax.numpy as jnp
 import pennylane as qml
 
 class QuantumRNN:
@@ -6,24 +8,69 @@ class QuantumRNN:
         self.num_qubits = num_qubits
         self.num_layers = num_layers
         self.dev = qml.device("default.qubit", wires=num_qubits)
-        self.params = np.random.uniform(low=-np.pi, high=np.pi, size=(num_layers, num_qubits, 3))
+        self.param_init_fn = lambda key, shape: np.random.uniform(low=-np.pi, high=np.pi, size=shape)
+        self.params = self.param_init_fn(None, (num_layers, num_qubits, 2))
 
-    @qml.qnode(device=qml.device("default.qubit", wires=1))
+    def init(self, key, input_shape):
+        self.key = key
+        self.input_shape = input_shape
+        # Initialize params for 3D input shape (batch_size, time_steps, features)
+        self.params = self.param_init_fn(key, (self.num_layers, self.num_qubits, 2))
+        return self.params
+
     def qubit_layer(self, params, input_val):
-        qml.RX(input_val, wires=0)
-        qml.RY(params[0], wires=0)
-        qml.RZ(params[1], wires=0)
-        return qml.expval(qml.PauliZ(0))
+        dev = qml.device("default.qubit", wires=self.num_qubits)
+        @qml.qnode(dev)
+        def _qubit_circuit(params, input_val):
+            input_val = jnp.atleast_2d(input_val)
+            for b in range(input_val.shape[0]):  # Iterate over batch
+                for i in range(self.num_qubits):
+                    qml.RX(input_val[b, i % input_val.shape[1]], wires=i)
+                    qml.RY(params[i][0], wires=i)
+                    qml.RZ(params[i][1], wires=i)
+            return [qml.expval(qml.PauliZ(i)) for i in range(self.num_qubits)]
+        return jnp.array([_qubit_circuit(params, jnp.atleast_2d(iv)) for iv in input_val])
 
     def quantum_rnn_layer(self, inputs, params, hidden_state):
-        outputs = []
-        for t in range(len(inputs)):
-            qml.RX(hidden_state, wires=0)
-            qml.RY(inputs[t], wires=1)
-            qml.CNOT(wires=[0, 1])
-            hidden_state = self.qubit_layer(params, inputs[t])
-            outputs.append(hidden_state)
-        return np.array(outputs), hidden_state
+        # Handle both 2D and 3D input shapes
+        if inputs.ndim == 2:
+            batch_size, input_features = inputs.shape
+            time_steps = 1
+            inputs = jnp.reshape(inputs, (batch_size, time_steps, input_features))
+        elif inputs.ndim == 3:
+            batch_size, time_steps, input_features = inputs.shape
+        else:
+            raise ValueError(f"Expected 2D or 3D input, got shape {inputs.shape}")
+
+        hidden_features = self.num_qubits  # Number of features in hidden state
+
+        # Initialize hidden_state if it's the first pass
+        if isinstance(hidden_state, int) and hidden_state == 0:
+            hidden_state = jnp.zeros((batch_size, hidden_features))
+
+        def scan_fn(carry, x):
+            hidden_state = carry
+            input_t = x
+
+            # Combine hidden state and input, ensuring dimensions match
+            combined_input = jnp.concatenate([hidden_state, input_t], axis=1)
+
+            # Adjust combined_input if necessary to match num_qubits
+            if combined_input.shape[1] > self.num_qubits:
+                combined_input = combined_input[:, :self.num_qubits]
+            elif combined_input.shape[1] < self.num_qubits:
+                pad_width = self.num_qubits - combined_input.shape[1]
+                combined_input = jnp.pad(combined_input, ((0, 0), (0, pad_width)), mode='constant')
+
+            # Ensure input_val shape matches the expected shape for qubit_layer
+            input_val = jnp.reshape(combined_input, (-1, self.num_qubits))
+            new_hidden_state = self.qubit_layer(params=params, input_val=input_val)
+            return new_hidden_state, new_hidden_state
+
+        hidden_state, outputs = jax.lax.scan(scan_fn, hidden_state, jnp.transpose(inputs, (1, 0, 2)))
+        outputs = jnp.transpose(outputs, (1, 0, 2))
+
+        return outputs, hidden_state
 
     def forward(self, inputs):
         hidden_state = 0
@@ -31,6 +78,10 @@ class QuantumRNN:
         for layer in range(self.num_layers):
             x, hidden_state = self.quantum_rnn_layer(x, self.params[layer], hidden_state)
         return x
+
+    def apply(self, params, inputs):
+        self.params = params
+        return self.forward(inputs)
 
     def loss(self, inputs, targets):
         predictions = self.forward(inputs)
