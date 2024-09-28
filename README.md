@@ -64,6 +64,9 @@ To install NeuroFlex, please follow these steps:
 ```python
 from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
 from NeuroFlex.bci_integration import BCIIntegration
+from neuroflex import TensorFlowConvolutions
+from neuroflex.utils import convert_array
+from neuroflex import adversarial_training
 ```
 
 2. **Define Your Model**
