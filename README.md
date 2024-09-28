@@ -62,11 +62,9 @@ To install NeuroFlex, please follow these steps:
 1. **Import NeuroFlex**
 
 ```python
-from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
-from NeuroFlex.bci_integration import BCIIntegration
-from neuroflex import TensorFlowConvolutions
-from neuroflex.utils import convert_array
-from neuroflex import adversarial_training
+from NeuroFlex.core_neural_networks.tensorflow.tensorflow_convolutions import TensorFlowConvolutions
+# Note: The convert_array function is not currently implemented in the codebase.
+from NeuroFlex.scientific_domains.art_integration import ARTIntegration
 ```
 
 2. **Define Your Model**
