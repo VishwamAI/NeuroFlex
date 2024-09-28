@@ -40,9 +40,22 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 
 ## Installation
 
-```bash
-pip install neuroflex
-```
+To install NeuroFlex, please follow these steps:
+
+1. Ensure you have Python 3.9 or later installed.
+2. It's recommended to use a virtual environment:
+   ```bash
+   python -m venv neuroflex-env
+   source neuroflex-env/bin/activate  # On Windows use `neuroflex-env\Scripts\activate`
+   ```
+3. Install NeuroFlex using pip:
+   ```bash
+   pip install neuroflex
+   ```
+4. If you encounter any issues, ensure that your pip is up to date:
+   ```bash
+   pip install --upgrade pip
+   ```
 
 ## Quick Start Guide
 
