@@ -116,7 +116,7 @@ print(f"Model Accuracy: {accuracy:.2f}%")
 ### TensorFlow Convolutions
 
 ```python
-from neuroflex import TensorFlowConvolutions
+from NeuroFlex.core_neural_networks.tensorflow.tensorflow_convolutions import TensorFlowConvolutions
 
 tf_conv = TensorFlowConvolutions(
     features=(32, 64, 128),
@@ -129,18 +129,15 @@ model = tf_conv.create_model()
 ### JAX/Flax and TensorFlow Compatibility
 
 ```python
-from neuroflex.utils import convert_array
-
-jax_array = jax.random.uniform(jax.random.PRNGKey(0), shape=(1, 28, 28, 1))
-tf_tensor = convert_array(jax_array, 'tensorflow')
+# Note: The convert_array function is not currently implemented in the codebase.
 ```
 
 ### Adversarial Training
 
 ```python
-from neuroflex import adversarial_training
+from NeuroFlex.scientific_domains.art_integration import ARTIntegration
 
-perturbed_data = adversarial_training(model, params, input_data, epsilon=0.1, step_size=0.01)
+perturbed_data = ARTIntegration.adversarial_training(model, params, input_data, epsilon=0.1, step_size=0.01)
 ```
 
 ## Testing
