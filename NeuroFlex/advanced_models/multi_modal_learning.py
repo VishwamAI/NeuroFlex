@@ -186,12 +186,16 @@ class MultiModalLearning(nn.Module):
 
         encoded_modalities = {}
         for name, modality in self.modalities.items():
+            logger.debug(f"Processing modality: {name}")
+            logger.debug(f"Input shape for {name}: {inputs[name].shape}")
+            logger.debug(f"Expected shape for {name}: (batch_size, {modality['input_shape']})")
             if inputs[name].shape[1:] != modality['input_shape']:
                 raise ValueError(f"Input shape for {name} {inputs[name].shape} does not match the defined shape (batch_size, {modality['input_shape']})")
 
             if name == 'image':
                 # For image modality, preserve the 4D structure
                 encoded_modalities[name] = modality['encoder'](inputs[name])
+                logger.debug(f"Encoded image shape: {encoded_modalities[name].shape}")
             elif name == 'text':
                 # For text modality, ensure long type for embedding and float type for LSTM
                 text_input = inputs[name].long().clamp(0, 29999)  # Clamp to valid range
@@ -212,20 +216,23 @@ class MultiModalLearning(nn.Module):
                     inputs[name] = inputs[name].unsqueeze(1)
                 logger.debug(f"Time series input shape: {inputs[name].shape}, type: {type(inputs[name])}")
                 encoded_modalities[name] = modality['encoder'](inputs[name])
+                logger.debug(f"Encoded time series shape: {encoded_modalities[name].shape}")
             elif name == 'tabular':
                 # For tabular data, ensure 2D input (batch_size, features)
                 logger.debug(f"Tabular input shape: {inputs[name].shape}, type: {type(inputs[name])}")
                 encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
+                logger.debug(f"Encoded tabular shape: {encoded_modalities[name].shape}")
             else:
                 # For other modalities, flatten the input
                 logger.debug(f"Other modality input shape: {inputs[name].shape}, type: {type(inputs[name])}")
                 encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
+                logger.debug(f"Encoded other modality shape: {encoded_modalities[name].shape}")
 
             logger.debug(f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}")
 
         # Ensure all encoded modalities have the same batch size and are 2D tensors
         encoded_modalities = {name: tensor.view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
-        logger.debug(f"Encoded modalities shapes: {[(name, tensor.shape) for name, tensor in encoded_modalities.items()]}")
+        logger.debug(f"Encoded modalities shapes after reshaping: {[(name, tensor.shape) for name, tensor in encoded_modalities.items()]}")
 
         if self.fusion_method == 'concatenation':
             fused = torch.cat(list(encoded_modalities.values()), dim=1)
