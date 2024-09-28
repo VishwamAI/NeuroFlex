@@ -69,7 +69,7 @@ from neuroflex import NeuroFlexNN, train_model, create_neuroflex_nn
 
 ```python
 model = create_neuroflex_nn(
-    features=[64, 32, 10],
+    features=[128, 64, 32, 10],  # Updated feature sizes for better performance
     input_shape=(1, 28, 28, 1),
     output_shape=(1, 10),
     use_cnn=True,
@@ -83,7 +83,9 @@ model = create_neuroflex_nn(
 ```python
 trained_state, trained_model = train_model(
     model, train_data, val_data,
-    num_epochs=10, batch_size=32, learning_rate=1e-3
+    num_epochs=20,  # Increased epochs for improved training
+    batch_size=32,
+    learning_rate=1e-3
 )
 ```
 
@@ -91,6 +93,13 @@ trained_state, trained_model = train_model(
 
 ```python
 predictions = trained_model(test_data)
+```
+
+5. **Evaluate Model Performance**
+
+```python
+accuracy = evaluate_model(trained_model, test_data, test_labels)
+print(f"Model Accuracy: {accuracy:.2f}%")
 ```
 
 ## Advanced Usage
