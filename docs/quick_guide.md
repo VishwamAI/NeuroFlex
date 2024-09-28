@@ -3,13 +3,19 @@
 ## Key Features
 
 1. **Core Neural Networks**: Provides core neural network models and functionalities.
-2. **Quantum Neural Networks**: Includes quantum generative models and reinforcement learning.
-3. **BCI Integration**: Integrates brain-computer interface components.
-4. **Explainable AI**: Offers models and methods for explainable AI.
-5. **Consciousness Simulation**: Integrates theories like IIT and GWT for consciousness simulation.
-6. **Threat Detection**: Provides methods for detecting and analyzing threats using anomaly detection and deep learning.
-7. **Edge AI**: Focuses on edge AI optimization and deployment.
-8. **Advanced Models**: Contains advanced math solving, time series analysis, and multi-modal learning models.
+2. **Advanced Models**: Includes advanced math solving, time series analysis, and multi-modal learning models.
+3. **Generative Models**: Offers generative models for various applications.
+4. **Transformers**: Implements transformer models for NLP and other tasks.
+5. **Quantum Neural Networks**: Includes quantum generative models and reinforcement learning.
+6. **BCI Integration**: Integrates brain-computer interface components.
+7. **Cognitive Architectures**: Provides cognitive models and architectures.
+8. **Scientific Domains**: Focuses on scientific applications and domains.
+9. **Edge AI**: Focuses on edge AI optimization and deployment.
+10. **Prompt Agent**: Implements prompt-based agents for interactive AI.
+11. **Explainable AI**: Offers models and methods for explainable AI.
+12. **Consciousness Simulation**: Integrates theories like IIT and GWT for consciousness simulation.
+13. **Threat Detection**: Provides methods for detecting and analyzing threats using anomaly detection and deep learning.
+14. **Utilities and Ethics**: Includes utility functions and AI ethics modules.
 
 ## Installation
 
@@ -37,6 +43,11 @@ To install NeuroFlex, please follow these steps:
 ```python
 from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
 from NeuroFlex.bci_integration import BCIIntegration
+from NeuroFlex.quantum_deep_learning import QuantumGenerativeModel
+from NeuroFlex.explainable_ai import ExplainableModel
+from NeuroFlex.consciousness_simulation import ConsciousnessSimulator
+from NeuroFlex.threat_detection import ThreatDetector
+from NeuroFlex.edge_ai import EdgeAIOptimizer
 ```
 
 2. **Define Your Model**
@@ -79,6 +90,49 @@ predictions = trained_model(test_data)
 ```python
 accuracy = evaluate_model(trained_model, test_data, test_labels)
 print(f"Model Accuracy: {accuracy:.2f}%")
+```
+
+7. **Use Quantum Neural Networks**
+
+```python
+quantum_model = QuantumGenerativeModel()
+# Add example usage here
+```
+
+8. **Implement Explainable AI**
+
+```python
+explainable_model = ExplainableModel(trained_model)
+explanations = explainable_model.explain(test_data)
+```
+
+9. **Simulate Consciousness**
+
+```python
+consciousness_simulator = ConsciousnessSimulator()
+consciousness_state = consciousness_simulator.simulate(model)
+```
+
+10. **Detect Threats**
+
+```python
+threat_detector = ThreatDetector()
+threats = threat_detector.detect(test_data)
+```
+
+11. **Optimize for Edge AI**
+
+```python
+edge_optimizer = EdgeAIOptimizer()
+optimized_model = edge_optimizer.optimize(model)
+```
+
+12. **Advanced Models**
+
+```python
+# Example for advanced math solving, time series analysis, or multi-modal learning
+advanced_model = create_advanced_model()
+advanced_results = advanced_model.analyze(data)
 ```
 
 This guide provides a comprehensive overview of the NeuroFlex features and how to get started with the project.
