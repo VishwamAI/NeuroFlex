@@ -40,23 +40,37 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 
 ## Installation
 
-```bash
-pip install neuroflex
-```
+To install NeuroFlex, please follow these steps:
+
+1. Ensure you have Python 3.9 or later installed.
+2. It's recommended to use a virtual environment:
+   ```bash
+   python -m venv neuroflex-env
+   source neuroflex-env/bin/activate  # On Windows use `neuroflex-env\Scripts\activate`
+   ```
+3. Install NeuroFlex using pip:
+   ```bash
+   pip install neuroflex
+   ```
+4. If you encounter any issues, ensure that your pip is up to date:
+   ```bash
+   pip install --upgrade pip
+   ```
 
 ## Quick Start Guide
 
 1. **Import NeuroFlex**
 
 ```python
-from neuroflex import NeuroFlexNN, train_model, create_neuroflex_nn
+from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
+from NeuroFlex.bci_integration import BCIIntegration
 ```
 
 2. **Define Your Model**
 
 ```python
 model = create_neuroflex_nn(
-    features=[64, 32, 10],
+    features=[128, 64, 32, 10],  # Updated feature sizes for better performance
     input_shape=(1, 28, 28, 1),
     output_shape=(1, 10),
     use_cnn=True,
@@ -65,19 +79,35 @@ model = create_neuroflex_nn(
 )
 ```
 
-3. **Train Your Model**
+3. **Integrate BCI Components**
+
+```python
+bci_integration = BCIIntegration(model)
+bci_integration.setup_bci()
+```
+
+4. **Train Your Model**
 
 ```python
 trained_state, trained_model = train_model(
     model, train_data, val_data,
-    num_epochs=10, batch_size=32, learning_rate=1e-3
+    num_epochs=20,  # Increased epochs for improved training
+    batch_size=32,
+    learning_rate=1e-3
 )
 ```
 
-4. **Make Predictions**
+5. **Make Predictions**
 
 ```python
 predictions = trained_model(test_data)
+```
+
+6. **Evaluate Model Performance**
+
+```python
+accuracy = evaluate_model(trained_model, test_data, test_labels)
+print(f"Model Accuracy: {accuracy:.2f}%")
 ```
 
 ## Advanced Usage
