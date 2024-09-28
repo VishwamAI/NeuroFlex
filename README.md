@@ -62,7 +62,8 @@ To install NeuroFlex, please follow these steps:
 1. **Import NeuroFlex**
 
 ```python
-from neuroflex import NeuroFlexNN, train_model, create_neuroflex_nn
+from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
+from NeuroFlex.bci_integration import BCIIntegration
 ```
 
 2. **Define Your Model**
@@ -78,7 +79,14 @@ model = create_neuroflex_nn(
 )
 ```
 
-3. **Train Your Model**
+3. **Integrate BCI Components**
+
+```python
+bci_integration = BCIIntegration(model)
+bci_integration.setup_bci()
+```
+
+4. **Train Your Model**
 
 ```python
 trained_state, trained_model = train_model(
@@ -89,13 +97,13 @@ trained_state, trained_model = train_model(
 )
 ```
 
-4. **Make Predictions**
+5. **Make Predictions**
 
 ```python
 predictions = trained_model(test_data)
 ```
 
-5. **Evaluate Model Performance**
+6. **Evaluate Model Performance**
 
 ```python
 accuracy = evaluate_model(trained_model, test_data, test_labels)

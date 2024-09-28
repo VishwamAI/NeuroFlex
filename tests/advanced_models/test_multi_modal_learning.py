@@ -165,11 +165,21 @@ class TestMultiModalLearning(unittest.TestCase):
         val_inputs = {k: torch.randn(val_batch_size, *v.shape[1:]) for k, v in inputs.items()}
         val_labels = torch.randint(0, 10, (val_batch_size,))
 
-        # Ensure all inputs are tensors
-        inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in inputs.items()}
-        val_inputs = {k: v if isinstance(v, torch.Tensor) else torch.tensor(v) for k, v in val_inputs.items()}
-        labels = labels if isinstance(labels, torch.Tensor) else torch.tensor(labels)
-        val_labels = val_labels if isinstance(val_labels, torch.Tensor) else torch.tensor(val_labels)
+        # Ensure all inputs are tensors and have the correct shape
+        inputs = {
+            'image': inputs['image'].float(),
+            'text': inputs['text'].long(),
+            'tabular': inputs['tabular'].float(),
+            'time_series': inputs['time_series'].float()
+        }
+        val_inputs = {
+            'image': val_inputs['image'].float(),
+            'text': val_inputs['text'].long(),
+            'tabular': val_inputs['tabular'].float(),
+            'time_series': val_inputs['time_series'].float()
+        }
+        labels = labels.long()
+        val_labels = val_labels.long()
 
         initial_params = [p.clone().detach() for p in self.model.parameters()]
 
