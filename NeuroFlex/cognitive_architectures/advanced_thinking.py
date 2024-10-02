@@ -61,27 +61,44 @@ class CDSTDP(nn.Module):
         # Ensure pre_synaptic and post_synaptic have the same batch size
         assert pre_synaptic.size(0) == post_synaptic.size(0), "Batch sizes must match"
 
-        # Implement STDP rule
+        # Implement enhanced STDP rule with synaptic tagging and capture
         time_window = 21  # -10 to 10, inclusive
         delta_t = torch.arange(-10, 11).unsqueeze(0).unsqueeze(1).unsqueeze(2).repeat(
             pre_synaptic.size(0), pre_synaptic.size(1), post_synaptic.size(1), 1
         )
+
+        # Enhanced STDP rule with multiple time constants
+        tau_plus = 17.0
+        tau_minus = 34.0
+        A_plus = 0.008
+        A_minus = 0.005
         stdp = torch.where(
             delta_t > 0,
-            torch.exp(-delta_t / 20.0) * 0.1,
-            torch.exp(delta_t / 20.0) * -0.12
+            A_plus * torch.exp(-delta_t / tau_plus),
+            -A_minus * torch.exp(delta_t / tau_minus)
         )
 
-        # Modulate STDP by dopamine
-        modulated_stdp = stdp * dopamine
+        # Synaptic tagging and capture
+        tag_threshold = 0.5
+        capture_rate = 0.1
+        tags = torch.where(torch.abs(stdp) > tag_threshold, torch.sign(stdp), torch.zeros_like(stdp))
 
-        # Compute weight updates
+        # Modulate STDP by dopamine with more realistic neuromodulatory effects
+        dopamine_decay = 0.9
+        dopamine_threshold = 0.3
+        modulated_stdp = stdp * (1 + torch.tanh(dopamine / dopamine_threshold))
+        modulated_stdp *= dopamine_decay ** torch.abs(delta_t)
+
+        # Compute weight updates with synaptic tagging and capture
         pre_expanded = pre_synaptic.unsqueeze(2).unsqueeze(3).expand(-1, -1, post_synaptic.size(1), time_window)
         post_expanded = post_synaptic.unsqueeze(1).unsqueeze(3).expand(-1, pre_synaptic.size(1), -1, time_window)
         dw = (pre_expanded * post_expanded * modulated_stdp).sum(dim=3)
+        dw += capture_rate * tags * torch.sign(dw)
 
-        # Update synaptic weights
-        self.synaptic_weights.data += dw.mean(dim=0)  # Average over batch
+        # Update synaptic weights with soft bounds
+        w_min, w_max = 0.0, 1.0
+        new_weights = self.synaptic_weights.data + dw.mean(dim=0)
+        self.synaptic_weights.data = torch.clamp(new_weights, w_min, w_max)
 
     def train_step(self, inputs: torch.Tensor, targets: torch.Tensor, dopamine: float):
         self.optimizer.zero_grad()

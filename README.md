@@ -21,22 +21,16 @@ NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and Ten
 - **Natural Language Processing**: Sentence piece integration and advanced NLP tasks.
 - **Neuromorphic Computing**: Energy-efficient spiking neural networks.
 - **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability.
-- **Consciousness Simulation**: Integration of **Integrated Information Theory (IIT)** and **Global Workspace Theory (GWT)** for advanced consciousness modeling.
-  
-## Latest Updates (v0.1.3)
+- **Consciousness Simulation**: Integration of **Integrated Information Theory (IIT)**, **Global Workspace Theory (GWT)**, **Attention Schema Theory (AST)**, and **Higher-Order Thoughts (HOT)** for advanced consciousness modeling.
 
-- **Consciousness Simulation**: Achieved integration of **Integrated Information Theory (IIT)** and **Global Workspace Theory (GWT)** for cognitive and consciousness modeling.
-- TensorFlow Integration: Added support for TensorFlow backend alongside JAX/Flax.
-- 2D and 3D Convolutions: Implemented efficient convolutional layers for both 2D and 3D inputs.
-- Enhanced Compatibility: Improved interoperability between JAX/Flax and TensorFlow.
-- Comprehensive Testing: Developed and passed pytest tests for all components, including TensorFlow integration.
-- Enhanced self-curing mechanism with adaptive learning rate adjustment.
-- Improved model robustness against gradient explosions and local minima.
-- Advanced diagnostic checks for model performance and training issues.
-- Whisper API integration for advanced speech recognition.
-- Enhanced AlphaFold integration for protein structure prediction.
-- Support for Python 3.9, 3.10, 3.11, 3.12.
-- Resolved dependency issues and improved stability.
+### Cognitive Models
+
+- **Global Workspace Theory (GWT)**: Proposes that consciousness arises from a global workspace that integrates and broadcasts information from various specialized cognitive processes. Formula: \( G(x) = \sum_{i=1}^{n} w_i f(x_i) \) where \( x \) represents the input stimulus, \( f(x_i) \) denotes cognitive processes, and \( w_i \) are weights representing each module's contribution.
+- **Integrated Information Theory (IIT)**: Measures consciousness in terms of integrated information (\( \Phi \)) present in a system. Formula: \( \Phi = I(S) - \sum_{i=1}^{n} I(S_i) \) where \( S \) denotes the complete system, \( S_i \) are individual elements, \( I(S) \) is the total system information, and \( I(S_i) \) represents isolated component information.
+- **Attention Schema Theory (AST)**: Suggests that consciousness emerges as the brain's internal model of its attention mechanisms. Formula: \( P(A) = \frac{\sum_{i=1}^{n} w_i f(A_i)}{\sum_{j=1}^{m} w_j} \) where \( A_i \) are features, \( w_i \) are weights, and \( f(A_i) \) represents the attention.
+- **Higher-Order Thoughts (HOT)**: Proposes that consciousness arises when a system has thoughts about its own thoughts. Formula: \( C(t) = f(T(t)) \) where \( C(t) \) denotes the conscious state, and \( T(t) \) represents internal thought processes.
+
+## Latest Updates (v0.1.3)
 
 ## Installation
 

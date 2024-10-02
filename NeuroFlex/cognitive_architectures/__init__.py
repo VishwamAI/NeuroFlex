@@ -1,17 +1,17 @@
 # MIT License
-# 
+#
 # Copyright (c) 2024 VishwamAI
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -44,7 +44,10 @@ from ..constants import (
     MAX_HEALING_ATTEMPTS,
     CONSCIOUSNESS_BROADCAST_INTERVAL
 )
-
+from .attention_schema_theory import ASTModel
+from .global_workspace_theory import GWTModel
+from .higher_order_thoughts import  HOTModel
+from .integrated_inforamtion_theory import IITModel
 __all__ = [
     'CognitiveArchitecture',
     'create_consciousness',
@@ -66,6 +69,10 @@ __all__ = [
     'initialize_cognitive_architectures',
     'create_cognitive_model',
     'validate_cognitive_model_config'
+    'ASTModel'
+    'GWTModel'
+    'HOTModel'
+    'IITModel'
 ]
 
 def get_cognitive_architectures_version():
