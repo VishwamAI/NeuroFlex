@@ -70,7 +70,12 @@ def test_generative_ai_model_call():
     input_shape = (1, 50)  # Sequence length of 50
     params = transformer_model.init(rng, jnp.ones(input_shape, dtype=jnp.int32))
     output = transformer_model.apply(params, jnp.ones(input_shape, dtype=jnp.int32))
-    assert output.shape == (1, 10)  # Consistent output shape for both models
+    assert output.shape == (1, 1000)  # Shape should be (batch_size, vocab_size) for inference mode
+
+    # Test generate method for text-to-text generation
+    input_ids = jnp.ones((1, 10), dtype=jnp.int32)  # Start with 10 tokens
+    generated_ids = transformer_model.apply(params, input_ids, method=transformer_model.generate, max_new_tokens=5)
+    assert generated_ids.shape == (1, 15)  # 10 input tokens + 5 new tokens
 
 def test_generative_ai_model_edge_cases():
     # Test with extreme values
@@ -123,7 +128,7 @@ def test_generative_ai_model_simulate_consciousness(generative_ai_model, transfo
     params = transformer_model.init(rng, jnp.ones((1, 50), dtype=jnp.int32))['params']
     logits = transformer_model.apply({'params': params}, jnp.ones((1, 50), dtype=jnp.int32))
     conscious_state = transformer_model.simulate_consciousness(logits)
-    assert conscious_state.shape == (1, 10)
+    assert conscious_state.shape == (1, 1000)
     assert jnp.all((conscious_state == 0) | (conscious_state == 1))
 
 def test_transformer_model_output_shape(transformer_model):
@@ -131,7 +136,7 @@ def test_transformer_model_output_shape(transformer_model):
     input_shape = (1, 50)  # Sequence length of 50
     params = transformer_model.init(rng, jnp.ones(input_shape, dtype=jnp.int32))
     output = transformer_model.apply(params, jnp.ones(input_shape, dtype=jnp.int32))
-    assert output.shape == (1, 10)  # (batch_size, output_dim)
+    assert output.shape == (1, 1000)  # (batch_size, output_dim)
 
 def test_generative_ai_model_generate_math_problem(generative_ai_model):
     rng = jax.random.PRNGKey(0)
@@ -246,7 +251,7 @@ def test_generative_ai_framework_generate(generative_ai_framework):
     transformer_state = transformer_framework.init_model(rng, (1, 50))
     transformer_input = jnp.array(jax.random.randint(rng, (1, 50), 0, 999), dtype=jnp.int32)  # Ensure input is within vocab range and of integer type
     transformer_output = transformer_framework.generate(transformer_state, transformer_input)
-    assert transformer_output.shape == (1, 10)
+    assert transformer_output.shape == (1, 1000)
     assert jnp.all((transformer_output >= 0) & (transformer_output <= 1))
     assert jnp.allclose(jnp.sum(transformer_output, axis=-1), 1.0, atol=1e-6)
 
@@ -258,7 +263,7 @@ def test_generative_ai_framework_generate(generative_ai_framework):
 
     transformer_batch = jnp.array(jax.random.randint(rng, (batch_size, 50), 0, 999), dtype=jnp.int32)
     transformer_batch_output = transformer_framework.generate(transformer_state, transformer_batch)
-    assert transformer_batch_output.shape == (batch_size, 10)
+    assert transformer_batch_output.shape == (batch_size, 1000)
 def test_generative_ai_framework_solve_math_problem(generative_ai_framework):
     # Test cases with expected solutions
     test_cases = [
