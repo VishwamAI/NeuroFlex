@@ -1,5 +1,7 @@
 # Contributor Covenant Code of Conduct
 
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](code_of_conduct.md)
+
 ## Our Pledge
 
 We as members, contributors, and leaders pledge to make participation in the **NeuroFlex** project a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
@@ -22,7 +24,7 @@ Examples of unacceptable behavior by participants include:
 - Trolling, insulting/derogatory comments, and personal or political attacks.
 - Public or private harassment.
 - Publishing others’ private information, such as a physical or email address, without explicit permission.
-- Other conduct which could reasonably be considered inappropriate in a professional setting.
+- Other conduct that could reasonably be considered inappropriate in a professional setting.
 
 ## Our Responsibilities
 
@@ -36,9 +38,9 @@ This Code of Conduct applies within all project spaces and also applies when an 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team at [INSERT CONTACT EMAIL]. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team at [kasinadhsarma@gmail.com]. All complaints will be reviewed and investigated promptly and fairly.
 
-The project team is obligated to maintain confidentiality with regard to the reporter of an incident. Further details of specific enforcement policies may be posted separately.
+The project team is obligated to maintain confidentiality about the reporter of an incident. Further details of specific enforcement policies may be posted separately.
 
 Project maintainers who do not follow or enforce the Code of Conduct in good faith may face temporary or permanent repercussions as determined by other members of the project’s leadership.
 
