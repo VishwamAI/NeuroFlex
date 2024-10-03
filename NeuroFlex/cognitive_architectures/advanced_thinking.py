@@ -62,8 +62,8 @@ class CDSTDP(nn.Module):
         assert pre_synaptic.size(0) == post_synaptic.size(0), "Batch sizes must match"
 
         # Implement enhanced STDP rule with synaptic tagging and capture
-        time_window = 21  # -10 to 10, inclusive
-        delta_t = torch.arange(-10, 11).unsqueeze(0).unsqueeze(1).unsqueeze(2).repeat(
+        time_window = 20  # -9 to 10, inclusive
+        delta_t = torch.arange(-9, 11).unsqueeze(0).unsqueeze(1).unsqueeze(2).repeat(
             pre_synaptic.size(0), pre_synaptic.size(1), post_synaptic.size(1), 1
         )
 
@@ -86,7 +86,8 @@ class CDSTDP(nn.Module):
         # Modulate STDP by dopamine with more realistic neuromodulatory effects
         dopamine_decay = 0.9
         dopamine_threshold = 0.3
-        modulated_stdp = stdp * (1 + torch.tanh(dopamine / dopamine_threshold))
+        dopamine_tensor = torch.tensor(dopamine, device=pre_synaptic.device)
+        modulated_stdp = stdp * (1 + torch.tanh(dopamine_tensor / dopamine_threshold))
         modulated_stdp *= dopamine_decay ** torch.abs(delta_t)
 
         # Compute weight updates with synaptic tagging and capture

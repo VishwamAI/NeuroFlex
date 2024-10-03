@@ -47,7 +47,7 @@ from ..constants import (
 from .attention_schema_theory import ASTModel
 from .global_workspace_theory import GWTModel
 from .higher_order_thoughts import  HOTModel
-from .integrated_inforamtion_theory import IITModel
+from .integrated_information_theory import IITModel
 __all__ = [
     'CognitiveArchitecture',
     'create_consciousness',
@@ -68,10 +68,10 @@ __all__ = [
     'SUPPORTED_COGNITIVE_MODELS',
     'initialize_cognitive_architectures',
     'create_cognitive_model',
-    'validate_cognitive_model_config'
-    'ASTModel'
-    'GWTModel'
-    'HOTModel'
+    'validate_cognitive_model_config',
+    'ASTModel',
+    'GWTModel',
+    'HOTModel',
     'IITModel'
 ]
 

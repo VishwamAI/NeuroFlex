@@ -36,7 +36,11 @@ class IITModel(nn.Module):
 
     def setup(self):
         self.state_space = self.param('state_space', nn.initializers.zeros, (self.num_components, 2))
-        self.connectivity_matrix = self.param('connectivity_matrix', nn.initializers.zeros, (self.num_components, self.num_components))
+        self.connectivity_matrix = self.param('connectivity_matrix', nn.initializers.uniform(), (self.num_components, self.num_components))
+        self.weights = self.param('weights', nn.initializers.uniform(), (self.num_components, self.num_components))
+        self.consciousness_layer = nn.Dense(self.num_components)
+        self.bias_mitigation_layer = nn.Dense(self.num_components)
+        self.initialized = self.variable('state', 'initialized', lambda: jnp.array(True))
 
     def __call__(self, inputs):
         return self.calculate_phi()
@@ -89,7 +93,8 @@ class IITModel(nn.Module):
         # Calculate Phi
         phi = I_S - I_Si_sum
 
-        return jnp.maximum(0, phi)  # Phi should not be negative
+        # Convert JAX array to Python float and ensure non-negative
+        return float(jnp.maximum(0, phi))
 
     def _calculate_system_information(self) -> float:
         # Simplified calculation of system information
@@ -136,6 +141,41 @@ class IITModel(nn.Module):
             List[int]: The current binary state of each component.
         """
         return self.state_space[:, 0].tolist()
+
+    def compute_cause_effect_structure(self, state):
+        """
+        Analyze the cause-effect structure of the system's state.
+
+        Args:
+            state (jnp.ndarray): The current state of the system.
+
+        Returns:
+            Dict: A dictionary representing the cause-effect structure.
+        """
+        ces = {}
+        # Access parameters directly within the method
+        if not self.initialized.value:
+            raise ValueError("Model not initialized. Initialize the model first.")
+
+        # Use self.variables instead of self.params to access parameters
+        weights = self.variables['params']['weights']
+        connectivity_matrix = self.variables['params']['connectivity_matrix']
+
+        for i in range(self.num_components):
+            cause = self._compute_cause(i, state)
+            effect = self._compute_effect(i, state)
+            ces[tuple([i])] = {"cause": tuple(cause) if cause.ndim > 0 else (cause.item(),),
+                               "effect": tuple(effect) if effect.ndim > 0 else (effect.item(),)}
+        return ces
+
+    def _compute_cause(self, component, state):
+        # Simplified cause computation
+        connectivity_matrix = self.variables['params']['connectivity_matrix']
+        return jnp.dot(connectivity_matrix[:, component], state)
+
+    def _compute_effect(self, component, state):
+        # Simplified effect computation
+        return jnp.dot(self.connectivity_matrix[component, :], state)
 
 # Example usage:
 if __name__ == "__main__":

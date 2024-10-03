@@ -40,8 +40,10 @@ class ASTModel(nn.Module):
 
     def setup(self):
         self.attention_schema = nn.Dense(self.attention_dim)
-        self.attention_control = nn.Dense(self.hidden_dim)
+        self.attention_control = nn.Dense(self.attention_dim)  # Changed from hidden_dim to attention_dim
         self.output_layer = nn.Dense(self.attention_dim)
+        self.consciousness_layer = nn.Dense(self.attention_dim)
+        self.bias_mitigation_layer = nn.Dense(self.attention_dim)
 
     def __call__(self, inputs):
         # Create an attention schema
@@ -50,13 +52,18 @@ class ASTModel(nn.Module):
         # Use the schema to control attention
         control = nn.sigmoid(self.attention_control(schema))
 
+        # Ensure control has the same shape as inputs for broadcasting
+        if control.ndim != inputs.ndim:
+            control = jnp.expand_dims(control, axis=tuple(range(inputs.ndim - control.ndim)))
+        control = jnp.broadcast_to(control, inputs.shape)
+
         # Apply attention control to inputs
         attended = inputs * control
 
         # Generate output based on attended inputs
         output = self.output_layer(attended)
 
-        return output, schema
+        return output
 
     def update_schema(self, inputs, feedback):
         """
@@ -69,7 +76,7 @@ class ASTModel(nn.Module):
         """
         Simulate awareness of attention processes
         """
-        _, schema = self(inputs)
+        schema = nn.relu(self.attention_schema(inputs))
         awareness = jnp.mean(schema, axis=-1)
         return awareness
 

@@ -41,9 +41,13 @@ class HOTModel(nn.Module):
 
     def setup(self):
         self.thought_layers = [
-            nn.Dense(self.hidden_dim) for _ in range(self.num_layers - 1)
+            nn.Dense(features=self.input_dim if i == 0 else (self.hidden_dim if i < self.num_layers - 1 else self.output_dim))
+            for i in range(self.num_layers)
         ]
-        self.output_layer = nn.Dense(self.output_dim)
+        self.input_layer = nn.Dense(features=self.input_dim)
+        self.output_layer = nn.Dense(features=self.output_dim)
+        self.consciousness_layer = nn.Dense(features=self.hidden_dim)
+        self.bias_mitigation_layer = nn.Dense(features=self.hidden_dim)
 
     def __call__(self, inputs):
         x = inputs

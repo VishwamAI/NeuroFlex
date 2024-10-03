@@ -31,17 +31,26 @@ and broadcasts information from various specialized cognitive processes.
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
+from flax.core.frozen_dict import FrozenDict
+from jax import random
+from collections.abc import Callable
 
 class GWTModel(nn.Module):
     num_processes: int
     workspace_size: int
 
     def setup(self):
-        self.specialized_processes = [nn.Dense(self.workspace_size) for _ in range(self.num_processes)]
-        self.global_workspace = nn.Dense(self.workspace_size)
-        self.weights = self.param('weights', nn.initializers.constant(1.0 / self.num_processes), (self.num_processes,))
+        self.specialized_processes = [nn.Dense(self.workspace_size, kernel_init=nn.initializers.normal(stddev=0.01)) for _ in range(self.num_processes)]
+        self.global_workspace = nn.Dense(self.workspace_size, kernel_init=nn.initializers.normal(stddev=0.01))
+        self.weights = self.param('weights', nn.initializers.uniform(), (self.num_processes,))
+        self.consciousness_layer = nn.Dense(self.workspace_size, kernel_init=nn.initializers.normal(stddev=0.01))
+        self.bias_mitigation_layer = nn.Dense(self.workspace_size, kernel_init=nn.initializers.normal(stddev=0.01))
 
     def __call__(self, inputs):
+        # Process inputs without assuming specific attributes
+        if callable(inputs):
+            return inputs(self)
+        inputs = jnp.atleast_2d(inputs)  # Ensure inputs are at least 2D
         specialized_outputs = [process(inputs) for process in self.specialized_processes]
         integrated_workspace = self.integrate_workspace(specialized_outputs)
         broadcasted_workspace = self.broadcast_workspace(integrated_workspace, specialized_outputs)
@@ -51,14 +60,24 @@ class GWTModel(nn.Module):
         """
         Integrate information from specialized processes into the global workspace.
         """
-        weighted_sum = jnp.sum(jnp.stack(specialized_outputs) * self.weights[:, jnp.newaxis], axis=0)
-        return self.global_workspace(weighted_sum)
+        weights = self.variables['params']['weights']
+        weighted_sum = jnp.sum(jnp.stack(specialized_outputs) * weights[:, jnp.newaxis], axis=0)
+        integrated = self.global_workspace(weighted_sum)
+        print(f"Integrated shape: {integrated.shape}, Specialized output shape: {specialized_outputs[0].shape}")
+        print(f"Weights shape: {weights.shape}, Weighted sum shape: {weighted_sum.shape}")
+        # Ensure the integrated output has shape (1, workspace_size)
+        integrated = integrated.mean(axis=0, keepdims=True)  # Average across processes and keep dims
+        print(f"Final integrated shape: {integrated.shape}")
+        return integrated
 
     def broadcast_workspace(self, integrated_workspace, specialized_outputs):
         """
         Broadcast the contents of the global workspace to all specialized processes.
         """
-        return [jnp.maximum(output, integrated_workspace) for output in specialized_outputs]
+        print("Integrated workspace shape:", integrated_workspace.shape)
+        print("Specialized outputs shapes:", [output.shape for output in specialized_outputs])
+        broadcasted = [jnp.broadcast_to(integrated_workspace[i], output.shape) for i, output in enumerate(specialized_outputs)]
+        return broadcasted
 
     def apply_gwt_formula(self, input_stimulus):
         """
@@ -71,18 +90,39 @@ class GWTModel(nn.Module):
             jax.numpy.array: The result of applying the GWT formula.
         """
         specialized_outputs = [process(input_stimulus) for process in self.specialized_processes]
-        return jnp.sum(jnp.stack(specialized_outputs) * self.weights[:, jnp.newaxis], axis=0)
+        weights = self.variables['params']['weights']
+        return jnp.sum(jnp.stack(specialized_outputs) * weights[:, jnp.newaxis], axis=0)
 
     def update_weights(self, new_weights):
         """
         Update the weights for each specialized process.
 
         Args:
-            new_weights (jax.numpy.array): New weights for the specialized processes.
+            new_weights (jax.numpy.array or callable): New weights for the specialized processes or a function to update them.
         """
-        if new_weights.shape != self.weights.shape:
-            raise ValueError("Number of weights must match number of processes")
-        self.weights = new_weights / jnp.sum(new_weights)  # Normalize weights
+        current_weights = self.variables['params']['weights']
+        if callable(new_weights):
+            updated_weights = new_weights(current_weights)
+        else:
+            updated_weights = new_weights
+
+        if isinstance(updated_weights, jnp.ndarray):
+            if updated_weights.shape != (self.num_processes,):
+                raise ValueError("Number of weights must match number of processes")
+            normalized_weights = updated_weights / jnp.sum(updated_weights)  # Normalize weights
+        else:
+            raise ValueError("Updated weights must be a JAX numpy array")
+
+        # Return a new FrozenDict with updated weights
+        return FrozenDict({'params': {'weights': normalized_weights}})
+
+    @property
+    def current_weights(self):
+        return self.variables['params']['weights']
+
+    @property
+    def current_weights(self):
+        return self.variables['params']['weights']
 
 # Example usage:
 if __name__ == "__main__":
