@@ -165,6 +165,7 @@ class MultiModalLearning(nn.Module):
         for name, tensor in inputs.items():
             if not isinstance(tensor, torch.Tensor):
                 inputs[name] = torch.tensor(tensor, dtype=torch.float32)
+            inputs[name] = inputs[name].float()  # Ensure all inputs are float tensors
             logger.debug(f"Input {name} shape: {inputs[name].shape}, type: {type(inputs[name])}")
 
         # Check for batch size consistency across all input modalities
@@ -176,7 +177,7 @@ class MultiModalLearning(nn.Module):
         if set(inputs.keys()) != set(self.modalities.keys()):
             missing_modalities = set(self.modalities.keys()) - set(inputs.keys())
             for modality in missing_modalities:
-                inputs[modality] = torch.zeros((batch_sizes[0],) + self.modalities[modality]['input_shape'])
+                inputs[modality] = torch.zeros((batch_sizes[0],) + self.modalities[modality]['input_shape'], dtype=torch.float32)
 
         max_batch_size = batch_sizes[0]
 

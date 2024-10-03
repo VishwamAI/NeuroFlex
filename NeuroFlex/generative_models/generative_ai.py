@@ -62,22 +62,50 @@ class GenerativeAIModel(nn.Module):
     output_dim: int
     use_transformer: bool = False
     transformer_config: Dict[str, Any] = None
+    max_length: int = 512  # Maximum sequence length for text-to-text generation
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, x, targets=None):
         if self.use_transformer:
             transformer = TransformerModel(**self.transformer_config)
             # Cast input to integer type for the Embed layer
             x = jnp.asarray(x, dtype=jnp.int32)
             x = transformer(x)
-            # Ensure the output shape is consistent with non-transformer case
-            x = nn.Dense(self.output_dim)(x[:, -1, :])
+
+            if targets is not None:
+                # Training mode: return logits for all tokens
+                return x
+            else:
+                # Inference mode: return logits for the last token
+                return x[:, -1, :]
         else:
             for feat in self.features:
                 x = nn.Dense(feat)(x)
                 x = nn.relu(x)
             x = nn.Dense(self.output_dim)(x)
         return x.reshape(-1, self.output_dim)  # Ensure consistent output shape
+
+    def generate(self, input_ids, max_new_tokens, temperature=1.0):
+        # Text-to-text generation method
+        for _ in range(max_new_tokens):
+            # Get the predictions for the last token
+            outputs = self(input_ids)
+            next_token_logits = outputs
+
+            # Apply temperature
+            next_token_logits = next_token_logits / temperature
+
+            # Sample from the distribution
+            next_token = jax.random.categorical(jax.random.PRNGKey(0), next_token_logits)
+
+            # Append the new token to the input
+            input_ids = jnp.concatenate([input_ids, next_token[:, None]], axis=-1)
+
+            # Break if we exceed max_length
+            if input_ids.shape[1] >= self.max_length:
+                break
+
+        return input_ids
 
     def simulate_consciousness(self, x):
         consciousness = jax.nn.sigmoid(x)

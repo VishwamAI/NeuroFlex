@@ -94,5 +94,41 @@ class TestCDSTDP(unittest.TestCase):
         self.assertEqual(cdstdp.output_size, self.output_size)
         self.assertEqual(cdstdp.learning_rate, self.learning_rate)
 
+    def test_reinforcement_learning_with_causal_reasoning(self):
+        input_tensor = torch.randn(1, self.input_size)
+        cdstdp = create_cdstdp(self.input_size, self.hidden_size, self.output_size, self.learning_rate)
+
+        # Test causal model
+        causal_output = cdstdp.causal_model(torch.randn(1, self.hidden_size))
+        self.assertEqual(causal_output.shape, (1, self.hidden_size))
+
+        # Test intervention model
+        intervention_output = cdstdp.intervention_model(torch.randn(1, self.hidden_size))
+        self.assertEqual(intervention_output.shape, (1, self.hidden_size))
+
+    def test_meta_learning_capabilities(self):
+        cdstdp = create_cdstdp(self.input_size, self.hidden_size, self.output_size, self.learning_rate)
+        inputs = torch.randn(5, self.input_size)
+        targets = torch.randn(5, self.output_size)
+
+        # Test meta-learning step
+        loss = cdstdp.meta_learning_step(inputs, targets)
+        self.assertIsInstance(loss, float)
+        self.assertGreater(loss, 0)
+
+    def test_hierarchical_models(self):
+        cdstdp = create_cdstdp(self.input_size, self.hidden_size, self.output_size, self.learning_rate)
+        inputs = torch.randn(5, self.input_size)
+        targets = torch.randn(5, self.output_size)
+
+        # Test breaking into subtasks
+        subtasks = cdstdp.break_into_subtasks(inputs, targets)
+        self.assertIsInstance(subtasks, list)
+        self.assertTrue(all(isinstance(subtask, tuple) for subtask in subtasks))
+
+        # Test hierarchical forward pass
+        hierarchical_output = cdstdp.hierarchical_forward(inputs)
+        self.assertEqual(hierarchical_output.shape, (5, self.output_size))
+
 if __name__ == '__main__':
     unittest.main()

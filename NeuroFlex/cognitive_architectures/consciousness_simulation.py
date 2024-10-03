@@ -554,6 +554,18 @@ class ConsciousnessSimulation(nn.Module):
             if performance_drop > 0.1:
                 issues.append(f"Sudden performance drop of {performance_drop:.4f}")
 
+        # Monitor resource utilization
+        try:
+            import psutil
+            memory_usage = psutil.virtual_memory().percent
+            cpu_usage = psutil.cpu_percent(interval=1)
+            if memory_usage > 90:
+                issues.append(f"High memory usage: {memory_usage}%")
+            if cpu_usage > 90:
+                issues.append(f"High CPU usage: {cpu_usage}%")
+        except ImportError:
+            issues.append("Unable to monitor resource utilization (psutil not installed)")
+
         return issues
 
     def heal(self, x: jnp.ndarray):
