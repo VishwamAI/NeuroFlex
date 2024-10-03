@@ -1,84 +1,57 @@
-# Contributing to NeuroFlex
+# Contributing to NeuroFlex Project
 
-Thank you for your interest in contributing to NeuroFlex! We welcome contributions from the community and are excited to see what you can bring to the project. This document outlines the process for contributing to NeuroFlex and provides guidelines to ensure a smooth collaboration.
+![adjusted_combined_logo](https://github.com/user-attachments/assets/4a664a66-8da3-43ec-ba3e-db42db6946a4)
 
-## Table of Contents
-1. [Introduction](#introduction)
-2. [Setting Up the Development Environment](#setting-up-the-development-environment)
-3. [Coding Standards and Best Practices](#coding-standards-and-best-practices)
-4. [Submitting Pull Requests](#submitting-pull-requests)
-5. [Review Process](#review-process)
-6. [Getting Help](#getting-help)
+Welcome to the NeuroFlex repository! 🎉 We’re excited to participate in **Hacktoberfest**, and we welcome your contributions. This guide will help you get started on making contributions to the project.
 
-## Introduction
+## How to Contribute
 
-NeuroFlex is an advanced neural network framework that integrates various cutting-edge techniques, including reinforcement learning, generative AI, and brain-computer interface technologies. We appreciate all forms of contributions, including but not limited to:
+### 1. **Add the Hacktoberfest Topic**
+This repository is part of Hacktoberfest! By adding the "hacktoberfest" topic, we’re indicating that we’re actively looking for contributions.
 
-- Bug fixes
-- Feature implementations
-- Documentation improvements
-- Performance optimizations
-- Test case additions
+If you're looking for issues to contribute to, check for issues labeled with **hacktoberfest**.
 
-## Setting Up the Development Environment
+### 2. **Find an Issue**
+   - Check the [Issues section](https://github.com/your-repository/issues) of the repository.
+   - Issues with the `hacktoberfest` label are good starting points for contributors. We aim to make these issues well-defined and self-contained.
+   - If you want to work on an issue, leave a comment to let us know!
 
-1. Fork the NeuroFlex repository on GitHub.
-2. Clone your fork locally:
-   ```
-   git clone https://github.com/VishwamAI/NeuroFlex.git
-   ```
-3. Create a virtual environment:
-   ```
-   python -m venv neuroflexenv
-   source neuroflexenv/bin/activate  # On Windows, use `neuroflexenv\Scripts\activate`
-   ```
-4. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-5. Set up pre-commit hooks:
-   ```
-   pre-commit install
-   ```
+### 3. **Set Up Your Development Environment**
+   1. **Fork** the repository and **clone** it to your local machine.
+   2. Set up the development environment by following the instructions in the `README.md` or any specific setup instructions provided in the issue.
+   3. Create a new branch for your work using the following naming convention:  
+      ```
+      git checkout -b hacktoberfest-your-feature
+      ```
+   4. Make sure your branch is up to date before creating a pull request (PR).
 
-## Coding Standards and Best Practices
+### 4. **Contribute**
+   - **Write clear and concise code**: Follow any coding conventions or standards mentioned in the project.
+   - **Document your code**: If adding a new feature, ensure that you add relevant documentation or comments.
+   - **Testing**: If applicable, write unit tests to validate your changes.
+   
+   When you're ready, push your changes to your fork and submit a **Pull Request (PR)**.
 
-- Follow PEP 8 style guide for Python code.
-- Use meaningful variable and function names.
-- Write docstrings for all functions, classes, and modules.
-- Maintain a test coverage of at least 80% for new code.
-- Use type hints to improve code readability and catch potential errors.
-- Keep functions and methods small and focused on a single task.
-- Use comments sparingly and only when necessary to explain complex logic.
+### 5. **Create a Pull Request**
+   1. Once your changes are ready, create a PR by navigating to the original repository and comparing your changes.
+   2. Add a clear and descriptive title to the PR.
+   3. In the PR description, briefly explain what you have done and reference the issue you’re addressing if applicable.
+   4. We’ll review your PR and, if everything looks good, merge it or suggest changes. Use the **hacktoberfest-accepted** label for valid contributions.
 
-## Submitting Pull Requests
+### 6. **Review Process**
+   - A project maintainer will review your pull request. If changes are required, please make them as soon as possible so we can merge your PR.
+   - Valid contributions will be labeled as **hacktoberfest-accepted** and merged or approved via reviews.
 
-1. Create a new branch for your feature or bug fix:
-   ```
-   git checkout -b feature-or-fix-name
-   ```
-2. Make your changes and commit them with a clear, descriptive commit message.
-3. Push your changes to your fork:
-   ```
-   git push origin feature-or-fix-name
-   ```
-4. Create a pull request from your fork to the main NeuroFlex repository.
-5. In the pull request description, clearly explain the changes you've made and their purpose.
-6. Link any relevant issues in the pull request description.
+## Hacktoberfest Guidelines
 
-## Review Process
+- **Spam Contributions**: Please avoid submitting low-quality, irrelevant, or non-useful PRs just to earn Hacktoberfest credit. PRs flagged as **spam** will be rejected.
+- **Valid Contributions**: Your contributions should add value to the project, and follow the repository’s goals and guidelines.
+- **Respectful Communication**: We expect contributors to interact respectfully and adhere to our [Code of Conduct](#code-of-conduct).
 
-- All pull requests will be reviewed by at least one core contributor.
-- Reviewers may request changes or ask for clarifications.
-- Once approved, your pull request will be merged into the main branch.
-- We aim to review and respond to pull requests within 5 business days.
+## Code of Conduct
+Please adhere to our [Code of Conduct](./CODE_OF_CONDUCT.md) to foster an inclusive and friendly community. We want all contributors to feel welcome and respected.
 
-## Getting Help
+## Need Help?
+If you have any questions about the repository or contributing, feel free to open an issue or start a discussion. We’re here to help!
 
-If you need help or have questions about contributing to NeuroFlex, you can:
-
-- Open an issue on the GitHub repository
-- Join our community Discord server: [NeuroFlex Discord](https://discord.gg/CUXW65Yz6d)
-- Email the core development team at: [REDACTED SECRET]
-
-We appreciate your contributions and look forward to your involvement in making NeuroFlex even better!
+Happy coding and thank you for participating in Hacktoberfest! 🎉
