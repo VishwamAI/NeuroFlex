@@ -38,6 +38,7 @@ gast<=0.4.0,>=0.2.1
 google-pasta
 grpcio
 gym
+gymnasium
 h5py
 huggingface-hub
 humanize
