@@ -33,12 +33,35 @@ import torch.quantization
 import torch.nn.utils.prune as prune
 from torch import optim
 from torch.optim import Optimizer
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Union, Optional, Tuple, Callable
 import logging
 from torch.utils.data import DataLoader
 import time
 import random
 from ..constants import PERFORMANCE_THRESHOLD, UPDATE_INTERVAL, LEARNING_RATE_ADJUSTMENT, MAX_HEALING_ATTEMPTS
+try:
+    from ranger import Ranger
+except ImportError:
+    print("Ranger optimizer not found. Please install it using 'pip install ranger-optimizer'.")
+
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif self.best_loss - val_loss > self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -97,11 +120,35 @@ class EdgeAIOptimization:
                 raise ValueError(f"Unsupported optimization technique: {technique}")
 
             logger.info(f"Applying {technique} optimization...")
-            optimized_model = self.optimization_techniques[technique](model, **kwargs)
-            logger.info(f"{technique.capitalize()} optimization completed successfully.")
-            return optimized_model
+
+            # Benchmark Adam
+            adam_model, adam_metrics = self._benchmark_adam(model.clone(), **kwargs)
+            logger.info(f"Adam optimization metrics: {adam_metrics}")
+
+            # Benchmark RMSprop
+            rmsprop_model, rmsprop_metrics = self._benchmark_rmsprop(model.clone(), **kwargs)
+            logger.info(f"RMSprop optimization metrics: {rmsprop_metrics}")
+
+            # Benchmark Mini-batch Gradient Descent
+            mbgd_model, mbgd_metrics = self._benchmark_mini_batch_gd(model.clone(), **kwargs)
+            logger.info(f"Mini-batch Gradient Descent optimization metrics: {mbgd_metrics}")
+
+            # Explore hybrid approach
+            hybrid_model, hybrid_metrics = self._explore_hybrid_approach(model.clone(), **kwargs)
+            logger.info(f"Hybrid approach metrics: {hybrid_metrics}")
+
+            # Choose the best performing model
+            best_model, best_metrics = max([
+                (adam_model, adam_metrics),
+                (rmsprop_model, rmsprop_metrics),
+                (mbgd_model, mbgd_metrics),
+                (hybrid_model, hybrid_metrics)
+            ], key=lambda x: x[1]['performance'])
+
+            logger.info(f"Best performing optimization: {best_metrics}")
+            return best_model
         except Exception as e:
-            logger.error(f"Error during {technique} optimization: {str(e)}")
+            logger.error(f"Error during optimization benchmarking: {str(e)}")
             raise
 
     def quantize_model(self, model: nn.Module, bits: int = 8, backend: str = 'fbgemm') -> nn.Module:
@@ -656,6 +703,139 @@ class EdgeAIOptimization:
             issues.append("Consistently low performance")
         return issues
 
+    def _benchmark_adam(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the Adam optimizer."""
+        lr = kwargs.pop('lr', 0.001)
+        betas = kwargs.pop('betas', (0.9, 0.999))
+        weight_decay = kwargs.pop('weight_decay', 1e-5)
+        optimizer = optim.Adam(model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay, **kwargs)
+
+        # Learning rate scheduler
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-6)
+
+        # Early stopping
+        early_stopping = EarlyStopping(patience=20, min_delta=0.001)
+
+        # Gradient clipping
+        clip_value = 1.0
+
+        return self._run_benchmark(model, optimizer, scheduler=scheduler, early_stopping=early_stopping)
+
+
+    def _benchmark_rmsprop(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the RMSprop optimizer."""
+        optimizer = optim.RMSprop(model.parameters(), **kwargs)
+        return self._run_benchmark(model, optimizer)
+
+    def _benchmark_mini_batch_gd(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the Mini-batch Gradient Descent optimizer."""
+        optimizer = optim.SGD(model.parameters(), **kwargs)
+        return self._run_benchmark(model, optimizer)
+
+    def _explore_hybrid_approach(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Explore a hybrid approach combining Adam and Mini-batch Gradient Descent."""
+        def hybrid_optimizer(epoch):
+            if epoch < kwargs.get('switch_epoch', 5):
+                return optim.Adam(model.parameters(), **kwargs)
+            else:
+                return optim.SGD(model.parameters(), **kwargs)
+        return self._run_benchmark(model, hybrid_optimizer)
+
+    def _benchmark_adamw(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the AdamW optimizer."""
+        optimizer = optim.AdamW(model.parameters(), **kwargs)
+        return self._run_benchmark(model, optimizer)
+
+    def _benchmark_ranger(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the Ranger optimizer."""
+        from pytorch_ranger import Ranger  # Make sure to import Ranger
+        optimizer = Ranger(model.parameters(), **kwargs)
+        return self._run_benchmark(model, optimizer)
+
+    def _benchmark_nadam(self, model: nn.Module, **kwargs) -> Tuple[nn.Module, Dict[str, float]]:
+        """Benchmark the Nadam optimizer."""
+        optimizer = optim.NAdam(model.parameters(), **kwargs)
+        return self._run_benchmark(model, optimizer)
+
+    def _run_benchmark(self, model: nn.Module, optimizer: Union[optim.Optimizer, Callable], scheduler=None, early_stopping=None) -> Tuple[nn.Module, Dict[str, float]]:
+        """Run benchmark for a given model and optimizer."""
+        # Implement benchmark logic here
+        # This should include training the model for a few epochs and evaluating its performance
+        # Return the trained model and performance metrics
+        epochs = 5
+        train_loader, val_loader = self._get_data_loaders()
+        criterion = nn.CrossEntropyLoss()
+
+        start_time = time.time()
+        for epoch in range(epochs):
+            model.train()
+            for batch_idx, (data, target) in enumerate(train_loader):
+                if isinstance(optimizer, Callable):
+                    optimizer = optimizer(epoch)
+                optimizer.zero_grad()
+                output = model(data)
+                loss = criterion(output, target)
+                loss.backward()
+                optimizer.step()
+
+            # Validation step
+            model.eval()
+            val_loss = 0
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in val_loader:
+                    outputs = model(data)
+                    val_loss += criterion(outputs, target).item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += target.size(0)
+                    correct += (predicted == target).sum().item()
+
+            val_loss /= len(val_loader)
+            val_accuracy = correct / total
+
+            if scheduler:
+                scheduler.step(val_loss)
+
+            if early_stopping:
+                early_stopping(val_loss)
+                if early_stopping.early_stop:
+                    print("Early stopping")
+                    break
+
+        train_time = time.time() - start_time
+
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data, target in val_loader:
+                outputs = model(data)
+                _, predicted = torch.max(outputs.data, 1)
+                total += target.size(0)
+                correct += (predicted == target).sum().item()
+
+        accuracy = correct / total
+        inference_time = time.time() - (start_time + train_time)
+
+        metrics = {
+            'accuracy': accuracy,
+            'train_time': train_time,
+            'inference_time': inference_time
+        }
+
+        return model, metrics
+
+    def _get_data_loaders(self):
+        """Provide train and validation data loaders."""
+        from torchvision import datasets, transforms
+        transform = transforms.Compose([transforms.ToTensor()])
+        train_dataset = datasets.FakeData(size=1000, image_size=(3, 32, 32), num_classes=5, transform=transform)
+        val_dataset = datasets.FakeData(size=200, image_size=(3, 32, 32), num_classes=5, transform=transform)
+        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+        return train_loader, val_loader
+
 # Example usage
 if __name__ == "__main__":
     edge_ai_optimizer = EdgeAIOptimization()
@@ -666,6 +846,53 @@ if __name__ == "__main__":
         nn.ReLU(),
         nn.Linear(20, 5)
     )
+
+    def _get_data_loaders(self):
+        """Provide train and validation data loaders."""
+        from torchvision import datasets, transforms
+        transform = transforms.Compose([transforms.ToTensor()])
+        train_dataset = datasets.FakeData(size=1000, image_size=(3, 32, 32), num_classes=5, transform=transform)
+        val_dataset = datasets.FakeData(size=200, image_size=(3, 32, 32), num_classes=5, transform=transform)
+        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+        return train_loader, val_loader
+
+    def benchmark_adam(self):
+        """Benchmark the Adam optimizer using a simple test model."""
+        # Create a simple test model
+        test_model = nn.Sequential(
+            nn.Linear(32*32*3, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 5)
+        )
+
+        # Benchmark Adam optimizer
+        optimized_model, adam_metrics = self._benchmark_adam(test_model)
+        logging.info(f"Adam optimizer metrics: {adam_metrics}")
+        return optimized_model, adam_metrics
+
+    def run_benchmarks(self):
+        """Run benchmarks for different optimization algorithms."""
+        # Benchmark Adam
+        optimized_model_adam, adam_metrics = self.benchmark_adam()
+        logging.info(f"Adam optimizer metrics: {adam_metrics}")
+
+        # Benchmark RMSprop
+        optimized_model_rmsprop, rmsprop_metrics = self._benchmark_rmsprop()
+        logging.info(f"RMSprop optimizer metrics: {rmsprop_metrics}")
+
+        # Benchmark Mini-batch Gradient Descent
+        optimized_model_mbgd, mbgd_metrics = self._benchmark_mini_batch_gd()
+        logging.info(f"Mini-batch Gradient Descent optimizer metrics: {mbgd_metrics}")
+
+        # Explore hybrid approach
+        optimized_model_hybrid, hybrid_metrics = self._explore_hybrid_approach()
+        logging.info(f"Hybrid approach metrics: {hybrid_metrics}")
+
+    # Call the benchmark_adam method to execute the benchmarking process
+    optimized_model, adam_metrics = self.benchmark_adam()
 
     # Optimize the model using quantization
     optimized_model = edge_ai_optimizer.optimize(model, 'quantization', bits=8)
