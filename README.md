@@ -1,3 +1,5 @@
+![adjusted_combined_logo](https://github.com/user-attachments/assets/4a664a66-8da3-43ec-ba3e-db42db6946a4)
+
 # NeuroFlex: Advanced Neural Network Framework
 
 [![NeuroFlex CI/CD](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml/badge.svg)](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml)
