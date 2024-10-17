@@ -15,3 +15,9 @@ specific_test_output.log
 test_output.log
 test_warnings.log
 warnings_analysis.txt
+check_*.py
+*_test.log
+examine_*.py
+inspect_*.py
+test_*.py
+verify_*.py

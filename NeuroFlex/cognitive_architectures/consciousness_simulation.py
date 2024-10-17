@@ -130,6 +130,16 @@ class ConsciousnessSimulation(nn.Module):
         logging.debug("AdvancedSelfHealing initialized")
         logging.debug("Setup method completed")
 
+    def process_external_stimuli(self, x, external_stimuli):
+        if external_stimuli is not None:
+            # Combine input data with external stimuli
+            combined_input = jnp.concatenate([x, external_stimuli], axis=-1)
+            logging.debug(f"Combined input with external stimuli. Shape: {combined_input.shape}")
+            return combined_input
+        else:
+            logging.debug("No external stimuli provided. Using original input.")
+            return x
+
     @nn.compact
     @enhanced_error_handling
     def __call__(self, x, external_stimuli=None, deterministic: bool = True, rngs: Dict[str, jax.random.PRNGKey] = None):
@@ -137,9 +147,14 @@ class ConsciousnessSimulation(nn.Module):
         logging.debug(f"Input type: {type(x)}")
         logging.debug(f"Input: min={jnp.min(x)}, max={jnp.max(x)}, mean={jnp.mean(x)}")
 
-        # Ensure input shape is (batch_size, input_dim)
-        if len(x.shape) == 1:
-            x = jnp.expand_dims(x, axis=0)
+        # Input validation
+        if len(x.shape) != 2 or x.shape[1] != self.features[0]:
+            error_msg = f"Invalid input shape. Expected (batch_size, {self.features[0]}), but got {x.shape}"
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Process external stimuli
+        x = self.process_external_stimuli(x, external_stimuli)
 
         for i, feat in enumerate(self.features):
             x = nn.Dense(feat, kernel_init=nn.initializers.variance_scaling(2.0, 'fan_in', 'truncated_normal'))(x)
@@ -165,10 +180,6 @@ class ConsciousnessSimulation(nn.Module):
             logging.debug(f"New working memory state shape: {new_working_memory_state[0].shape}, {new_working_memory_state[1].shape}")
             logging.debug(f"Working memory output shape: {y.shape}")
             current_working_memory.value = new_working_memory_state
-            logging.debug(f"New working memory state type: {type(new_working_memory_state)}")
-            logging.debug(f"New working memory state shape: {new_working_memory_state[0].shape}, {new_working_memory_state[1].shape}")
-            logging.debug(f"Working memory output (y) shape: {y.shape}")
-            current_working_memory.value = new_working_memory_state
             logging.debug(f"Working memory output: min={jnp.min(y)}, max={jnp.max(y)}, mean={jnp.mean(y)}")
         except Exception as e:
             logging.error(f"Error in advanced working memory: {str(e)}")
@@ -179,18 +190,19 @@ class ConsciousnessSimulation(nn.Module):
         logging.debug(f"Metacognition output shape: {metacognition_output.shape}")
         logging.debug(f"Metacognition output: min={jnp.min(metacognition_output)}, max={jnp.max(metacognition_output)}, mean={jnp.mean(metacognition_output)}")
 
-        # Generate thought
+        # Generate detailed thought
         thought = self.thought_generator(jnp.concatenate([y, metacognition_output], axis=-1))
         logging.debug(f"Thought shape: {thought.shape}")
         logging.debug(f"Thought: min={jnp.min(thought)}, max={jnp.max(thought)}, mean={jnp.mean(thought)}")
 
+        # Process environmental interactions
         if external_stimuli is not None:
             environmental_response = self.environmental_interaction(thought, external_stimuli)
             thought = jnp.concatenate([thought, environmental_response], axis=-1)
             logging.debug(f"Thought after environmental interaction: shape={thought.shape}")
             logging.debug(f"Thought after environmental interaction: min={jnp.min(thought)}, max={jnp.max(thought)}, mean={jnp.mean(thought)}")
 
-        # Update long-term memory
+        # Update and use long-term memory
         long_term_memory_state = self.variable('long_term_memory', 'current_state', jnp.zeros, (1, self.long_term_memory_size))
         updated_long_term_memory, memory_output = self.long_term_memory(thought, long_term_memory_state.value)
         long_term_memory_state.value = updated_long_term_memory
@@ -200,6 +212,7 @@ class ConsciousnessSimulation(nn.Module):
         # Generate higher-level thought using complex reasoning
         higher_level_thought = self.complex_reasoning(cognitive_state, y)
 
+        # Combine all outputs into final consciousness state
         consciousness = jnp.concatenate([
             cognitive_state,
             attention_output,
@@ -211,7 +224,7 @@ class ConsciousnessSimulation(nn.Module):
         ], axis=-1)
 
         logging.debug(f"Consciousness components shapes: cognitive_state={cognitive_state.shape}, "
-                      f"attention_output={attention_output.shape}, new_working_memory={y.shape}, "
+                      f"attention_output={attention_output.shape}, working_memory_output={y.shape}, "
                       f"thought={thought.shape}, metacognition_output={metacognition_output.shape}, "
                       f"memory_output={memory_output.shape}, higher_level_thought={higher_level_thought.shape}")
 
@@ -616,12 +629,115 @@ class LongTermMemory(nn.Module):
         updated_memory = nn.Dense(self.memory_size)(jnp.concatenate([current_memory, memory_output], axis=-1))
         return updated_memory, memory_output
 
+class ImprovedConsciousnessSimulation(ConsciousnessSimulation):
+    """
+    An improved version of ConsciousnessSimulation that integrates all 10 enhancements.
+    This class incorporates advanced attention mechanisms, working memory, metacognition,
+    detailed thought generation, environmental interaction, long-term memory,
+    adaptive learning rate scheduling, and self-healing capabilities.
+    """
+
+    def setup(self):
+        super().setup()
+        self.improved_attention = EnhancedAttention(
+            num_heads=self.attention_heads,
+            qkv_features=self.qkv_features,
+            out_features=self.working_memory_size,
+            dropout_rate=self.dropout_rate
+        )
+        self.improved_working_memory = AdvancedWorkingMemory(memory_size=self.working_memory_size)
+        self.improved_metacognition = AdvancedMetacognition()
+        self.improved_thought_generator = DetailedThoughtGenerator(output_dim=self.output_dim)
+        self.improved_environmental_interaction = EnvironmentalInteraction()
+        self.improved_long_term_memory = LongTermMemory(memory_size=self.long_term_memory_size)
+        self.improved_lr_scheduler = AdaptiveLearningRateScheduler(initial_lr=self.learning_rate)
+        self.improved_self_healing = AdvancedSelfHealing()
+        self.param('learning_rate', lambda key: jnp.array(self.learning_rate, dtype=jnp.float32))
+
+    def apply_self_healing(self):
+        issues = self.improved_self_healing.diagnose(self)
+        if issues:
+            self.improved_self_healing.heal(self, issues)
+
+    def update_learning_rate(self, performance):
+        current_lr = self.get_variable('params', 'learning_rate')
+        new_lr = self.improved_lr_scheduler.step(performance)
+        self.put_variable('params', 'learning_rate', new_lr)
+
+    @nn.compact
+    @enhanced_error_handling
+    def __call__(self, x, external_stimuli=None, deterministic: bool = True, rngs: Dict[str, jax.random.PRNGKey] = None):
+        try:
+            # Retrieve current learning rate
+            current_lr = self.get_variable('params', 'learning_rate')
+
+            # Process external stimuli
+            x = self.improved_environmental_interaction(x, external_stimuli)
+
+            # Apply improved attention
+            attention_output = self.improved_attention(x, deterministic=deterministic)
+
+            # Use advanced working memory
+            working_memory_state = self.variable('working_memory', 'current_state', lambda: jnp.zeros((x.shape[0], self.working_memory_size)))
+            working_memory_output, new_working_memory_state = self.improved_working_memory(attention_output, working_memory_state.value)
+            working_memory_state.value = new_working_memory_state
+
+            # Generate detailed thoughts
+            thought = self.improved_thought_generator(working_memory_output)
+
+            # Apply metacognition
+            metacognition_output = self.improved_metacognition(thought)
+
+            # Update long-term memory
+            long_term_memory_state = self.variable('long_term_memory', 'current_state', lambda: jnp.zeros((x.shape[0], self.long_term_memory_size)))
+            new_long_term_memory, memory_output = self.improved_long_term_memory(metacognition_output, long_term_memory_state.value)
+            long_term_memory_state.value = new_long_term_memory
+
+            # Combine outputs into improved consciousness state
+            improved_consciousness_state = jnp.concatenate([thought, metacognition_output, memory_output], axis=-1)
+
+            # Apply self-healing
+            self.apply_self_healing()
+
+            # Update learning rate
+            current_performance = jnp.mean(improved_consciousness_state)
+            self.update_learning_rate(current_performance)
+
+            return improved_consciousness_state, working_memory_state.value, long_term_memory_state.value
+        except Exception as e:
+            return self._handle_error(e, x)
+
+    def _handle_error(self, error, x):
+        logging.error(f"Error in __call__: {str(error)}")
+        # Return default values in case of an error
+        default_state = jnp.zeros((x.shape[0], self.output_dim * 3))
+        default_memory = jnp.zeros((x.shape[0], self.working_memory_size))
+        default_long_term = jnp.zeros((x.shape[0], self.long_term_memory_size))
+        return default_state, default_memory, default_long_term
+
+    def thought_generator(self, x):
+        return self.improved_thought_generator(x)
+
+def create_improved_consciousness_simulation(features: List[int], output_dim: int, working_memory_size: int = 192, attention_heads: int = 4, qkv_features: int = 64, dropout_rate: float = 0.1, num_brain_areas: int = 90, simulation_length: float = 1.0, long_term_memory_size: int = 1024) -> ImprovedConsciousnessSimulation:
+    return ImprovedConsciousnessSimulation(
+        features=features,
+        output_dim=output_dim,
+        working_memory_size=working_memory_size,
+        attention_heads=attention_heads,
+        qkv_features=qkv_features,
+        dropout_rate=dropout_rate,
+        num_brain_areas=num_brain_areas,
+        simulation_length=simulation_length,
+        long_term_memory_size=long_term_memory_size
+    )
+
 # Example usage
 if __name__ == "__main__":
     rng = jax.random.PRNGKey(0)
     x = jax.random.normal(rng, (1, 10))  # Example input
-    model = create_consciousness_simulation(features=[64, 32], output_dim=16)
-    params = model.init(rng, x)
+    external_stimuli = jax.random.normal(rng, (1, 5))  # Example external stimuli
+    model = create_improved_consciousness_simulation(features=[64, 32], output_dim=16)
+    params = model.init(rng, x, external_stimuli)
 
     # Create separate RNG keys for different operations
     rng_keys = {
