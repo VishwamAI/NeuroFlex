@@ -133,16 +133,16 @@ class BCIProcessor:
             # Ensure the power feature maintains 64 channels
             if psd.shape[0] != 64:
                 psd = psd[:64] if psd.shape[0] > 64 else np.pad(psd, ((0, 64 - psd.shape[0]), (0, 0)))
-            features[f'{band}_power'] = psd.T  # Transpose the power feature
+            features[f'{band}_power'] = psd  # Do not transpose the power feature
             print(f"{band}_power shape: {features[f'{band}_power'].shape}")
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
             # Ensure wavelet features maintain correct channel dimensions
-            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs]).T
-            # Ensure the wavelet feature maintains 64 channels
-            if wavelet_features.shape[0] != 64:
-                wavelet_features = wavelet_features[:64] if wavelet_features.shape[0] > 64 else np.pad(wavelet_features, ((0, 64 - wavelet_features.shape[0]), (0, 0)))
+            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs])
+            # Ensure the wavelet feature maintains 64 channels in the first dimension
+            if wavelet_features.shape[1] != 64:
+                wavelet_features = wavelet_features[:, :64] if wavelet_features.shape[1] > 64 else np.pad(wavelet_features, ((0, 0), (0, 64 - wavelet_features.shape[1])))
             features[f'{band}_wavelet'] = wavelet_features
             print(f"{band}_wavelet shape: {features[f'{band}_wavelet'].shape}")
 

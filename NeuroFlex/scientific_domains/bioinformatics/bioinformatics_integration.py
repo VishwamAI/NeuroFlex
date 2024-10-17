@@ -92,3 +92,15 @@ class BioinformaticsIntegration:
     def _is_dna(self, sequence: Seq) -> bool:
         """Check if a sequence is DNA."""
         return set(sequence.upper()).issubset({'A', 'C', 'G', 'T', 'N'})
+
+    def predict_structure(self, sequence: str) -> Dict:
+        """
+        Predict protein structure from a given sequence.
+
+        Args:
+            sequence (str): Protein sequence.
+
+        Returns:
+            Dict: Predicted structure information.
+        """
+        return {"predicted_structure": "Not implemented yet"}

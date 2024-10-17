@@ -38,6 +38,7 @@ from .text_to_image import TextToImageGenerator
 from .latent_diffusion import LatentDiffusionModel
 from .cognitive_architecture import CognitiveArchitecture
 from .ddim import DDIMSampler
+from .generative_ai_model import GenerativeAIModel
 
 __all__ = [
     'GAN',
@@ -47,6 +48,7 @@ __all__ = [
     'LatentDiffusionModel',
     'CognitiveArchitecture',
     'DDIMSampler',
+    'GenerativeAIModel',
     'get_generative_models_version',
     'SUPPORTED_GENERATIVE_MODELS',
     'generate_random_noise',

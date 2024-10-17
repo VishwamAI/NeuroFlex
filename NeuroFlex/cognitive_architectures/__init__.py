@@ -34,7 +34,6 @@ Recent updates:
 """
 
 from .cognitive_architecture import CognitiveArchitecture, create_consciousness, create_feedback_mechanism
-from ..NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
 from .extended_cognitive_architectures import ExtendedCognitiveArchitecture, BCIProcessor, create_extended_cognitive_model
 from .advanced_thinking import CDSTDP, create_cdstdp
 from ..constants import (
@@ -52,8 +51,6 @@ __all__ = [
     'CognitiveArchitecture',
     'create_consciousness',
     'create_feedback_mechanism',
-    'ConsciousnessSimulation',
-    'create_consciousness_simulation',
     'ExtendedCognitiveArchitecture',
     'BCIProcessor',
     'create_extended_cognitive_model',
@@ -96,6 +93,7 @@ def create_cognitive_model(model_type, *args, **kwargs):
     if model_type == "CognitiveArchitecture":
         return CognitiveArchitecture(*args, **kwargs)
     elif model_type == "ConsciousnessSimulation":
+        from ..NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulation
         return ConsciousnessSimulation(*args, **kwargs)
     elif model_type == "ExtendedCognitiveArchitecture":
         return ExtendedCognitiveArchitecture(*args, **kwargs)

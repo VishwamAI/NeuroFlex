@@ -1,17 +1,17 @@
 # MIT License
-# 
+#
 # Copyright (c) 2024 VishwamAI
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,20 +26,29 @@ import numpy as np
 import torch
 import tensorflow as tf
 from Bio.Seq import Seq
-from NeuroFlex.utils.utils import tokenize_text
-from NeuroFlex.utils.descriptive_statistics import preprocess_data
-from NeuroFlex.utils.logging_config import setup_logging
+from ..utils.utils import tokenize_text
+from ..utils.descriptive_statistics import preprocess_data
+from ..utils.logging_config import setup_logging
 from .jax.pytorch_module_converted import PyTorchModel
 from .tensorflow.tensorflow_module import TensorFlowModel
 from .pytorch.pytorch_module import PyTorchModel as OriginalPyTorchModel
-from NeuroFlex.quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
-from NeuroFlex.scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
-from NeuroFlex.ai_ethics.scikit_bio_integration import ScikitBioIntegration
-from NeuroFlex.scientific_domains.bioinformatics.ete_integration import ETEIntegration
-from NeuroFlex.scientific_domains.bioinformatics.alphafold_integration import AlphaFoldIntegration
-from NeuroFlex.scientific_domains.xarray_integration import XarrayIntegration
-from NeuroFlex.generative_models.ddpm import DDPM
-from NeuroFlex.ai_ethics.advanced_security_agent import AdvancedSecurityAgent
+# Reintroduce necessary imports with relative paths
+from ..quantum_neural_networks.quantum_nn_module import QuantumNeuralNetwork
+from ..scientific_domains.bioinformatics.bioinformatics_integration import BioinformaticsIntegration
+from ..ai_ethics.scikit_bio_integration import ScikitBioIntegration
+from ..scientific_domains.bioinformatics.ete_integration import ETEIntegration
+from ..scientific_domains.bioinformatics.alphafold_integration import AlphaFoldIntegration
+from ..scientific_domains.xarray_integration import XarrayIntegration
+# Comment out less critical imports for now
+# from NeuroFlex.generative_models.ddpm import DDPM
+from ..ai_ethics.advanced_security_agent import AdvancedSecurityAgent
+from ..advanced_models.multi_modal_learning import MultiModalLearning
+from ..generative_models import GenerativeAIModel
+from ..edge_ai.edge_ai_optimization import EdgeAIOptimization
+# Removed import for ZeroShotAgent as it seems to be missing
+
+# Set up logging
+logger = setup_logging()
 
 # Set up logging
 logger = setup_logging()
@@ -306,32 +315,100 @@ class SelfCuringAlgorithm:
             elif all(x > y for x, y in zip(recent_performance, recent_performance[1:])):
                 self.learning_rate *= 0.9  # Decrease learning rate if consistently worsening
         return self.learning_rate
-
-class NeuroFlex:
-    def __init__(self, config):
-        self.config = config
+class CoreNeuroFlex:
+    def __init__(self, config=None):
+        self.config = config or {}
+        self.config['USE_BCI'] = True
+        self.config['USE_CONSCIOUSNESS_SIM'] = True
         self.logger = setup_logging()
-        self.features = config.get('CORE_MODEL_FEATURES', [])
-        self.use_cnn = config.get('USE_CNN', False)
-        self.use_rnn = config.get('USE_RNN', False)
-        self.use_gan = config.get('USE_GAN', False)
-        self.fairness_constraint = config.get('FAIRNESS_CONSTRAINT', None)
-        self.use_quantum = config.get('USE_QUANTUM', False)
-        self.use_alphafold = config.get('USE_ALPHAFOLD', False)
-        self.backend = config.get('BACKEND', 'pytorch')
+        self.features = self.config.get('CORE_MODEL_FEATURES', [])
+        self.use_cnn = self.config.get('USE_CNN', False)
+        self.use_rnn = self.config.get('USE_RNN', False)
+        self.use_gan = self.config.get('USE_GAN', False)
+        self.fairness_constraint = self.config.get('FAIRNESS_CONSTRAINT', None)
+        self.use_quantum = self.config.get('USE_QUANTUM', False)
+        self.use_alphafold = self.config.get('USE_ALPHAFOLD', False)
+        self.backend = self.config.get('BACKEND', 'pytorch')
         self.bioinformatics_data = None
         self.core_model = None
         self.quantum_model = None
         self.ethical_framework = None
         self.explainable_ai = None
         self.bci_processor = None
-        self.consciousness_sim = None
+        self.consciousness_simulation = None
         self.alphafold = None
         self.math_solver = None
         self.edge_optimizer = None
         self.security_agent = None
         self.optimizer = None
         self.loss_fn = None
+        self.unified_transformer = None
+        self.zero_shot_agent = None
+        self.self_curing_algorithm = None
+        self.multi_modal_learning = None
+        self.generative_ai_model = None
+        self.advanced_quantum_model = None
+        self.bioinformatics_integration = None
+        self.edge_ai_optimization = None
+        self.advanced_security_agent = None
+        self._setup_self_curing_algorithm()
+        self._setup_multi_modal_learning()
+        self._setup_generative_ai_model()
+        self._setup_unified_transformer()
+        self._setup_advanced_quantum_model()
+        self._setup_bioinformatics_integration()
+        self._setup_edge_ai_optimization()
+        self._setup_zero_shot_agent()
+        self._setup_advanced_security_agent()
+        self._setup_core_model()
+        self._setup_quantum_model()
+        self._setup_ethical_framework()
+        self._setup_explainable_ai()
+        self._setup_bci_processor()
+        self._setup_consciousness_sim()
+        self._setup_alphafold()
+        self._setup_math_solver()
+        self._setup_edge_optimizer()
+        self._setup_security_agent()
+
+    def _setup_self_curing_algorithm(self):
+        self.self_curing_algorithm = SelfCuringAlgorithm(self)
+
+    def _setup_multi_modal_learning(self):
+        self.multi_modal_learning = MultiModalLearning()  # Assuming MultiModalLearning class exists
+
+    def _setup_generative_ai_model(self):
+        self.generative_ai_model = GenerativeAIModel()  # Assuming GenerativeAIModel class exists
+
+    def _setup_unified_transformer(self):
+        from ..Transformers.unified_transformer import UnifiedTransformer
+        vocab_size = self.config.get('UNIFIED_TRANSFORMER_VOCAB_SIZE', 10000)
+        self.unified_transformer = UnifiedTransformer(vocab_size=vocab_size)
+        self.logger.info(f"Unified Transformer set up with vocab size: {vocab_size}")
+
+    def _setup_advanced_quantum_model(self):
+        self.advanced_quantum_model = QuantumNeuralNetwork(
+            n_qubits=self.config.get('QUANTUM_N_QUBITS', 4),
+            n_layers=self.config.get('QUANTUM_N_LAYERS', 2)
+        )
+
+    def _setup_bioinformatics_integration(self):
+        self.bioinformatics_integration = BioinformaticsIntegration()
+
+    def _setup_edge_ai_optimization(self):
+        self.edge_ai_optimization = EdgeAIOptimization()  # Assuming EdgeAIOptimization class exists
+
+    def _setup_zero_shot_agent(self):
+        from ..Prompt_Agent.agentic_behavior import ZeroShotAgent
+        self.zero_shot_agent = ZeroShotAgent(self.core_model)
+        self.logger.info("Zero Shot Agent set up")
+
+    def _setup_advanced_security_agent(self):
+        self.advanced_security_agent = AdvancedSecurityAgent(
+            features=self.features,
+            action_dim=self.config.get('ACTION_DIM', 2),
+            update_frequency=self.config.get('SECURITY_UPDATE_FREQUENCY', 100)
+        )
 
     def _setup_core_model(self):
         input_shape = self.config.get('INPUT_SHAPE', (28, 28, 1))
@@ -368,52 +445,56 @@ class NeuroFlex:
             self.logger.info("Quantum model set up")
 
     def _setup_ethical_framework(self):
-        from NeuroFlex.ai_ethics.ethical_framework import EthicalFramework
+        from ..ai_ethics.ethical_framework import EthicalFramework
         self.ethical_framework = EthicalFramework()
         self.logger.info("Ethical framework set up")
 
     def _setup_explainable_ai(self):
-        from NeuroFlex.ai_ethics.explainable_ai import ExplainableAI
+        from ..ai_ethics.explainable_ai import ExplainableAI
         self.explainable_ai = ExplainableAI()
         self.explainable_ai.set_model(self.core_model)
         self.logger.info("Explainable AI set up")
 
     def _setup_bci_processor(self):
         if self.config.get('USE_BCI', False):
-            from NeuroFlex.bci_integration.bci_processing import BCIProcessor
+            from ..bci_integration.bci_processing import BCIProcessor
             self.bci_processor = BCIProcessor(
                 sampling_rate=self.config.get('BCI_SAMPLING_RATE', 250),
-                num_channels=self.config.get('BCI_NUM_CHANNELS', 32)
+                num_channels=self.config.get('BCI_NUM_CHANNELS', 32),
+                electrode_thickness=self.config.get('BCI_ELECTRODE_THICKNESS', 0.005)
             )
             self.logger.info("BCI processor set up")
 
     def _setup_consciousness_sim(self):
         if self.config.get('USE_CONSCIOUSNESS_SIM', False):
-            from NeuroFlex.NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulation
-            self.consciousness_sim = ConsciousnessSimulation(
+            from ..cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
+            self.consciousness_simulation = ConsciousnessSimulation(
                 features=self.config.get('CONSCIOUSNESS_SIM_FEATURES', [64, 32])
             )
             self.logger.info("Consciousness simulation set up")
 
+    def _setup_consciousness_simulation(self):
+        self._setup_consciousness_sim()
+
     def _setup_alphafold(self):
         if self.use_alphafold:
-            from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
+            from ..scientific_domains.alphafold_integration import AlphaFoldIntegration
             self.alphafold = AlphaFoldIntegration()
             self.logger.info("AlphaFold integration set up")
 
     def _setup_math_solver(self):
-        from NeuroFlex.scientific_domains.math_solvers import MathSolver
+        from ..scientific_domains.math_solvers import MathSolver
         self.math_solver = MathSolver()
         self.logger.info("Math solver set up")
 
     def _setup_edge_optimizer(self):
         if self.config.get('USE_EDGE_OPTIMIZATION', False):
-            from NeuroFlex.edge_ai.edge_ai_optimization import EdgeAIOptimization
+            from ..edge_ai.edge_ai_optimization import EdgeAIOptimization
             self.edge_optimizer = EdgeAIOptimization()
             self.logger.info("Edge AI optimizer set up")
 
     def _setup_security_agent(self):
-        from NeuroFlex.ai_ethics.advanced_security_agent import AdvancedSecurityAgent
+        from ..ai_ethics.advanced_security_agent import AdvancedSecurityAgent
         self.security_agent = AdvancedSecurityAgent(
             features=self.features,
             action_dim=self.config.get('ACTION_DIM', 2),
@@ -423,7 +504,7 @@ class NeuroFlex:
         self.security_agent.setup_threat_detection()
         self.security_agent.setup_model_monitoring()
         self.security_agent.integrate_with_neuroflex()
-        self.logger.info("Advanced Security Agent set up")
+        self.logger.info("Advanced Security Agent set up and integrated with NeuroFlex")
 
     def load_bioinformatics_data(self, file_path, skip_visualization=False):
         """
@@ -661,7 +742,7 @@ config = {
     'ALPHAFOLD_PARAMS': {'max_recycling': 3}
 }
 
-model = NeuroFlex(config)
+model = CoreNeuroFlex(config)
 
 # Initialize self-curing algorithm
 self_curing_algorithm = SelfCuringAlgorithm(model)

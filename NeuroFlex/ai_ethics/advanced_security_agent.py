@@ -298,6 +298,11 @@ class AdvancedSecurityAgent:
         # Implement logic to get fairness metrics
         return {}
 
+    def integrate_with_neuroflex(self):
+        # Integrate the security agent with the NeuroFlex system
+        self.neuroflex_integrator.register_security_agent(self)
+        logging.info("AdvancedSecurityAgent integrated with NeuroFlex system")
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     agent = AdvancedSecurityAgent([64, 64], 2)  # Example architecture

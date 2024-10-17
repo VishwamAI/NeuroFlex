@@ -8,7 +8,7 @@ import skbio
 import warnings
 from Bio.Seq import BiopythonWarning
 from skbio.util import EfficiencyWarning
-from NeuroFlex.core_neural_networks.model import NeuroFlex, train_neuroflex_model
+from NeuroFlex.core_neural_networks.model import CoreNeuroFlex, train_neuroflex_model
 from NeuroFlex.ai_ethics.advanced_security_agent import AdvancedSecurityAgent
 from NeuroFlex.ai_ethics.scikit_bio_integration import ScikitBioIntegration
 
@@ -28,7 +28,7 @@ class TestSecurityIntegration(unittest.TestCase):
             'SECURITY_UPDATE_FREQUENCY': 10
         }
         logging.info(f"Initializing NeuroFlex with config: {self.config}")
-        self.model = NeuroFlex(self.config)
+        self.model = CoreNeuroFlex(self.config)
 
         # Create a temporary directory for all test files
         self.temp_dir = tempfile.mkdtemp()

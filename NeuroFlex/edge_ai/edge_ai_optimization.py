@@ -33,7 +33,7 @@ import torch.quantization
 import torch.nn.utils.prune as prune
 from torch import optim
 from torch.optim import Optimizer
-from typing import List, Dict, Any, Union, Optional
+from typing import List, Dict, Any, Union, Optional, Callable
 import logging
 from torch.utils.data import DataLoader
 import time
@@ -104,63 +104,101 @@ class EdgeAIOptimization:
             logger.error(f"Error during {technique} optimization: {str(e)}")
             raise
 
-    def quantize_model(self, model: nn.Module, bits: int = 8, backend: str = 'fbgemm') -> nn.Module:
+    def quantize_model(self, model: Union[nn.Module, Callable], bits: int = 8, backend: str = 'fbgemm') -> Union[nn.Module, Callable]:
         """Quantize the model to reduce its size and increase inference speed."""
         try:
-            model.eval()
-
-            # Configure quantization
-            if backend == 'fbgemm':
-                qconfig = torch.quantization.QConfig(
-                    activation=torch.quantization.observer.MinMaxObserver.with_args(
-                        qscheme=torch.per_tensor_affine, dtype=torch.quint8,
-                        quant_min=0, quant_max=255
-                    ),
-                    weight=torch.quantization.observer.MinMaxObserver.with_args(
-                        dtype=torch.qint8, quant_min=-128, quant_max=127
-                    )
-                )
-            elif backend == 'qnnpack':
-                qconfig = torch.quantization.QConfig(
-                    activation=torch.quantization.observer.MinMaxObserver.with_args(
-                        qscheme=torch.per_tensor_affine, dtype=torch.quint8,
-                        quant_min=0, quant_max=255
-                    ),
-                    weight=torch.quantization.observer.MinMaxObserver.with_args(
-                        dtype=torch.qint8, quant_min=-128, quant_max=127
-                    )
-                )
+            if isinstance(model, nn.Module):
+                return self._quantize_nn_module(model, bits, backend)
+            elif callable(model):
+                return self._quantize_function(model, bits, backend)
             else:
-                raise ValueError(f"Unsupported backend: {backend}")
-
-            model.qconfig = qconfig
-            torch.quantization.propagate_qconfig_(model)
-
-            # Prepare model for quantization
-            model_prepared = torch.quantization.prepare(model)
-
-            # Calibration (using random data for demonstration)
-            input_shape = next(model.parameters()).shape[1]
-            calibration_data = torch.randn(100, input_shape)
-            model_prepared(calibration_data)
-
-            # Convert to quantized model
-            quantized_model = torch.quantization.convert(model_prepared)
-
-            # Ensure the model includes quantized modules and has qconfig
-            quantized_model.qconfig = qconfig
-            for module in quantized_model.modules():
-                if isinstance(module, (torch.nn.quantized.Linear, torch.nn.quantized.Conv2d)):
-                    module.qconfig = qconfig
-                    break
-            else:
-                raise ValueError("Quantization failed: No quantized modules found")
-
-            logger.info(f"Model quantized to {bits} bits using {backend} backend")
-            return quantized_model
+                raise ValueError("Input must be either nn.Module or a callable function")
         except Exception as e:
             logger.error(f"Error during model quantization: {str(e)}")
             raise
+
+    def _quantize_nn_module(self, model: nn.Module, bits: int, backend: str) -> nn.Module:
+        model.eval()
+
+        # Configure quantization
+        if backend == 'fbgemm':
+            qconfig = torch.quantization.QConfig(
+                activation=torch.quantization.observer.MinMaxObserver.with_args(
+                    qscheme=torch.per_tensor_affine, dtype=torch.quint8,
+                    quant_min=0, quant_max=255
+                ),
+                weight=torch.quantization.observer.MinMaxObserver.with_args(
+                    dtype=torch.qint8, quant_min=-128, quant_max=127
+                )
+            )
+        elif backend == 'qnnpack':
+            qconfig = torch.quantization.QConfig(
+                activation=torch.quantization.observer.MinMaxObserver.with_args(
+                    qscheme=torch.per_tensor_affine, dtype=torch.quint8,
+                    quant_min=0, quant_max=255
+                ),
+                weight=torch.quantization.observer.MinMaxObserver.with_args(
+                    dtype=torch.qint8, quant_min=-128, quant_max=127
+                )
+            )
+        else:
+            raise ValueError(f"Unsupported backend: {backend}")
+
+        model.qconfig = qconfig
+        torch.quantization.propagate_qconfig_(model)
+
+        # Prepare model for quantization
+        model_prepared = torch.quantization.prepare(model)
+
+        # Calibration (using random data for demonstration)
+        input_shape = 10  # Default input size
+        try:
+            # Try to get input shape from model parameters
+            for param in model.parameters():
+                if param.dim() > 1:
+                    input_shape = param.shape[1]
+                    break
+        except Exception:
+            logger.warning("Could not determine input shape from model parameters. Using default.")
+
+        calibration_data = torch.randn(100, input_shape)
+        model_prepared(calibration_data)
+
+        # Convert to quantized model
+        quantized_model = torch.quantization.convert(model_prepared)
+
+        # Ensure the model includes quantized modules and has qconfig
+        quantized_model.qconfig = qconfig
+        for module in quantized_model.modules():
+            if isinstance(module, (torch.nn.quantized.Linear, torch.nn.quantized.Conv2d)):
+                module.qconfig = qconfig
+                break
+        else:
+            logger.warning("No quantized modules found. Model may not be fully quantized.")
+
+        logger.info(f"Model quantized to {bits} bits using {backend} backend")
+        return quantized_model
+
+    def _quantize_function(self, func: Callable, bits: int, backend: str) -> Callable:
+        class FunctionWrapper(nn.Module):
+            def __init__(self, func):
+                super().__init__()
+                self.func = func
+                self.dummy_param = nn.Parameter(torch.empty(0))  # Add a dummy parameter
+
+            def forward(self, x):
+                return self.func(x)
+
+        wrapped_model = FunctionWrapper(func)
+
+        # Create a dummy input tensor for calibration
+        input_shape = 10  # Assume a default input size for callable functions
+        dummy_input = torch.randn(1, input_shape)
+
+        quantized_model = self._quantize_nn_module(wrapped_model, bits, backend)
+        quantized_model(dummy_input)  # Calibrate with dummy input
+
+        return lambda x: quantized_model(x)
 
     def prune_model(self, model: nn.Module, sparsity: float = 0.5, method: str = 'l1_unstructured') -> nn.Module:
         """Prune the model to remove unnecessary weights."""

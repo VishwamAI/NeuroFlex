@@ -105,3 +105,15 @@ class NeuroFlexIntegrator:
         for component_name, component in self.components.items():
             status["components"][component_name] = component.get_status()  # Assuming components have a get_status method
         return status
+
+    def register_security_agent(self, security_agent):
+        """
+        Register a security agent with the NeuroFlex integrator.
+
+        Args:
+            security_agent: The security agent to be registered.
+
+        This method registers a security agent with the NeuroFlex system for integration.
+        """
+        self.logger.info(f"Registering security agent: {security_agent}")
+        self.components['SecurityAgent'] = security_agent

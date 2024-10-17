@@ -39,7 +39,7 @@ class NeuroscienceModel:
 
     def _create_model(self):
         if self.model_type == 'SNN':
-            return SpikingNeuralNetwork(self.input_size, self.hidden_size, self.output_size)
+            return SpikingNeuralNetwork(self.input_size, self.hidden_size, self.output_size, with_consciousness=True)
         elif self.model_type == 'LSTM':
             return LSTMNetwork(self.input_size, self.hidden_size, self.output_size)
         elif self.model_type == 'TCN':
@@ -88,6 +88,7 @@ class SpikingNeuralNetwork(nn.Module):
     input_size: int
     hidden_size: int
     output_size: int
+    with_consciousness: bool = False
 
     @nn.compact
     def __call__(self, x):
@@ -96,14 +97,19 @@ class SpikingNeuralNetwork(nn.Module):
 
         mem = jnp.zeros((x.shape[0], self.hidden_size))
         spk = jnp.zeros((x.shape[0], self.hidden_size))
+        consciousness = jnp.zeros((x.shape[0], x.shape[1])) if self.with_consciousness else None
 
         for t in range(x.shape[1]):
             cur = fc1(x[:, t, :])
             mem = mem * 0.9 + cur * (1 - 0.9)  # Leaky integration
             spk = jnp.where(mem > 1.0, 1.0, 0.0)  # Spike if membrane potential > threshold
             mem = jnp.where(mem > 1.0, 0.0, mem)  # Reset membrane potential after spike
+            if self.with_consciousness:
+                consciousness = consciousness.at[:, t].set(jnp.mean(spk, axis=1))
 
         output = fc2(spk)
+        if self.with_consciousness:
+            return output, consciousness
         return output
 
 class LSTMNetwork(nn.Module):
@@ -119,11 +125,11 @@ class LSTMNetwork(nn.Module):
             in_axes=1,
             out_axes=1
         )
-        lstm = ScanLSTM(self.hidden_size)
+        lstm = ScanLSTM(self.hidden_size, gate_fn=nn.sigmoid)
         batch_size, seq_len, input_size = x.shape
         carry = lstm.initialize_carry(jax.random.PRNGKey(0), (batch_size,), self.hidden_size)
         carry, outputs = lstm(carry, x)
-        return nn.Dense(features=self.output_size)(outputs[:, -1, :])
+        return nn.Dense(features=self.output_size)(outputs)
 
 class TemporalConvNet(nn.Module):
     input_size: int
@@ -132,12 +138,11 @@ class TemporalConvNet(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = jnp.transpose(x, (0, 2, 1))  # (batch, time, features) -> (batch, features, time)
+        # (batch, time, features)
         x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding='SAME')(x)
         x = nn.relu(x)
         x = nn.Conv(features=self.hidden_size, kernel_size=(3,), padding='SAME')(x)
         x = nn.relu(x)
-        x = jnp.mean(x, axis=-1)  # Global average pooling
         x = nn.Dense(features=self.output_size)(x)
         return x
 
