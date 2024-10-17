@@ -77,8 +77,21 @@ def test_predict_protein_structure(neuroflex_instance):
     structure = neuroflex_instance.bioinformatics_integration.predict_structure(sequence)
     assert structure is not None
 
+import torch
+import torch.nn as nn
+
+# ... (existing imports)
+
+class MockModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(10, 1)
+
+    def forward(self, x):
+        return self.linear(x)
+
 def test_optimize_for_edge(neuroflex_instance):
-    mock_model = lambda x: x  # Simple identity function as a mock model
+    mock_model = MockModel()  # Use the MockModel class instead of lambda
     optimized_model = neuroflex_instance.edge_ai_optimization.optimize(mock_model, technique='quantization')
-    assert optimized_model is not None
-    assert optimized_model != mock_model
+    assert isinstance(optimized_model, nn.Module)
+    assert optimized_model is not mock_model
