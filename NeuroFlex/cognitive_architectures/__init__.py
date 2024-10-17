@@ -34,7 +34,7 @@ Recent updates:
 """
 
 from .cognitive_architecture import CognitiveArchitecture, create_consciousness, create_feedback_mechanism
-from .consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
+from ..NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulation, create_consciousness_simulation
 from .extended_cognitive_architectures import ExtendedCognitiveArchitecture, BCIProcessor, create_extended_cognitive_model
 from .advanced_thinking import CDSTDP, create_cdstdp
 from ..constants import (

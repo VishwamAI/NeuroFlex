@@ -389,7 +389,7 @@ class NeuroFlex:
 
     def _setup_consciousness_sim(self):
         if self.config.get('USE_CONSCIOUSNESS_SIM', False):
-            from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
+            from NeuroFlex.NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulation
             self.consciousness_sim = ConsciousnessSimulation(
                 features=self.config.get('CONSCIOUSNESS_SIM_FEATURES', [64, 32])
             )

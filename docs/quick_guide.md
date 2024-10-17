@@ -45,7 +45,7 @@ from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model,
 from NeuroFlex.bci_integration import BCIIntegration
 from NeuroFlex.quantum_deep_learning import QuantumGenerativeModel
 from NeuroFlex.explainable_ai import ExplainableModel
-from NeuroFlex.consciousness_simulation import ConsciousnessSimulator
+from NeuroFlex.NeuroFlex.quantum_consciousness.consciousness_simulation import ConsciousnessSimulator
 from NeuroFlex.threat_detection import ThreatDetector
 from NeuroFlex.edge_ai import EdgeAIOptimizer
 ```

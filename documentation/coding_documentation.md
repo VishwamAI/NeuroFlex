@@ -526,7 +526,7 @@ Key features:
 Example usage:
 
 ```python
-from neuroflex.cognitive_architectures.consciousness_simulation import create_consciousness_simulation
+from neuroflex.NeuroFlex.quantum_consciousness.consciousness_simulation import create_consciousness_simulation
 
 model = create_consciousness_simulation(features=[64, 32], output_dim=16)
 consciousness_state, working_memory = model.simulate_consciousness(input_data)
