@@ -235,12 +235,7 @@ class MultiModalLearning(nn.Module):
         encoded_modalities = {name: tensor.view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
         logger.debug(f"Encoded modalities shapes after reshaping: {[(name, tensor.shape) for name, tensor in encoded_modalities.items()]}")
 
-        if self.fusion_method == 'concatenation':
-            fused = torch.cat(list(encoded_modalities.values()), dim=1)
-        elif self.fusion_method == 'attention':
-            fused = self.fuse_modalities(encoded_modalities)
-        else:
-            raise ValueError(f"Unsupported fusion method: {self.fusion_method}")
+        fused = self.fuse_modalities(encoded_modalities)
 
         logger.debug(f"Fused tensor shape: {fused.shape}, type: {type(fused)}")
 
