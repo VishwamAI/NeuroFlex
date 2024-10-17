@@ -1,13 +1,15 @@
 import jax
 import jax.numpy as jnp
 import logging
-from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation, EnhancedAttention, AdvancedWorkingMemory, detailed_brain_simulation, AdvancedMetacognition
+from NeuroFlex.cognitive_architectures.consciousness_simulation import (
+    ConsciousnessSimulation, EnhancedAttention, AdvancedWorkingMemory,
+    detailed_brain_simulation, AdvancedMetacognition, AdaptiveLearningRateScheduler,
+    AdvancedSelfHealing, DetailedThoughtGenerator, EnvironmentalInteraction, LongTermMemory
+)
 from NeuroFlex.cognitive_architectures.error_handling import enhanced_error_handling
-from NeuroFlex.cognitive_architectures.adaptive_learning_rate_scheduler import AdaptiveLearningRateScheduler
-from NeuroFlex.cognitive_architectures.advanced_self_healing import AdvancedSelfHealing
-from NeuroFlex.cognitive_architectures.detailed_thought_generator import DetailedThoughtGenerator
-from NeuroFlex.cognitive_architectures.environmental_interaction import EnvironmentalInteraction
-from NeuroFlex.cognitive_architectures.long_term_memory import LongTermMemory
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -30,31 +32,49 @@ def test_enhanced_attention():
 
 @enhanced_error_handling
 def test_advanced_working_memory():
-    logger.info("Testing AdvancedWorkingMemory")
+    logger.info("Starting test_advanced_working_memory")
     rng = jax.random.PRNGKey(0)
-    memory_size, batch_size, input_size = 192, 1, 64
+    features, batch_size, input_size = 192, 1, 64
 
-    awm = AdvancedWorkingMemory(memory_size=memory_size)
+    logger.debug(f"Initializing AdvancedWorkingMemory with features={features}")
+    awm = AdvancedWorkingMemory(features=features)
+    logger.debug("AdvancedWorkingMemory initialized")
+
+    logger.debug(f"Generating input with shape ({batch_size}, {input_size})")
     x = jax.random.normal(rng, (batch_size, input_size))
-    initial_state = awm.initialize_state(batch_size)
+    logger.debug(f"Input generated: shape={x.shape}, min={jnp.min(x)}, max={jnp.max(x)}, mean={jnp.mean(x)}")
 
-    def init_and_apply(rng, x, initial_state):
-        params = awm.init(rng, x, initial_state)
+    # Initialize state
+    initial_state = awm.initialize_state(batch_size)
+    logger.debug(f"Initial state created: shape={initial_state[0].shape}, {initial_state[1].shape}")
+
+    def init_and_apply(rng, x, state):
+        logger.debug("Entering init_and_apply function")
+        logger.debug("Initializing parameters")
+        params = awm.init(rng, x, state)
+        logger.debug("Parameters initialized")
         def apply_fn(params, x, state):
+            logger.debug("Applying AdvancedWorkingMemory")
             return awm.apply(params, x, state)
+        logger.debug("Jitting apply_fn")
         return jax.jit(apply_fn), params
 
+    logger.debug("Calling init_and_apply")
     apply_fn, params = init_and_apply(rng, x, initial_state)
+    logger.debug("init_and_apply completed")
+
+    logger.debug("Applying jitted function")
     new_state, y = apply_fn(params, x, initial_state)
+    logger.debug("Jitted function applied")
 
     logger.debug(f"Input shape: {x.shape}")
-    logger.debug(f"Initial state shape: {initial_state[0].shape}, {initial_state[1].shape}")
     logger.debug(f"New state shape: {new_state[0].shape}, {new_state[1].shape}")
     logger.debug(f"Output shape: {y.shape}")
 
+    logger.debug("Running assertions")
     assert isinstance(new_state, tuple) and len(new_state) == 2, "New state should be a tuple with two elements"
-    assert new_state[0].shape == new_state[1].shape == (batch_size, memory_size), f"Expected shape {(batch_size, memory_size)}, but got {new_state[0].shape} and {new_state[1].shape}"
-    assert y.shape == (batch_size, memory_size), f"Expected output shape {(batch_size, memory_size)}, but got {y.shape}"
+    assert new_state[0].shape == new_state[1].shape == (batch_size, features), f"Expected shape {(batch_size, features)}, but got {new_state[0].shape} and {new_state[1].shape}"
+    assert y.shape == (batch_size, features), f"Expected output shape {(batch_size, features)}, but got {y.shape}"
 
     logger.info("AdvancedWorkingMemory test passed")
 

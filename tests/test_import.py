@@ -1,0 +1,4 @@
+from NeuroFlex.cognitive_architectures.consciousness_simulation import ConsciousnessSimulation
+
+print("Successfully imported ConsciousnessSimulation")
+print(ConsciousnessSimulation)

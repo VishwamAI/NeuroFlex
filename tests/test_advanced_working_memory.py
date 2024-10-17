@@ -11,14 +11,14 @@ def test_advanced_working_memory():
 
     try:
         rng = jax.random.PRNGKey(0)
-        memory_size = 192
+        features = 64
         batch_size = 1
 
         # Initialize the AdvancedWorkingMemory
-        awm = AdvancedWorkingMemory(memory_size=memory_size)
+        awm = AdvancedWorkingMemory(features=features)
 
         # Create a random input
-        x = jax.random.normal(rng, (batch_size, memory_size))
+        x = jax.random.normal(rng, (batch_size, features))
         logger.debug(f"Input shape: {x.shape}")
 
         # Initialize the state
@@ -38,9 +38,9 @@ def test_advanced_working_memory():
         # Assertions
         assert isinstance(new_state, tuple), "New state should be a tuple"
         assert len(new_state) == 2, "New state should have two elements"
-        assert new_state[0].shape == (batch_size, memory_size), f"Expected shape {(batch_size, memory_size)}, but got {new_state[0].shape}"
-        assert new_state[1].shape == (batch_size, memory_size), f"Expected shape {(batch_size, memory_size)}, but got {new_state[1].shape}"
-        assert y.shape == (batch_size, memory_size), f"Expected output shape {(batch_size, memory_size)}, but got {y.shape}"
+        assert new_state[0].shape == (batch_size, features), f"Expected shape {(batch_size, features)}, but got {new_state[0].shape}"
+        assert new_state[1].shape == (batch_size, features), f"Expected shape {(batch_size, features)}, but got {new_state[1].shape}"
+        assert y.shape == (batch_size, features), f"Expected output shape {(batch_size, features)}, but got {y.shape}"
 
         logger.info("Advanced working memory test passed successfully")
     except Exception as e:
