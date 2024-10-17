@@ -34,7 +34,8 @@ Recent updates:
 
 from .jax.pytorch_module_converted import PyTorchModel
 from .advanced_thinking import CDSTDP, create_cdstdp
-from .model import NeuroFlex, SelfCuringAlgorithm
+from .model import SelfCuringAlgorithm
+# NeuroFlex import removed to avoid circular import
 from .cnn import CNN, create_cnn
 from .lstm import LSTMModule
 from .rnn import LRNN

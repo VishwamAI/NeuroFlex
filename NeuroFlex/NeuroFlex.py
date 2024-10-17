@@ -23,7 +23,8 @@
 import jax
 import flax
 import tensorflow as tf
-from .core_neural_networks import NeuroFlex as CoreNeuroFlex, CNN, LRNN, LSTMModule
+from .core_neural_networks import CNN, LRNN, LSTMModule
+from .core_neural_networks.model import CoreNeuroFlex
 from .quantum_neural_networks import QuantumNeuralNetwork
 from .ai_ethics import EthicalFramework, ExplainableAI
 from .bci_integration import BCIProcessor
