@@ -34,7 +34,7 @@ jobs:
         run: echo "ALPHAFOLD_PATH=${{ github.workspace }}/alphafold" >> $GITHUB_ENV
       - name: Run tests
         run: |
-          pytest tests/ --disable-warnings
+          pytest tests/ -v --tb=long --capture=no --disable-warnings
         env:
           NEUROFLEX_DATA_DIR: ${{ github.workspace }}/data
           NEUROFLEX_SAVE_DIR: ${{ github.workspace }}/path/to/save
