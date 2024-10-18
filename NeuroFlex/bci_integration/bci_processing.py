@@ -153,7 +153,7 @@ class BCIProcessor:
         # Ensure correct channel dimensions for all features
         for feature_name, feature_data in features.items():
             print(f"{feature_name} shape before adjustment: {feature_data.shape}")
-            if 'power' in feature_name and feature_data.shape[0] != self.num_channels:
+            if 'power' in feature_name:
                 features[feature_name] = feature_data.T
             elif 'wavelet' in feature_name and feature_data.shape[0] != self.num_channels:
                 features[feature_name] = feature_data.T
