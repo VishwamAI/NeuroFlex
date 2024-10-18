@@ -200,36 +200,36 @@ class MultiModalLearning(nn.Module):
             elif name == 'text':
                 # For text modality, ensure long type for embedding and float type for LSTM
                 text_input = inputs[name].long().clamp(0, 29999)  # Clamp to valid range
-                logger.debug(f"Text input shape: {text_input.shape}, type: {type(text_input)}")
+                logger.debug(f"Text input shape: {text_input.shape}, type: {text_input.dtype}")
                 embedded = modality['encoder'][0](text_input)
-                logger.debug(f"Embedded shape: {embedded.shape}, type: {type(embedded)}")
+                logger.debug(f"Embedded shape: {embedded.shape}, type: {embedded.dtype}")
                 lstm_out, _ = modality['encoder'][1](embedded.float())  # Unpack LSTM output
-                logger.debug(f"Raw LSTM output shape: {lstm_out.shape}, type: {type(lstm_out)}")
+                logger.debug(f"Raw LSTM output shape: {lstm_out.shape}, type: {lstm_out.dtype}")
                 lstm_out = lstm_out[:, -1, :]  # Use last time step output
-                logger.debug(f"LSTM output shape: {lstm_out.shape}, type: {type(lstm_out)}")
+                logger.debug(f"LSTM output shape: {lstm_out.shape}, type: {lstm_out.dtype}")
                 lstm_out = lstm_out.contiguous().view(lstm_out.size(0), -1)  # Ensure correct shape
-                logger.debug(f"Reshaped LSTM output shape: {lstm_out.shape}, type: {type(lstm_out)}")
+                logger.debug(f"Reshaped LSTM output shape: {lstm_out.shape}, type: {lstm_out.dtype}")
                 encoded_modalities[name] = modality['encoder'][2](lstm_out)
-                logger.debug(f"Encoded text shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}")
+                logger.debug(f"Encoded text shape: {encoded_modalities[name].shape}, type: {encoded_modalities[name].dtype}")
             elif name == 'time_series':
                 # For time series, ensure 3D input (batch_size, channels, sequence_length)
                 if inputs[name].dim() == 2:
                     inputs[name] = inputs[name].unsqueeze(1)
-                logger.debug(f"Time series input shape: {inputs[name].shape}, type: {type(inputs[name])}")
+                logger.debug(f"Time series input shape: {inputs[name].shape}, type: {inputs[name].dtype}")
                 encoded_modalities[name] = modality['encoder'](inputs[name])
                 logger.debug(f"Encoded time series shape: {encoded_modalities[name].shape}")
             elif name == 'tabular':
                 # For tabular data, ensure 2D input (batch_size, features)
-                logger.debug(f"Tabular input shape: {inputs[name].shape}, type: {type(inputs[name])}")
+                logger.debug(f"Tabular input shape: {inputs[name].shape}, type: {inputs[name].dtype}")
                 encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
                 logger.debug(f"Encoded tabular shape: {encoded_modalities[name].shape}")
             else:
                 # For other modalities, flatten the input
-                logger.debug(f"Other modality input shape: {inputs[name].shape}, type: {type(inputs[name])}")
+                logger.debug(f"Other modality input shape: {inputs[name].shape}, type: {inputs[name].dtype}")
                 encoded_modalities[name] = modality['encoder'](inputs[name].view(inputs[name].size(0), -1))
                 logger.debug(f"Encoded other modality shape: {encoded_modalities[name].shape}")
 
-            logger.debug(f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {type(encoded_modalities[name])}")
+            logger.debug(f"Encoded {name} shape: {encoded_modalities[name].shape}, type: {encoded_modalities[name].dtype}")
 
         # Ensure all encoded modalities have the same batch size and are 2D tensors
         encoded_modalities = {name: tensor.view(max_batch_size, -1) for name, tensor in encoded_modalities.items()}
@@ -237,7 +237,7 @@ class MultiModalLearning(nn.Module):
 
         fused = self.fuse_modalities(encoded_modalities)
 
-        logger.debug(f"Fused tensor shape: {fused.shape}, type: {type(fused)}")
+        logger.debug(f"Fused tensor shape: {fused.shape}, type: {fused.dtype}")
 
         # Ensure fused tensor is 2D and matches the classifier's input size
         if fused.dim() != 2 or fused.size(1) != self.classifier.in_features:
@@ -247,13 +247,13 @@ class MultiModalLearning(nn.Module):
         # Ensure fused tensor is a valid input for the classifier
         fused = fused.float()  # Convert to float if not already
 
-        logger.debug(f"Final fused tensor shape: {fused.shape}, type: {type(fused)}")
+        logger.debug(f"Final fused tensor shape: {fused.shape}, type: {fused.dtype}")
 
         # Ensure input to classifier is a tensor
         if not isinstance(fused, torch.Tensor):
             fused = torch.tensor(fused, dtype=torch.float32)
 
-        logger.debug(f"Classifier input shape: {fused.shape}, type: {type(fused)}")
+        logger.debug(f"Classifier input shape: {fused.shape}, type: {fused.dtype}")
         return self.classifier(fused)
 
     def fit(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, val_data: Dict[str, torch.Tensor] = None, val_labels: torch.Tensor = None, epochs: int = 10, lr: float = 0.001, patience: int = 5, batch_size: int = 32):
