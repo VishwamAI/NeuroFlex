@@ -120,7 +120,7 @@ class BCIProcessor:
             # Ensure the power feature maintains 64 channels and 129 frequency bins
             psd = psd[:64, :129] if psd.shape[0] >= 64 and psd.shape[1] >= 129 else np.pad(psd, ((0, max(0, 64 - psd.shape[0])), (0, max(0, 129 - psd.shape[1]))))
             print(f"PSD shape after adjustment: {psd.shape}")
-            features[f'{band}_power'] = psd  # Remove transpose to maintain shape (64, 129)
+            features[f'{band}_power'] = psd.T  # Transpose to match expected shape (129, 64)
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
