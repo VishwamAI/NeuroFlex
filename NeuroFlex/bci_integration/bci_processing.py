@@ -111,35 +111,28 @@ class BCIProcessor:
     def extract_features(self, filtered_data: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         features = {}
         for band, data in filtered_data.items():
-            print(f"Processing {band} band, data shape: {data.shape}")
-
             # Calculate power spectral density using numpy
             f, psd = signal.welch(data, fs=self.sampling_rate, nperseg=min(256, data.shape[-1]))
-            print(f"PSD shape before adjustment: {psd.shape}")
 
-            # Ensure the power feature maintains 64 channels and 129 frequency bins
-            psd = psd[:64, :129] if psd.shape[0] >= 64 and psd.shape[1] >= 129 else np.pad(psd, ((0, max(0, 64 - psd.shape[0])), (0, max(0, 129 - psd.shape[1]))))
-            print(f"PSD shape after adjustment: {psd.shape}")
-            features[f'{band}_power'] = psd.T  # Transpose to match expected shape (129, 64)
+            # Ensure the power feature maintains 64 channels
+            if psd.shape[0] > 64:
+                psd = psd[:64, :]
+            elif psd.shape[0] < 64:
+                psd = np.pad(psd, ((0, 64 - psd.shape[0]), (0, 0)))
+
+            features[f'{band}_power'] = psd
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
-            print(f"Number of wavelet coefficients: {len(coeffs)}")
 
             # Ensure wavelet features maintain correct dimensions (64 channels, 6 coefficients)
-            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs])
-            print(f"Wavelet features shape before transpose: {wavelet_features.shape}")
-            wavelet_features = wavelet_features.T
-            print(f"Wavelet features shape after transpose: {wavelet_features.shape}")
+            wavelet_features = np.array([np.mean(np.abs(c), axis=-1) for c in coeffs]).T
 
-            if wavelet_features.shape[0] != 64:
-                print(f"Resizing wavelet features from {wavelet_features.shape} to (64, {wavelet_features.shape[1]})")
-                # Resize wavelet_features to have exactly 64 channels
-                resized_features = np.zeros((64, wavelet_features.shape[1]))
-                resized_features[:min(64, wavelet_features.shape[0]), :] = wavelet_features[:min(64, wavelet_features.shape[0]), :]
-                wavelet_features = resized_features
+            if wavelet_features.shape[0] > 64:
+                wavelet_features = wavelet_features[:64, :]
+            elif wavelet_features.shape[0] < 64:
+                wavelet_features = np.pad(wavelet_features, ((0, 64 - wavelet_features.shape[0]), (0, 0)))
 
-            print(f"Final wavelet features shape: {wavelet_features.shape}")
             features[f'{band}_wavelet'] = wavelet_features
 
         return features
