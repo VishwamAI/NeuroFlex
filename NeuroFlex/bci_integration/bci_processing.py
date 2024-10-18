@@ -125,7 +125,7 @@ class BCIProcessor:
             elif psd.shape[1] < 129:
                 psd = np.pad(psd, ((0, 0), (0, 129 - psd.shape[1])))
 
-            features[f'{band}_power'] = psd  # Shape is now (64, 129)
+            features[f'{band}_power'] = psd.T  # Transpose to get shape (129, 64)
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
