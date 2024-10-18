@@ -114,13 +114,18 @@ class BCIProcessor:
             # Calculate power spectral density using numpy
             f, psd = signal.welch(data, fs=self.sampling_rate, nperseg=min(256, data.shape[-1]))
 
-            # Ensure the power feature maintains 64 channels
+            # Ensure the power feature maintains 64 channels and 129 frequency bins
             if psd.shape[0] > 64:
                 psd = psd[:64, :]
             elif psd.shape[0] < 64:
                 psd = np.pad(psd, ((0, 64 - psd.shape[0]), (0, 0)))
 
-            features[f'{band}_power'] = psd
+            if psd.shape[1] > 129:
+                psd = psd[:, :129]
+            elif psd.shape[1] < 129:
+                psd = np.pad(psd, ((0, 0), (0, 129 - psd.shape[1])))
+
+            features[f'{band}_power'] = psd.T  # Transpose to get shape (129, 64)
 
             # Apply wavelet transform
             coeffs = pywt.wavedec(data, 'db4', level=min(5, data.shape[-1] // 2), axis=-1)
