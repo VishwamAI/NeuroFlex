@@ -53,11 +53,11 @@ class QuantumBoltzmannMachine:
                 if entangled_state.ndim == 1 and entangled_state.shape[0] >= 4:
                     # Use the absolute value of the last element of entangled_state as the interaction strength
                     interaction_strength = abs(float(entangled_state[-1]))
-                    energy += interaction_strength * float(visible_state[i]) * float(hidden_state[j])
+                    energy -= interaction_strength * float(visible_state[i]) * float(hidden_state[j])  # Negate the interaction term
                 else:
                     raise ValueError(f"Unexpected shape of entangled_state: {entangled_state.shape}")
         print(f"Energy calculation: visible_state={visible_state}, hidden_state={hidden_state}, energy={energy}")
-        return float(energy)  # Return positive energy as float
+        return float(energy)  # Return non-positive energy as float (energy is already negative or zero)
 
     def sample_hidden(self, visible_state):
         hidden_probs = np.zeros(self.num_hidden)
