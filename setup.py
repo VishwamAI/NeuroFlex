@@ -24,11 +24,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="neuroflex",
-    version="0.1.4",  # Updated version to 0.1.3
+    version="0.1.4",  # Updated version to 0.1.4
     author="kasinadhsarma",
     author_email="kasinadhsarma@gmail.com",
     description="An advanced neural network framework with interpretability, generalization, robustness, and fairness features",
-    long_description=open("README.md").read(),
+    long_description=open("README.md").read() + "\n\n## Publishing Instructions\n\nTo publish the package to PyPI, follow these steps:\n\n1. Ensure you have the latest version of `setuptools` and `twine` installed:\n   ```bash\n   pip install --upgrade setuptools twine\n   ```\n\n2. Create the distribution files for the package:\n   ```bash\n   python setup.py sdist bdist_wheel\n   ```\n\n3. Upload the package to PyPI using `twine`:\n   ```bash\n   twine upload dist/*\n   ```\n\n4. Verify the package is published by checking the [PyPI page](https://pypi.org/project/neuroflex/).\n",
     long_description_content_type="text/markdown",
     url="https://github.com/VishwamAI/neuroflex",
     packages=find_packages(include=["NeuroFlex", "NeuroFlex.*"], exclude=["tests*"]),

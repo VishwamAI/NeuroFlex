@@ -91,3 +91,17 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           python -m twine upload dist/* --skip-existing
+
+  update_workflow:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Update workflow
+        run: |
+          echo "Updating workflow in GitHub"
+          # Add any additional steps needed to update the workflow
