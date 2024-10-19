@@ -154,6 +154,7 @@ class MultiModalLearning(nn.Module):
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Forward pass through the multi-modal learning model."""
         logger.debug(f"Input types: {[(name, type(tensor)) for name, tensor in inputs.items()]}")
+        logger.debug(f"Input shapes: {[(name, tensor.shape) for name, tensor in inputs.items()]}")
         if not inputs:
             raise ValueError("Input dictionary is empty")
 
@@ -246,8 +247,12 @@ class MultiModalLearning(nn.Module):
             fused = fused.float()  # Convert to float if not already
 
             logger.debug(f"Final fused tensor shape: {fused.shape}, type: {fused.dtype}")
+            logger.debug(f"Classifier input shape: {fused.shape}")
 
-            return self.classifier(fused)
+            output = self.classifier(fused)
+            logger.debug(f"Final output shape: {output.shape}")
+
+            return output
         except Exception as e:
             logger.error(f"Error during fusion or classification: {str(e)}")
             raise
