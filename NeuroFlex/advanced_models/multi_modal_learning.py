@@ -411,6 +411,10 @@ class MultiModalLearning(nn.Module):
         correct_predictions = 0
         total_samples = 0
 
+        logger.debug(f"_train_epoch input - data types: {[(k, type(v)) for k, v in data.items()]}")
+        logger.debug(f"_train_epoch input - data shapes: {[(k, v.shape) for k, v in data.items()]}")
+        logger.debug(f"_train_epoch input - labels type: {type(labels)}, shape: {labels.shape}")
+
         if not data or not labels.numel():
             logger.warning("Empty data or labels provided for training epoch.")
             return 0.0, 0.0
@@ -421,6 +425,10 @@ class MultiModalLearning(nn.Module):
             num_batches = (num_samples + batch_size - 1) // batch_size
 
             for i, (batch_data, batch_labels) in enumerate(self._batch_data(data, labels, batch_size)):
+                logger.debug(f"Batch {i+1}/{num_batches} - data types: {[(k, type(v)) for k, v in batch_data.items()]}")
+                logger.debug(f"Batch {i+1}/{num_batches} - data shapes: {[(k, v.shape) for k, v in batch_data.items()]}")
+                logger.debug(f"Batch {i+1}/{num_batches} - labels type: {type(batch_labels)}, shape: {batch_labels.shape}")
+
                 if not batch_data or not batch_labels.numel():
                     logger.warning(f"Empty batch encountered at iteration {i+1}/{num_batches}. Skipping.")
                     continue
@@ -428,7 +436,9 @@ class MultiModalLearning(nn.Module):
                 print(f"\rTraining: {i+1}/{num_batches}", end="", flush=True)
                 optimizer.zero_grad()
                 outputs = self.forward(batch_data)
+                logger.debug(f"Batch {i+1}/{num_batches} - outputs type: {type(outputs)}, shape: {outputs.shape}")
                 loss = criterion(outputs, batch_labels)
+                logger.debug(f"Batch {i+1}/{num_batches} - loss type: {type(loss)}, value: {loss.item()}")
                 loss.backward()
 
                 # Gradient clipping
@@ -461,6 +471,7 @@ class MultiModalLearning(nn.Module):
 
         except Exception as e:
             logger.error(f"Error in _train_epoch: {str(e)}")
+            logger.exception("Traceback:")
             return 0.0, 0.0
 
     def _validate(self, data: Dict[str, torch.Tensor], labels: torch.Tensor, criterion: nn.Module, batch_size: int = 32) -> Tuple[float, float]:
