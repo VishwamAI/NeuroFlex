@@ -39,44 +39,50 @@ def test_ast_model(ast_model):
 
 def test_gwt_model(gwt_model):
     key = random.PRNGKey(0)
-    input_stimulus = random.normal(key, (1, 100))
+    input_stimulus = random.normal(key, (1, gwt_model.workspace_size))
 
-    variables = gwt_model.init({"params": key}, input_stimulus)
-    # Ensure the correct structure is used for the apply function
-    assert isinstance(variables['params'], FrozenDict), "variables['params'] should be a FrozenDict"
+    variables = gwt_model.init(key, input_stimulus)
+    assert 'params' in variables, "variables should contain 'params'"
+    assert 'weights' in variables['params'], "variables['params'] should contain 'weights'"
+    assert variables['params']['weights'].shape == (gwt_model.num_processes,), f"weights shape should be ({gwt_model.num_processes},)"
 
-    state = train_state.TrainState.create(
-        apply_fn=gwt_model.apply,
-        params=variables['params'],
-        tx=optax.adam(learning_rate=1e-3)
-    )
-
-    # Ensure the model is bound before accessing variables
     bound_gwt_model = gwt_model.bind(variables)
 
-    # Pass the PRNG key correctly during model application
-    broadcasted_workspace, integrated_workspace = bound_gwt_model.apply(variables, input_stimulus, rngs={"params": key})
+    output = bound_gwt_model.apply(variables, input_stimulus)
 
-    assert len(broadcasted_workspace) == gwt_model.num_processes
-    assert all(bw.shape == (1, gwt_model.workspace_size) for bw in broadcasted_workspace)
-    assert integrated_workspace.shape == (1, gwt_model.workspace_size)
-    assert all(jnp.isfinite(bw).all() for bw in broadcasted_workspace)
-    assert jnp.isfinite(integrated_workspace).all()
+    assert 'broadcasted_workspace' in output, "Output should contain 'broadcasted_workspace'"
+    assert 'integrated_workspace' in output, "Output should contain 'integrated_workspace'"
+    assert 'gwt_output' in output, "Output should contain 'gwt_output'"
 
-    # Verify weights initialization
-    assert 'weights' in variables['params']
-    assert variables['params']['weights'].shape == (gwt_model.num_processes,)
+    broadcasted_workspace = output['broadcasted_workspace']
+    integrated_workspace = output['integrated_workspace']
+    gwt_output = output['gwt_output']
 
-    # Investigate the GWT model's weight update issue
+    assert len(broadcasted_workspace) == gwt_model.num_processes, f"Expected {gwt_model.num_processes} broadcasted workspaces"
+    assert all(bw.shape == (1, gwt_model.workspace_size) for bw in broadcasted_workspace), f"Each broadcasted workspace should have shape (1, {gwt_model.workspace_size})"
+    assert integrated_workspace.shape == (1, gwt_model.workspace_size), f"Integrated workspace should have shape (1, {gwt_model.workspace_size})"
+    assert gwt_output.shape == (1,), f"GWT output should have shape (1,)"
+    assert all(jnp.isfinite(bw).all() for bw in broadcasted_workspace), "Broadcasted workspaces contain non-finite values"
+    assert jnp.isfinite(integrated_workspace).all(), "Integrated workspace contains non-finite values"
+    assert jnp.isfinite(gwt_output).all(), "GWT output contains non-finite values"
+
+    # Test weight update
     new_weights = jnp.array([0.1, 0.2, 0.3, 0.2, 0.2])
-    print(f"Initial weights: {variables['params']['weights']}")
-    updated_variables = bound_gwt_model.apply({'params': variables['params']}, new_weights, method=bound_gwt_model.update_weights, rngs={'params': key})
+    assert new_weights.shape == (gwt_model.num_processes,), f"New weights shape should be ({gwt_model.num_processes},)"
+
+    initial_weights = variables['params']['weights']
+    print(f"Initial weights: {initial_weights}")
+
+    updated_variables = bound_gwt_model.apply(variables, new_weights, method=bound_gwt_model.update_weights)
     updated_weights = updated_variables['params']['weights']
     expected_weights = new_weights / jnp.sum(new_weights)
+
     print(f"Updated weights: {updated_weights}")
     print(f"Expected weights: {expected_weights}")
     print(f"Difference: {jnp.abs(updated_weights - expected_weights)}")
-    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5)
+
+    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5), "Weight update did not produce expected results"
+    assert jnp.isclose(jnp.sum(updated_weights), 1.0, atol=1e-5), "Updated weights should sum to 1"
 
 def test_ast_model(ast_model):
     key = random.PRNGKey(0)
@@ -139,10 +145,11 @@ def test_gwt_model_update_weights(gwt_model):
     new_weights = jnp.array([0.1, 0.2, 0.3, 0.2, 0.2])
     assert new_weights.shape == (gwt_model.num_processes,), "New weights shape mismatch"
 
-    updated_variables = bound_gwt_model.apply({'params': variables['params']}, new_weights, method=bound_gwt_model.update_weights, rngs={'params': key})
+    updated_variables = bound_gwt_model.apply(variables, new_weights, method=bound_gwt_model.update_weights)
     updated_weights = updated_variables['params']['weights']
     expected_weights = new_weights / jnp.sum(new_weights)
     assert jnp.allclose(updated_weights, expected_weights, atol=1e-5), f"Expected {expected_weights}, but got {updated_weights}"
+    assert jnp.isclose(jnp.sum(updated_weights), 1.0, atol=1e-5), "Updated weights should sum to 1"
 
 def test_hot_model_higher_order_thought(hot_model):
     key = random.PRNGKey(0)

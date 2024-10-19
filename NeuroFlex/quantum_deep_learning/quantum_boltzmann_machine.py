@@ -56,7 +56,8 @@ class QuantumBoltzmannMachine:
                     energy += interaction_strength * float(visible_state[i]) * float(hidden_state[j])
                 else:
                     raise ValueError(f"Unexpected shape of entangled_state: {entangled_state.shape}")
-        return float(-energy)  # Return negative energy as float to align with minimization objective
+        print(f"Energy calculation: visible_state={visible_state}, hidden_state={hidden_state}, energy={energy}")
+        return float(energy)  # Return positive energy as float
 
     def sample_hidden(self, visible_state):
         hidden_probs = np.zeros(self.num_hidden)

@@ -20,9 +20,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+print("Attempting to import jax...")
 import jax
+print(f"JAX version: {jax.__version__}")
+print(f"JAX location: {jax.__file__}")
+print("Attempting to import jax.numpy...")
 import jax.numpy as jnp
-from jax.config import config
+print("Attempting to import jax.config...")
+from jax import config
+print("Successfully imported jax.config")
 config.update("jax_enable_x64", True)
 import flax.linen as nn
 from typing import List, Tuple, Dict, Any
