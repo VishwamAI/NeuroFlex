@@ -1,32 +1,31 @@
 import pytest
 import jax.numpy as jnp
 from jax import random
-from flax import linen as nn
-from flax.training import train_state
-from flax.training.train_state import TrainState
-import optax
-from flax.core.frozen_dict import FrozenDict
-from flax.core import freeze, unfreeze
 from NeuroFlex.cognitive_architectures.attention_schema_theory import ASTModel
 from NeuroFlex.cognitive_architectures.global_workspace_theory import GWTModel
 from NeuroFlex.cognitive_architectures.higher_order_thoughts import HOTModel
 from NeuroFlex.cognitive_architectures.integrated_information_theory import IITModel
 
+
 @pytest.fixture
 def ast_model():
     return ASTModel(attention_dim=10, hidden_dim=20)
+
 
 @pytest.fixture
 def gwt_model():
     return GWTModel(num_processes=5, workspace_size=100)
 
+
 @pytest.fixture
 def hot_model():
     return HOTModel(num_layers=3, hidden_dim=10)
 
+
 @pytest.fixture
 def iit_model():
     return IITModel(num_components=5)
+
 
 def test_ast_model(ast_model):
     key = random.PRNGKey(0)
@@ -37,53 +36,76 @@ def test_ast_model(ast_model):
     assert output.shape == (1, 10)  # Updated to match the input shape
     assert jnp.isfinite(output).all()
 
+
 def test_gwt_model(gwt_model):
     key = random.PRNGKey(0)
-    input_stimulus = random.normal(key, (1, 100))
+    input_stimulus = random.normal(key, (1, gwt_model.workspace_size))
 
-    variables = gwt_model.init({"params": key}, input_stimulus)
-    # Ensure the correct structure is used for the apply function
-    assert isinstance(variables['params'], FrozenDict), "variables['params'] should be a FrozenDict"
-
-    state = train_state.TrainState.create(
-        apply_fn=gwt_model.apply,
-        params=variables['params'],
-        tx=optax.adam(learning_rate=1e-3)
+    variables = gwt_model.init(key, input_stimulus)
+    assert 'params' in variables, "variables should contain 'params'"
+    assert 'weights' in variables['params'], "variables['params'] should contain 'weights'"
+    assert variables['params']['weights'].shape == (gwt_model.num_processes,), (
+        f"weights shape should be ({gwt_model.num_processes},)"
     )
 
-    # Ensure the model is bound before accessing variables
     bound_gwt_model = gwt_model.bind(variables)
 
-    # Pass the PRNG key correctly during model application
-    broadcasted_workspace, integrated_workspace = bound_gwt_model.apply(variables, input_stimulus, rngs={"params": key})
+    output = bound_gwt_model.apply(variables, input_stimulus)
 
-    assert len(broadcasted_workspace) == gwt_model.num_processes
-    assert all(bw.shape == (1, gwt_model.workspace_size) for bw in broadcasted_workspace)
-    assert integrated_workspace.shape == (1, gwt_model.workspace_size)
-    assert all(jnp.isfinite(bw).all() for bw in broadcasted_workspace)
-    assert jnp.isfinite(integrated_workspace).all()
+    assert 'broadcasted_workspace' in output, "Output should contain 'broadcasted_workspace'"
+    assert 'integrated_workspace' in output, "Output should contain 'integrated_workspace'"
+    assert 'gwt_output' in output, "Output should contain 'gwt_output'"
 
-    # Verify weights initialization
-    assert 'weights' in variables['params']
-    assert variables['params']['weights'].shape == (gwt_model.num_processes,)
+    broadcasted_workspace = output['broadcasted_workspace']
+    integrated_workspace = output['integrated_workspace']
+    gwt_output = output['gwt_output']
 
-    # Investigate the GWT model's weight update issue
+    assert len(broadcasted_workspace) == gwt_model.num_processes, (
+        f"Expected {gwt_model.num_processes} broadcasted workspaces"
+    )
+    assert all(
+        bw.shape == (1, gwt_model.workspace_size) for bw in broadcasted_workspace
+    ), (
+        f"Each broadcasted workspace should have shape (1, {gwt_model.workspace_size})"
+    )
+    assert integrated_workspace.shape == (1, gwt_model.workspace_size), (
+        f"Integrated workspace should have shape (1, {gwt_model.workspace_size})"
+    )
+    assert gwt_output.shape == (1,), "GWT output should have shape (1,)"
+    assert all(jnp.isfinite(bw).all() for bw in broadcasted_workspace), (
+        "Broadcasted workspaces contain non-finite values"
+    )
+    assert jnp.isfinite(integrated_workspace).all(), (
+        "Integrated workspace contains non-finite values"
+    )
+    assert jnp.isfinite(gwt_output).all(), "GWT output contains non-finite values"
+
+    # Test weight update
     new_weights = jnp.array([0.1, 0.2, 0.3, 0.2, 0.2])
-    print(f"Initial weights: {variables['params']['weights']}")
-    updated_variables = bound_gwt_model.apply({'params': variables['params']}, new_weights, method=bound_gwt_model.update_weights, rngs={'params': key})
+    assert new_weights.shape == (gwt_model.num_processes,), (
+        f"New weights shape should be ({gwt_model.num_processes},)"
+    )
+
+    initial_weights = variables['params']['weights']
+    print(f"Initial weights: {initial_weights[:3]}...")  # Show only first 3 elements
+
+    updated_variables = bound_gwt_model.apply(
+        variables, new_weights, method=bound_gwt_model.update_weights
+    )
     updated_weights = updated_variables['params']['weights']
     expected_weights = new_weights / jnp.sum(new_weights)
+
     print(f"Updated weights: {updated_weights}")
     print(f"Expected weights: {expected_weights}")
     print(f"Difference: {jnp.abs(updated_weights - expected_weights)}")
-    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5)
 
-def test_ast_model(ast_model):
-    key = random.PRNGKey(0)
-    x = random.normal(key, (1, 10))  # Input shape (1, 10)
-    variables = ast_model.init(key, x)
-    output = ast_model.apply(variables, x)
-    assert output.shape == (1, 10)  # Ensure output shape matches input shape
+    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5), (
+        "Weight update did not produce expected results"
+    )
+    assert jnp.isclose(jnp.sum(updated_weights), 1.0, atol=1e-5), (
+        "Updated weights should sum to 1"
+    )
+
 
 def test_hot_model(hot_model):
     key = random.PRNGKey(0)
@@ -91,17 +113,25 @@ def test_hot_model(hot_model):
     params = hot_model.init(key, x)
 
     output = hot_model.apply(params, x)
-    assert output.shape == (1, hot_model.output_dim), f"Expected output shape (1, {hot_model.output_dim}), but got {output.shape}"
+    assert output.shape == (1, hot_model.output_dim), (
+        f"Expected output shape (1, {hot_model.output_dim}), but got {output.shape}"
+    )
     assert jnp.isfinite(output).all(), "Output contains non-finite values"
 
     # Verify the model's dimensions
-    assert hot_model.input_dim == hot_model.output_dim, f"Expected input_dim to match output_dim, but got input_dim={hot_model.input_dim} and output_dim={hot_model.output_dim}"
+    assert hot_model.input_dim == hot_model.output_dim, (
+        f"Expected input_dim to match output_dim, but got input_dim={hot_model.input_dim} "
+        f"and output_dim={hot_model.output_dim}"
+    )
     assert hot_model.hidden_dim == 10, f"Expected hidden_dim 10, but got {hot_model.hidden_dim}"
-    print(f"HOT model dimensions: input_dim={hot_model.input_dim}, hidden_dim={hot_model.hidden_dim}, output_dim={hot_model.output_dim}")
+    print(
+        f"HOT model dimensions: input_dim={hot_model.input_dim}, "
+        f"hidden_dim={hot_model.hidden_dim}, output_dim={hot_model.output_dim}"
+    )
+
 
 def test_iit_model(iit_model):
     key = random.PRNGKey(0)
-    state = random.normal(key, (5,))
 
     # Initialize the model
     params = iit_model.init(key, None)
@@ -112,6 +142,7 @@ def test_iit_model(iit_model):
     assert jnp.isscalar(phi), f"Expected phi to be a scalar, but got {phi}"
     assert jnp.isfinite(phi)
     assert phi >= 0
+
 
 def test_ast_model_training(ast_model):
     key = random.PRNGKey(0)
@@ -130,6 +161,7 @@ def test_ast_model_training(ast_model):
     assert jnp.isfinite(loss)
     assert loss >= 0
 
+
 def test_gwt_model_update_weights(gwt_model):
     key = random.PRNGKey(0)
     input_stimulus = random.normal(key, (1, gwt_model.workspace_size))
@@ -139,10 +171,18 @@ def test_gwt_model_update_weights(gwt_model):
     new_weights = jnp.array([0.1, 0.2, 0.3, 0.2, 0.2])
     assert new_weights.shape == (gwt_model.num_processes,), "New weights shape mismatch"
 
-    updated_variables = bound_gwt_model.apply({'params': variables['params']}, new_weights, method=bound_gwt_model.update_weights, rngs={'params': key})
+    updated_variables = bound_gwt_model.apply(
+        variables, new_weights, method=bound_gwt_model.update_weights
+    )
     updated_weights = updated_variables['params']['weights']
     expected_weights = new_weights / jnp.sum(new_weights)
-    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5), f"Expected {expected_weights}, but got {updated_weights}"
+    assert jnp.allclose(updated_weights, expected_weights, atol=1e-5), (
+        f"Expected {expected_weights}, but got {updated_weights}"
+    )
+    assert jnp.isclose(jnp.sum(updated_weights), 1.0, atol=1e-5), (
+        "Updated weights should sum to 1"
+    )
+
 
 def test_hot_model_higher_order_thought(hot_model):
     key = random.PRNGKey(0)
@@ -150,20 +190,23 @@ def test_hot_model_higher_order_thought(hot_model):
     params = hot_model.init(key, x)
 
     first_order_thought = hot_model.apply(params, x)
-    higher_order_thought = hot_model.generate_higher_order_thought(params, first_order_thought)
+    higher_order_thought = hot_model.generate_higher_order_thought(
+        params, first_order_thought
+    )
 
     assert higher_order_thought.shape == (1, hot_model.output_dim)
     assert jnp.isfinite(higher_order_thought).all()
     assert first_order_thought.shape == (1, hot_model.output_dim)
 
+
 def test_iit_model_cause_effect_structure(iit_model):
     key = random.PRNGKey(0)
-    state = random.normal(key, (5,))
 
     # Initialize the model
-    params = iit_model.init(key, state)
+    params = iit_model.init(key, None)
     initialized_iit_model = iit_model.bind(params)
 
+    state = random.normal(key, (iit_model.num_components,))
     ces = initialized_iit_model.compute_cause_effect_structure(state)
     assert isinstance(ces, dict)
     assert len(ces) > 0

@@ -1,4 +1,4 @@
 [flake8]
-ignore = E8, E402, W503  # Add other codes you want to ignore
-max-line-length = 88     # Adjust line length as needed
+ignore = E801,E802,E803,E402,W503
+max-line-length = 88
 exclude = .git,__pycache__,dist,build  # Exclude directories as needed
