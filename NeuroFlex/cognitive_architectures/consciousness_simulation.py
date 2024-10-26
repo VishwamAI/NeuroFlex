@@ -122,7 +122,7 @@ class ConsciousnessSimulation(nn.Module):
         logging.debug(f"DetailedThoughtGenerator initialized with output_dim: {self.output_dim}")
         self.environmental_interaction = EnvironmentalInteraction()
         logging.debug("EnvironmentalInteraction initialized")
-        self.long_term_memory = LongTermMemory(memory_size=self.long_term_memory_size)
+        self.long_term_memory = LongTermMemory(memory_size=self.long_term_memory_size, input_size=self.working_memory_size, features=self.long_term_memory_size)
         logging.debug(f"LongTermMemory initialized with memory_size: {self.long_term_memory_size}")
         self.lr_scheduler = AdaptiveLearningRateScheduler()
         logging.debug("AdaptiveLearningRateScheduler initialized")
@@ -621,6 +621,8 @@ class EnvironmentalInteraction(nn.Module):
 
 class LongTermMemory(nn.Module):
     memory_size: int
+    input_size: int
+    features: int  # Required parameter for GRU cell initialization
 
     @nn.compact
     def __call__(self, x, current_memory):
@@ -649,7 +651,7 @@ class ImprovedConsciousnessSimulation(ConsciousnessSimulation):
         self.improved_metacognition = AdvancedMetacognition()
         self.improved_thought_generator = DetailedThoughtGenerator(output_dim=self.output_dim)
         self.improved_environmental_interaction = EnvironmentalInteraction()
-        self.improved_long_term_memory = LongTermMemory(memory_size=self.long_term_memory_size)
+        self.improved_long_term_memory = LongTermMemory(memory_size=self.long_term_memory_size, input_size=self.working_memory_size, features=self.long_term_memory_size)
         self.improved_lr_scheduler = AdaptiveLearningRateScheduler(initial_lr=self.learning_rate)
         self.improved_self_healing = AdvancedSelfHealing()
         self.param('learning_rate', lambda key: jnp.array(self.learning_rate, dtype=jnp.float32))

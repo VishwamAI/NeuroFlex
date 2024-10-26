@@ -1,17 +1,17 @@
 # MIT License
-# 
+#
 # Copyright (c) 2024 VishwamAI
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -33,19 +33,36 @@ Recent updates:
 
 __version__ = "0.1.3"  # Incremented version
 
-# Importing core components
-from .core_neural_networks import *
-from .advanced_models import *
-from .generative_models import *
-from .Transformers import *
-from .quantum_neural_networks import *
+# Lazy loading functions for core components
+def load_core_neural_networks():
+    from .core_neural_networks import NeuroFlex, SelfCuringAlgorithm
+    return NeuroFlex, SelfCuringAlgorithm
 
-# Importing specialized modules
-from .bci_integration import *
-from .cognitive_architectures import *
-from .scientific_domains import *
-from .edge_ai import *
-from .Prompt_Agent import *
+def load_cognitive_architectures():
+    from .cognitive_architectures.long_term_memory import LongTermMemory
+    return {'LongTermMemory': LongTermMemory}
+
+# Essential imports for testing
+try:
+    from .cognitive_architectures.long_term_memory import LongTermMemory
+except ImportError:
+    LongTermMemory = None
+
+# Deferred imports - only load when explicitly requested
+_core_components = None
+_cognitive_components = None
+
+def get_core_components():
+    global _core_components
+    if _core_components is None:
+        _core_components = load_core_neural_networks()
+    return _core_components
+
+def get_cognitive_components():
+    global _cognitive_components
+    if _cognitive_components is None:
+        _cognitive_components = load_cognitive_architectures()
+    return _cognitive_components
 
 # Importing utility and ethics modules
 from .utils import *

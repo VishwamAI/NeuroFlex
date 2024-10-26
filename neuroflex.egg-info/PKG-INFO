@@ -1,0 +1,287 @@
+Metadata-Version: 2.1
+Name: neuroflex
+Version: 0.1.4
+Summary: An advanced neural network framework with interpretability, generalization, robustness, and fairness features
+Home-page: https://github.com/VishwamAI/neuroflex
+Author: kasinadhsarma
+Author-email: kasinadhsarma@gmail.com
+License: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+License-File: LICENSE
+
+![adjusted_combined_logo](https://github.com/user-attachments/assets/4a664a66-8da3-43ec-ba3e-db42db6946a4)
+
+# NeuroFlex: Advanced Neural Network Framework
+
+[![NeuroFlex CI/CD](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml/badge.svg)](https://github.com/VishwamAI/NeuroFlex/actions/workflows/ci_cd.yml)
+[![PyPI version](https://badge.fury.io/py/neuroflex.svg)](https://badge.fury.io/py/neuroflex)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/VishwamAI/NeuroFlex/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/release/VishwamAI/NeuroFlex.svg)](https://GitHub.com/VishwamAI/NeuroFlex/releases/)
+[![GitHub stars](https://img.shields.io/github/stars/VishwamAI/NeuroFlex.svg)](https://GitHub.com/VishwamAI/NeuroFlex/stargazers/)
+[![Dependencies](https://img.shields.io/librariesio/release/pypi/neuroflex)](https://libraries.io/pypi/neuroflex)
+[![GitHub issues](https://img.shields.io/github/issues/VishwamAI/NeuroFlex.svg)](https://GitHub.com/VishwamAI/NeuroFlex/issues/)
+
+
+NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and TensorFlow, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project integrates state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
+
+![NeuroFlex Architecture](neuroflex-architecture-svg.svg)
+
+## Key Features
+
+- **Advanced Neural Architectures**: Support for CNN, RNN, LSTM, GAN, and Spiking Neural Networks.
+- **Multi-Backend Integration**: Seamless integration with JAX, Flax, and TensorFlow.
+- **2D and 3D Convolutions**: Efficient implementation of both 2D and 3D convolutional layers.
+- **Quantum Computing**: Quantum Neural Network module for next-generation AI.
+- **Reinforcement Learning**: Advanced capabilities with enhanced self-curing algorithms.
+- **Brain-Computer Interface (BCI)**: Cutting-edge integration for neurotechnology applications.
+- **Ethical AI**: Fairness constraints and bias mitigation techniques.
+- **Robustness**: Improved adversarial training, interpretability tools (SHAP), and adaptive learning rate adjustment.
+- **Bioinformatics**: AlphaFold integration for protein structure prediction and drug discovery.
+- **Generative AI**: Creative problem-solving and content generation.
+- **Natural Language Processing**: Sentence piece integration and advanced NLP tasks.
+- **Neuromorphic Computing**: Energy-efficient spiking neural networks.
+- **Self-Healing**: Advanced diagnostic and healing processes for improved model performance and stability.
+- **Consciousness Simulation**: Integration of **Integrated Information Theory (IIT)**, **Global Workspace Theory (GWT)**, **Attention Schema Theory (AST)**, and **Higher-Order Thoughts (HOT)** for advanced consciousness modeling.
+
+### Cognitive Models
+
+- **Global Workspace Theory (GWT)**: Proposes that consciousness arises from a global workspace that integrates and broadcasts information from various specialized cognitive processes. Formula: \( G(x) = \sum_{i=1}^{n} w_i f(x_i) \) where \( x \) represents the input stimulus, \( f(x_i) \) denotes cognitive processes, and \( w_i \) are weights representing each module's contribution.
+- **Integrated Information Theory (IIT)**: Measures consciousness in terms of integrated information (\( \Phi \)) present in a system. Formula: \( \Phi = I(S) - \sum_{i=1}^{n} I(S_i) \) where \( S \) denotes the complete system, \( S_i \) are individual elements, \( I(S) \) is the total system information, and \( I(S_i) \) represents isolated component information.
+- **Attention Schema Theory (AST)**: Suggests that consciousness emerges as the brain's internal model of its attention mechanisms. Formula: \( P(A) = \frac{\sum_{i=1}^{n} w_i f(A_i)}{\sum_{j=1}^{m} w_j} \) where \( A_i \) are features, \( w_i \) are weights, and \( f(A_i) \) represents the attention.
+- **Higher-Order Thoughts (HOT)**: Proposes that consciousness arises when a system has thoughts about its own thoughts. Formula: \( C(t) = f(T(t)) \) where \( C(t) \) denotes the conscious state, and \( T(t) \) represents internal thought processes.
+
+## Latest Updates (v0.1.3)
+
+## Installation
+
+To install NeuroFlex, please follow these steps:
+
+1. Ensure you have Python 3.9 or later installed.
+2. It's recommended to use a virtual environment:
+   ```bash
+   python -m venv neuroflex-env
+   source neuroflex-env/bin/activate  # On Windows use `neuroflex-env\Scripts\activate`
+   ```
+3. Install NeuroFlex using pip:
+   ```bash
+   pip install neuroflex
+   ```
+4. If you encounter any issues, ensure that your pip is up to date:
+   ```bash
+   pip install --upgrade pip
+   ```
+
+## Quick Start Guide
+
+1. **Import NeuroFlex**
+
+```python
+from NeuroFlex.core_neural_networks.advanced_nn import NeuroFlexNN, train_model, create_neuroflex_nn
+from NeuroFlex.bci_integration import BCIIntegration
+```
+
+2. **Define Your Model**
+
+```python
+model = create_neuroflex_nn(
+    features=[128, 64, 32, 10],  # Updated feature sizes for better performance
+    input_shape=(1, 28, 28, 1),
+    output_shape=(1, 10),
+    use_cnn=True,
+    conv_dim=2,
+    backend='tensorflow'  # or 'jax' for JAX/Flax backend
+)
+```
+
+3. **Integrate BCI Components**
+
+```python
+bci_integration = BCIIntegration(model)
+bci_integration.setup_bci()
+```
+
+4. **Train Your Model**
+
+```python
+trained_state, trained_model = train_model(
+    model, train_data, val_data,
+    num_epochs=20,  # Increased epochs for improved training
+    batch_size=32,
+    learning_rate=1e-3
+)
+```
+
+5. **Make Predictions**
+
+```python
+predictions = trained_model(test_data)
+```
+
+6. **Evaluate Model Performance**
+
+```python
+accuracy = evaluate_model(trained_model, test_data, test_labels)
+print(f"Model Accuracy: {accuracy:.2f}%")
+```
+
+## Advanced Usage
+
+### TensorFlow Convolutions
+
+```python
+from neuroflex import TensorFlowConvolutions
+
+tf_conv = TensorFlowConvolutions(
+    features=(32, 64, 128),
+    input_shape=(1, 28, 28, 1),
+    conv_dim=2  # Use 3 for 3D convolutions
+)
+model = tf_conv.create_model()
+```
+
+### JAX/Flax and TensorFlow Compatibility
+
+```python
+from neuroflex.utils import convert_array
+
+jax_array = jax.random.uniform(jax.random.PRNGKey(0), shape=(1, 28, 28, 1))
+tf_tensor = convert_array(jax_array, 'tensorflow')
+```
+
+### Adversarial Training
+
+```python
+from neuroflex import adversarial_training
+
+perturbed_data = adversarial_training(model, params, input_data, epsilon=0.1, step_size=0.01)
+```
+
+## Testing
+
+We have developed comprehensive pytest tests for all components, including the TensorFlow integration. To run the tests:
+
+```bash
+pytest tests/
+```
+
+Key test files:
+- `test_neuroflex_nn.py`: Tests for the core NeuroFlexNN functionality.
+- `test_tensorflow_convolutions.py`: Tests for TensorFlow convolution implementations.
+
+## Environment Setup
+
+NeuroFlex supports multiple operating systems:
+- Ubuntu
+- Windows
+- macOS
+
+To set up your environment:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/neuroflex/neuroflex.git
+   ```
+2. Create a virtual environment:
+   ```bash
+   python -m venv neuroflex-env
+   ```
+3. Activate the environment:
+   - Ubuntu/macOS: `source neuroflex-env/bin/activate`
+   - Windows: `neuroflex-env\Scripts\activate`
+4. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Documentation and Project Structure
+
+The NeuroFlex project is organized into several key directories and files, each serving a specific purpose:
+
+- **NeuroFlex.py**: Integrates various AI and neural network components, providing a unified interface for core neural networks, quantum neural networks, ethical frameworks, explainable AI, BCI integration, consciousness simulation, protein structure prediction, and more.
+- **Prompt_Agent**: Contains agentic behavior models and related functionalities.
+- **Transformers**: Includes advanced transformer models for text processing and classification.
+- **Advanced Models**: Contains advanced math solving, time series analysis, and multi-modal learning models.
+- **AI Ethics**: Implements ethical frameworks and guidelines for AI, including explainable AI and self-curing algorithms.
+- **BCI Integration**: Facilitates integration with brain-computer interfaces, providing tools for BCI data processing and neuroscience model integration.
+- **Cognitive Architectures**: Implements advanced cognitive architectures with self-healing mechanisms and adaptive algorithms.
+- **Config**: Contains configuration files and constants for the project.
+- **Core Neural Networks**: Provides core neural network models and functionalities.
+- **Edge AI**: Focuses on edge AI optimization and deployment.
+- **Generative Models**: Includes models for generative AI and creative problem-solving.
+- **Main.py**: Demonstrates various components of the NeuroFlex framework.
+- **Model Monitoring**: Contains tools for monitoring and analyzing model performance and health.
+- **NeuroFlex Integration**: Integrates various components of the NeuroFlex system.
+- **Threat Detection**: Provides methods for detecting and analyzing threats using anomaly detection, deep learning, and pattern recognition.
+- **Utils**: Offers utility functions for data handling, preprocessing, and analysis.
+
+For detailed documentation, including API references and tutorials, visit our [official documentation](https://neuroflex.readthedocs.io).
+
+## Contributing
+
+We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for more information on how to get started.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use NeuroFlex in your research, please cite:
+
+```bibtex
+@software{neuroflex2024,
+  author = {kasinadhsarma},
+  title = {NeuroFlex: Advanced Neural Network Framework},
+  year = {2024},
+  url = {https://github.com/VishwamAI/NeuroFlex}
+}
+```
+
+## Contact
+
+For questions, feedback, or support, please open an issue on our [GitHub repository](https://github.com/VishwamAI/NeuroFlex/issues) or contact us at [gmail](mailto:kasinadhsarma@gmail.com).
+
+---
+
+### **Changes**:
+- Added **Consciousness Simulation** section under Key Features and Latest Updates to reflect the integration of **IIT** and **GWT** theories.
+- Updated the version to **v0.1.3**.
+- General improvements and formatting to ensure clarity and consistency with the latest features.
+
+
+## Publishing Instructions
+
+To publish the package to PyPI, follow these steps:
+
+1. Ensure you have the latest version of `setuptools` and `twine` installed:
+   ```bash
+   pip install --upgrade setuptools twine
+   ```
+
+2. Create the distribution files for the package:
+   ```bash
+   python setup.py sdist bdist_wheel
+   ```
+
+3. Upload the package to PyPI using `twine`:
+   ```bash
+   twine upload dist/*
+   ```
+
+4. Verify the package is published by checking the [PyPI page](https://pypi.org/project/neuroflex/).
+
+
