@@ -35,6 +35,9 @@ import tempfile
 from Bio import Seq, SeqIO
 from unittest.mock import MagicMock
 
+# Configure logging at module level
+logger = logging.getLogger(__name__)
+
 # Mock dependencies
 confidence = MagicMock()
 features = MagicMock()
