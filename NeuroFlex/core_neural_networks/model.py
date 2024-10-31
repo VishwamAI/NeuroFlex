@@ -397,9 +397,10 @@ class NeuroFlex:
 
     def _setup_alphafold(self):
         if self.use_alphafold:
-            from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
-            self.alphafold = AlphaFoldIntegration()
-            self.logger.info("AlphaFold integration set up")
+            # Temporarily commented out AlphaFold integration
+            # from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
+            # self.alphafold = AlphaFoldIntegration()
+            self.logger.info("AlphaFold integration temporarily disabled")
 
     def _setup_math_solver(self):
         from NeuroFlex.scientific_domains.math_solvers import MathSolver

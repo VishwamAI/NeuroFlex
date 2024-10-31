@@ -1,17 +1,17 @@
 # MIT License
-# 
+#
 # Copyright (c) 2024 VishwamAI
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28,7 +28,7 @@ from .quantum_neural_networks import QuantumNeuralNetwork
 from .ai_ethics import EthicalFramework, ExplainableAI
 from .bci_integration import BCIProcessor
 from .cognitive_architectures import ConsciousnessSimulation
-from .scientific_domains import AlphaFoldIntegration, MathSolver
+from .scientific_domains import MathSolver  # AlphaFoldIntegration temporarily removed
 from .edge_ai import EdgeAIOptimization
 from .utils import Config, setup_logging
 from .Transformers.unified_transformer import UnifiedTransformer
@@ -126,7 +126,7 @@ class NeuroFlex:
 
     def _setup_alphafold(self):
         if self.config['USE_ALPHAFOLD']:
-            self.alphafold = AlphaFoldIntegration()
+            # self.alphafold = AlphaFoldIntegration()  # Temporarily commented out
 
     def _setup_math_solver(self):
         self.math_solver = MathSolver()

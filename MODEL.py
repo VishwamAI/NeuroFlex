@@ -253,7 +253,7 @@ def create_neuroflex_model():
         use_gan=True,
         fairness_constraint=0.1,
         use_quantum=True,
-        use_alphafold=True,
+        use_alphafold=False,  # Temporarily disabled since AlphaFold integration is commented out
         backend='jax',
         jax_model=JAXModel,
         tensorflow_model=TensorFlowModel,
@@ -262,8 +262,8 @@ def create_neuroflex_model():
         bioinformatics_integration=BioinformaticsIntegration(),
         scikit_bio_integration=ScikitBioIntegration(),
         ete_integration=ETEIntegration(),
-        alphafold_integration=AlphaFoldIntegration(),
-        alphafold_params={'max_recycling': 3},
+        # alphafold_integration=AlphaFoldIntegration(),  # Temporarily commented out
+        # alphafold_params={'max_recycling': 3},  # Temporarily commented out
         use_unified_transformer=True,
         unified_transformer_params={
             'vocab_size': 30000,
