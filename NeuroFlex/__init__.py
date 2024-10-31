@@ -33,6 +33,9 @@ Recent updates:
 
 __version__ = "0.1.3"  # Incremented version
 
+# Direct import of core components
+from .core_neural_networks import NeuroFlex, SelfCuringAlgorithm
+
 # Lazy loading functions for core components
 def load_core_neural_networks():
     from .core_neural_networks import NeuroFlex, SelfCuringAlgorithm
@@ -70,6 +73,8 @@ from .ai_ethics import *
 
 # Define what should be imported with "from NeuroFlex import *"
 __all__ = [
+    'NeuroFlex',
+    'SelfCuringAlgorithm',
     'core_neural_networks',
     'advanced_models',
     'generative_models',
