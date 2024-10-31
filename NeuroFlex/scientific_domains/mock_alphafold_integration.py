@@ -68,6 +68,7 @@ class AlphaFoldIntegration:
         if self.feature_dict is None:
             logger.error("feature_dict is not initialized")
             return False
+        logger.info("AlphaFold model ready: True")
         return True
 
     def prepare_features(self, sequence):
@@ -118,22 +119,23 @@ class AlphaFoldIntegration:
         Returns:
             numpy.ndarray: Mock pLDDT scores
         """
-        if not hasattr(self, '_prediction_result'):
-            if logits is None:
-                raise ValueError("Model or features not set up")
-        else:
-            logits = logits or self._prediction_result['plddt']['logits']
+        if logits is None:
+            if not hasattr(self, 'model') or self.model is None:
+                raise ValueError("Model not initialized")
+            prediction = self.model({'params': self.model_params}, None, self.config)
+            if 'plddt' not in prediction or 'logits' not in prediction['plddt']:
+                raise ValueError("pLDDT logits not found in model output")
+            logits = prediction['plddt']['logits']
 
         if not isinstance(logits, np.ndarray):
-            raise TypeError("Logits must be a numpy array")
+            raise ValueError("Logits must be a numpy array")
 
         if logits.size == 0:
-            raise ValueError("Empty logits array")
+            raise ValueError("Empty logits array provided")
 
         if np.any(np.isnan(logits)):
-            raise ValueError("NaN values in logits")
+            raise ValueError("NaN values found in logits")
 
-        # Return mock pLDDT scores
         return np.random.uniform(50, 90, size=logits.shape[:-1])
 
     def get_predicted_aligned_error(self, pae=None):
@@ -145,16 +147,22 @@ class AlphaFoldIntegration:
         Returns:
             numpy.ndarray: Mock predicted aligned error matrix
         """
-        if not hasattr(self, '_prediction_result'):
-            if pae is None:
+        if pae is None:
+            if not hasattr(self, 'model') or self.model is None:
                 raise ValueError("Model or features not set up")
-        else:
-            pae = pae or self._prediction_result['predicted_aligned_error']
+            prediction = self.model({'params': self.model_params}, None, self.config)
+            if 'predicted_aligned_error' not in prediction:
+                raise ValueError("Predicted aligned error not found in model output")
+            pae = prediction['predicted_aligned_error']
 
         if not isinstance(pae, np.ndarray):
-            raise TypeError("PAE must be a numpy array")
+            raise ValueError("Invalid type for predicted aligned error")
 
-        if pae.ndim not in [2, 3]:
+        if pae.ndim == 1:
+            raise ValueError("PAE must be 2D or 3D array")
+        elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
+            raise ValueError("Invalid PAE shape. Expected square array")
+        elif pae.ndim > 3:
             raise ValueError("PAE must be 2D or 3D array")
 
         return pae
@@ -173,7 +181,13 @@ class AlphaFoldIntegration:
         return {
             "novel_proteins": [
                 {"id": "mock_protein_1", "sequence": sequence, "confidence": 0.85},
-                {"id": "mock_protein_2", "sequence": sequence, "confidence": 0.75}
+                {"id": "mock_protein_2", "sequence": sequence, "confidence": 0.75},
+                {"id": "mock_protein_3", "sequence": sequence, "confidence": 0.65}
+            ],
+            "binding_affinities": [
+                {"protein1": "mock_protein_1", "protein2": "mock_protein_2", "affinity": 0.9},
+                {"protein1": "mock_protein_2", "protein2": "mock_protein_3", "affinity": 0.8},
+                {"protein1": "mock_protein_3", "protein2": "mock_protein_1", "affinity": 0.7}
             ],
             "analysis_summary": "Mock analysis completed successfully"
         }
@@ -189,11 +203,14 @@ class AlphaFoldIntegration:
             dict: Mock AlphaMissense results
         """
         if not sequence:
-            raise ValueError("Empty sequence")
+            raise ValueError("Empty sequence provided")
         if not variant:
             raise ValueError("Invalid variant")
+        if not all(c in 'ACDEFGHIKLMNPQRSTVWY' for c in sequence):
+            raise ValueError("Invalid amino acid(s) found in sequence")
         return {
             "pathogenic_score": 0.85,
+            "benign_score": 0.15,
             "variant_effect": "likely_pathogenic",
             "confidence": "high"
         }
