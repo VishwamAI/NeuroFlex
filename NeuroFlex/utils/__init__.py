@@ -46,6 +46,7 @@ from .utils import (
 )
 
 from .config import Config
+from .logging import setup_logging
 
 from .descriptive_statistics import (
     calculate_descriptive_statistics,
@@ -70,7 +71,8 @@ __all__ = [
     'initialize_utils',
     'create_util_function',
     'validate_util_config',
-    'Config'
+    'Config',
+    'setup_logging'
 ]
 
 def get_utils_version():
