@@ -127,6 +127,7 @@ class NeuroFlex:
     def _setup_alphafold(self):
         if self.config['USE_ALPHAFOLD']:
             # self.alphafold = AlphaFoldIntegration()  # Temporarily commented out
+            pass
 
     def _setup_math_solver(self):
         self.math_solver = MathSolver()
