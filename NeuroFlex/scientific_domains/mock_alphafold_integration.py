@@ -64,9 +64,6 @@ class AlphaFoldIntegration:
         self._is_ready = False
         os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
 
-        # Set up logger
-        self.logger = logging.getLogger(__name__)
-
         # Set provided values if any
         if model is not None:
             self.model = model
@@ -81,16 +78,16 @@ class AlphaFoldIntegration:
         Returns:
             bool: True if model is ready, False otherwise
         """
-        self.logger.info("Checking if AlphaFold model is ready")
+        logging.info("Checking if AlphaFold model is ready")
 
         # Check each attribute independently
         required_attrs = ['model', 'model_params', 'config', 'feature_dict']
         for attr in required_attrs:
             if getattr(self, attr) is None:
-                self.logger.error(f"{attr} is not initialized")
+                logging.error(f"{attr} is not initialized")
                 return False
 
-        self.logger.info("AlphaFold model ready: True")
+        logging.info("AlphaFold model ready: True")
         return True
 
     def prepare_features(self, sequence):
@@ -102,22 +99,22 @@ class AlphaFoldIntegration:
         Returns:
             dict: Mock feature dictionary
         """
-        self.logger.info(f"Preparing features for sequence of length {len(sequence)}")
+        logging.info(f"Preparing features for sequence of length {len(sequence)}")
 
         # Input validation
         if not sequence:
-            self.logger.error("Invalid amino acid sequence provided")
+            logging.error("Invalid amino acid sequence provided")
             raise ValueError("Invalid amino acid sequence provided.")
 
         # Check for invalid characters
         if not all(c.isalpha() for c in sequence):
-            self.logger.error("Invalid amino acid sequence provided")
+            logging.error("Invalid amino acid sequence provided")
             raise ValueError("Invalid amino acid sequence provided.")
 
         # Check sequence length
         if len(sequence) > 1000:
             error_msg = "Sequence length exceeds maximum allowed"
-            self.logger.error(f"Error during feature preparation: {error_msg}")
+            logging.error(f"Error during feature preparation: {error_msg}")
             raise Exception(error_msg)
 
         # Write sequence to temporary file
@@ -139,18 +136,18 @@ class AlphaFoldIntegration:
             description="query",
             num_res=len(sequence)
         )
-        self.logger.info("Sequence features prepared successfully")
+        logging.info("Sequence features prepared successfully")
 
         # Prepare MSA features
         msa_result = [('query', sequence)]
         msa_features = pipeline.make_msa_features(
             msas=[msa_result]  # Use msa_result consistently as expected by test
         )
-        self.logger.info("MSA features prepared successfully")
+        logging.info("MSA features prepared successfully")
 
         # Get template features
         template_features = self._search_templates(sequence)
-        self.logger.info("Template features prepared successfully")
+        logging.info("Template features prepared successfully")
 
         # Combine all features
         self.feature_dict = {
@@ -158,7 +155,7 @@ class AlphaFoldIntegration:
             **msa_features,
             **template_features
         }
-        self.logger.info("All features combined into feature dictionary")
+        logging.info("All features combined into feature dictionary")
         return self.feature_dict
 
     def predict_structure(self):

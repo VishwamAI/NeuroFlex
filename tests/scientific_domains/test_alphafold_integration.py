@@ -342,16 +342,14 @@ def mock_environment():
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.SeqIO')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jackhmmer.Jackhmmer')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.features')
-@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.logging')
+@patch('logging')  # Patch logging at module level
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.tempfile.NamedTemporaryFile')
 def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, mock_jackhmmer, mock_seqio, mock_pipeline, alphafold_integration):
     valid_sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"
 
     # Configure mock logger
-    mock_logger = MagicMock()
-    mock_logging.getLogger.return_value = mock_logger
-    mock_logging.info = mock_logger.info
-    mock_logging.error = mock_logger.error
+    mock_logging.info = MagicMock()
+    mock_logging.error = MagicMock()
 
     mock_pipeline.make_sequence_features.return_value = {
         'aatype': np.zeros(len(valid_sequence), dtype=np.int32),
