@@ -38,26 +38,14 @@ from unittest.mock import MagicMock
 # Configure logging at module level
 logger = logging.getLogger(__name__)
 
-# Mock dependencies
-confidence = MagicMock()
-features = MagicMock()
-jackhmmer = MagicMock()
-jackhmmer.Jackhmmer = MagicMock()
-jax = MagicMock()
-jax.numpy = MagicMock()
-pipeline = MagicMock()
-SeqIO = MagicMock()
-# Configure SeqIO.SeqRecord to return proper sequence
-class MockSeqRecord:
-    def __init__(self, seq, id="", description=""):
-        self.seq = seq
-        self.id = id
-        self.description = description
-SeqIO.SeqRecord = MockSeqRecord
-Seq = MagicMock()
-Seq.Seq = MagicMock(side_effect=lambda x: x)  # Return input sequence as-is
-
-logger = logging.getLogger(__name__)
+# Mock dependencies will be configured by tests
+confidence = None
+features = None
+jackhmmer = None
+jax = None
+pipeline = None
+SeqIO = None
+Seq = None
 
 class AlphaFoldIntegration:
     """Mock implementation of AlphaFold integration."""
