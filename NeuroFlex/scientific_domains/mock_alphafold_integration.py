@@ -50,13 +50,14 @@ class AlphaFoldIntegration:
         self.config = config
         self.feature_dict = None
         self._is_ready = False
+        os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
+
     def is_model_ready(self):
         """Check if mock model is ready.
 
         Returns:
             bool: True if model is ready, False otherwise
         """
-        logger.info("Checking if AlphaFold model is ready")
         if self.model is None:
             logger.error("model is not initialized")
             return False
@@ -120,9 +121,6 @@ class AlphaFoldIntegration:
         Returns:
             numpy.ndarray: Mock pLDDT scores
         """
-        if os.environ.get('ALPHAFOLD_PATH') is None:
-            os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
-
         if logits is None:
             if not hasattr(self, 'model') or self.model is None:
                 raise ValueError("Model or features not set up")
@@ -170,13 +168,14 @@ class AlphaFoldIntegration:
             pae = prediction['predicted_aligned_error']
 
         if not isinstance(pae, np.ndarray):
-            raise ValueError("Invalid type for predicted aligned error")
+            try:
+                pae = np.array(pae, dtype=float)
+            except:
+                raise ValueError("Invalid type for predicted aligned error")
 
         if pae.ndim == 1:
             raise ValueError("PAE must be 2D or 3D array")
         elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
-            raise ValueError("Invalid PAE shape. Expected square array")
-        elif pae.ndim == 3:
             raise ValueError("Invalid PAE shape")
         elif pae.ndim > 3:
             raise ValueError("PAE must be 2D or 3D array")
@@ -194,6 +193,13 @@ class AlphaFoldIntegration:
         """
         if not sequence:
             raise ValueError("Empty sequence")
+        if len(sequence) < 10:
+            raise ValueError("Sequence too short")
+        if len(sequence) > 1000:
+            raise ValueError("Sequence too long")
+        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence):
+            raise ValueError("Invalid amino acid(s) found in sequence")
+
         mock_proteins = []
         for i, conf in enumerate([0.85, 0.75, 0.65]):
             mock_protein = {
@@ -201,16 +207,13 @@ class AlphaFoldIntegration:
                 "sequence": sequence,
                 "confidence": conf,
                 "predicted_sequence": sequence,
-                "sequence_length": len(sequence)
+                "length": len(sequence)  # Add length field
             }
             mock_proteins.append(mock_protein)
+
         return {
             "novel_proteins": mock_proteins,
-            "binding_affinities": [
-                {"protein1": "mock_protein_1", "protein2": "mock_protein_2", "affinity": 0.9},
-                {"protein1": "mock_protein_2", "protein2": "mock_protein_3", "affinity": 0.8},
-                {"protein1": "mock_protein_3", "protein2": "mock_protein_1", "affinity": 0.7}
-            ],
+            "binding_affinities": [0.9, 0.8, 0.7],
             "analysis_summary": "Mock analysis completed successfully"
         }
 
@@ -224,6 +227,10 @@ class AlphaFoldIntegration:
         Returns:
             dict: Mock AlphaMissense results
         """
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type")
+        if not isinstance(variant, str):
+            raise ValueError("Invalid input type")
         if not sequence:
             raise ValueError("Empty sequence provided")
         if not variant:
@@ -233,12 +240,19 @@ class AlphaFoldIntegration:
         if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
             raise ValueError("Invalid variant format")
 
-        # Extract position from variant and validate
+        # Extract position and amino acids from variant and validate
         try:
+            orig_aa = variant[0]
             pos = int(re.search(r'\d+', variant).group())
             if pos > len(sequence):
                 raise ValueError("Invalid variant position")
-        except (AttributeError, ValueError):
+            if pos <= 0:
+                raise ValueError("Invalid variant position")
+            if orig_aa != sequence[pos-1]:
+                raise ValueError(f"Original amino acid in variant {variant} does not match sequence")
+        except (AttributeError, ValueError, IndexError) as e:
+            if "does not match sequence" in str(e):
+                raise
             raise ValueError("Invalid variant position")
 
         return {
