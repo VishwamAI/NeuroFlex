@@ -316,6 +316,12 @@ def test_is_model_ready_logging(alphafold_integration, caplog):
 
 @pytest.mark.parametrize("attribute", ["model", "model_params", "config", "feature_dict"])
 def test_is_model_ready_logging_error(alphafold_integration, caplog, attribute):
+    # Initialize all attributes with MagicMock
+    alphafold_integration.model = MagicMock()
+    alphafold_integration.model_params = MagicMock()
+    alphafold_integration.config = MagicMock()
+    alphafold_integration.feature_dict = MagicMock()
+    # Set the test attribute to None
     setattr(alphafold_integration, attribute, None)
     with caplog.at_level(logging.ERROR):
         alphafold_integration.is_model_ready()
