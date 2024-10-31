@@ -342,14 +342,11 @@ def mock_environment():
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.SeqIO')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jackhmmer.Jackhmmer')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.features')
-@patch('logging')  # Patch logging at module level
+@patch('logging.error')
+@patch('logging.info')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.tempfile.NamedTemporaryFile')
-def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, mock_jackhmmer, mock_seqio, mock_pipeline, alphafold_integration):
+def test_prepare_features(mock_named_temp_file, mock_logging_info, mock_logging_error, mock_features, mock_jackhmmer, mock_seqio, mock_pipeline, alphafold_integration):
     valid_sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"
-
-    # Configure mock logger
-    mock_logging.info = MagicMock()
-    mock_logging.error = MagicMock()
 
     mock_pipeline.make_sequence_features.return_value = {
         'aatype': np.zeros(len(valid_sequence), dtype=np.int32),
@@ -436,30 +433,30 @@ def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, moc
     assert os.environ.get('HHBLITS_BINARY_PATH') == '/mock/hhblits'
 
     # Verify logging calls
-    mock_logging.info.assert_any_call(f"Preparing features for sequence of length {len(valid_sequence)}")
-    mock_logging.info.assert_any_call("Sequence features prepared successfully")
-    mock_logging.info.assert_any_call("MSA features prepared successfully")
-    mock_logging.info.assert_any_call("Template features prepared successfully")
-    mock_logging.info.assert_any_call("All features combined into feature dictionary")
+    mock_logging_info.assert_any_call(f"Preparing features for sequence of length {len(valid_sequence)}")
+    mock_logging_info.assert_any_call("Sequence features prepared successfully")
+    mock_logging_info.assert_any_call("MSA features prepared successfully")
+    mock_logging_info.assert_any_call("Template features prepared successfully")
+    mock_logging_info.assert_any_call("All features combined into feature dictionary")
 
     # Test edge cases
     # Test with an empty sequence
     with pytest.raises(ValueError, match="Invalid amino acid sequence provided."):
         alphafold_integration.prepare_features("")
-    mock_logging.error.assert_called_with("Invalid amino acid sequence provided")
+    mock_logging_error.assert_called_with("Invalid amino acid sequence provided")
 
     # Test with a very long sequence
     long_sequence = "A" * 10000
     with patch.object(alphafold_integration, '_run_msa', side_effect=Exception("Sequence length exceeds maximum allowed")):
         with pytest.raises(Exception, match="Sequence length exceeds maximum allowed"):
             alphafold_integration.prepare_features(long_sequence)
-    mock_logging.error.assert_called_with("Error during feature preparation: Sequence length exceeds maximum allowed")
+    mock_logging_error.assert_called_with("Error during feature preparation: Sequence length exceeds maximum allowed")
 
     # Test with invalid characters in the sequence
     invalid_sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV123"
     with pytest.raises(ValueError, match="Invalid amino acid sequence provided."):
         alphafold_integration.prepare_features(invalid_sequence)
-    mock_logging.error.assert_called_with("Invalid amino acid sequence provided")
+    mock_logging_error.assert_called_with("Invalid amino acid sequence provided")
 
 @pytest.mark.skip(reason="Temporarily skipped due to failure")
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.protein')
