@@ -51,13 +51,22 @@ class AlphaFoldIntegration:
             model_params: Mock model parameters
             config: Mock configuration
         """
-        self.model = model
-        self.model_params = model_params
-        self.config = config
+        # Initialize all attributes to None
+        self.model = None
+        self.model_params = None
+        self.config = None
         self.confidence_module = confidence
         self.feature_dict = None
         self._is_ready = False
         os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
+
+        # Set provided values if any
+        if model is not None:
+            self.model = model
+        if model_params is not None:
+            self.model_params = model_params
+        if config is not None:
+            self.config = config
 
     def is_model_ready(self):
         """Check if mock model is ready.
@@ -66,16 +75,14 @@ class AlphaFoldIntegration:
             bool: True if model is ready, False otherwise
         """
         logger.info("Checking if AlphaFold model is ready")
-        attributes = [
-            ('model', self.model),
-            ('model_params', self.model_params),
-            ('config', self.config),
-            ('feature_dict', self.feature_dict)
-        ]
-        for attr_name, attr_value in attributes:
-            if attr_value is None:
-                logger.error(f"{attr_name} is not initialized")
+
+        # Check each attribute independently
+        required_attrs = ['model', 'model_params', 'config', 'feature_dict']
+        for attr in required_attrs:
+            if getattr(self, attr) is None:
+                logger.error(f"{attr} is not initialized")
                 return False
+
         logger.info("AlphaFold model ready: True")
         return True
 
