@@ -58,6 +58,7 @@ class AlphaFoldIntegration:
         Returns:
             bool: True if model is ready, False otherwise
         """
+        logger.info("Checking if AlphaFold model is ready")
         if self.model is None:
             logger.error("model is not initialized")
             return False
@@ -145,7 +146,11 @@ class AlphaFoldIntegration:
         if np.any(np.isnan(logits)):
             raise ValueError("NaN values in logits")
 
-        return np.random.uniform(50, 90, size=logits.shape[:-1])
+        # Return array with same shape as input logits, excluding last dimension
+        if len(logits.shape) > 1:
+            return np.random.uniform(50, 90, size=logits.shape[:-1])
+        else:
+            return np.random.uniform(50, 90, size=(logits.shape[0],))
 
     def get_predicted_aligned_error(self, pae=None):
         """Get predicted aligned error.
@@ -176,6 +181,8 @@ class AlphaFoldIntegration:
         if pae.ndim == 1:
             raise ValueError("PAE must be 2D or 3D array")
         elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
+            raise ValueError("Invalid PAE shape. Expected square array")
+        elif pae.ndim == 3:
             raise ValueError("Invalid PAE shape")
         elif pae.ndim > 3:
             raise ValueError("PAE must be 2D or 3D array")
@@ -200,16 +207,24 @@ class AlphaFoldIntegration:
         if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence):
             raise ValueError("Invalid amino acid(s) found in sequence")
 
+        class SequenceWrapper(str):
+            def __new__(cls, sequence, metadata):
+                instance = super().__new__(cls, sequence)
+                instance.metadata = metadata
+                for key, value in metadata.items():
+                    setattr(instance, key, value)
+                return instance
+
         mock_proteins = []
         for i, conf in enumerate([0.85, 0.75, 0.65]):
-            mock_protein = {
+            metadata = {
                 "id": f"mock_protein_{i+1}",
                 "sequence": sequence,
                 "confidence": conf,
                 "predicted_sequence": sequence,
-                "length": len(sequence)  # Add length field
+                "length": len(sequence)
             }
-            mock_proteins.append(mock_protein)
+            mock_proteins.append(SequenceWrapper(sequence, metadata))
 
         return {
             "novel_proteins": mock_proteins,
@@ -243,6 +258,7 @@ class AlphaFoldIntegration:
         # Extract position and amino acids from variant and validate
         try:
             orig_aa = variant[0]
+            new_aa = variant[-1]
             pos = int(re.search(r'\d+', variant).group())
             if pos > len(sequence):
                 raise ValueError("Invalid variant position")
@@ -250,8 +266,10 @@ class AlphaFoldIntegration:
                 raise ValueError("Invalid variant position")
             if orig_aa != sequence[pos-1]:
                 raise ValueError(f"Original amino acid in variant {variant} does not match sequence")
+            if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
+                raise ValueError("Invalid new amino acid in variant")
         except (AttributeError, ValueError, IndexError) as e:
-            if "does not match sequence" in str(e):
+            if "does not match sequence" in str(e) or "Invalid new amino acid" in str(e):
                 raise
             raise ValueError("Invalid variant position")
 

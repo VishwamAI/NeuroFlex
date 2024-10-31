@@ -38,7 +38,10 @@ from .art_integration import ARTIntegration
 from .biology.synthetic_biology_insights import SyntheticBiologyInsights
 from .google_integration import GoogleIntegration
 from .ibm_integration import IBMIntegration
-from .mock_alphafold_integration import AlphaFoldIntegration
+try:
+    from .mock_alphafold_integration import AlphaFoldIntegration
+except ImportError:
+    from .alphafold_integration import AlphaFoldIntegration
 from .xarray_integration import XarrayIntegration
 
 __all__ = [
