@@ -31,6 +31,12 @@ import numpy as np
 import logging
 import re
 import os
+from unittest.mock import MagicMock
+
+# Mock dependencies
+jax = MagicMock()
+jax.numpy = MagicMock()
+confidence = MagicMock()
 
 logger = logging.getLogger(__name__)
 
