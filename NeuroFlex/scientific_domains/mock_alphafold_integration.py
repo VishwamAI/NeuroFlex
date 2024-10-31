@@ -297,6 +297,17 @@ class AlphaFoldIntegration:
             "confidence": "high"
         }
 
+    def _search_templates(self, sequence):
+        """Search for templates for the given sequence.
+
+        Args:
+            sequence (str): Input protein sequence
+
+        Returns:
+            dict: Mock template features
+        """
+        return {'template_features': 'dummy_template'}
+
     def setup_model(self, model=None, model_params=None, config=None):
         """Set up mock model with given parameters.
 
