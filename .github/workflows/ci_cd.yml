@@ -26,27 +26,22 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
-          echo "Installing numerical computation packages..."
-          # Install specific versions of numerical computation packages first
-          pip install numpy==1.23.5 scipy==1.9.0
-          pip install jax==0.4.13 jaxlib==0.4.13
-          pip install flax==0.6.10 optax==0.1.5
-          echo "Installing alphafold dependencies..."
-          # Install alphafold dependencies first
-          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
             echo "Failed to clone alphafold repository"
             exit 1
           fi
-          echo "Installing alphafold..."
+          echo "Installing alphafold and its dependencies..."
           cd alphafold
           if ! pip install -e .; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
+          echo "Installing additional numerical computation packages..."
+          # Install additional packages needed by our project
+          pip install optax==0.1.5
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
           pip install -r requirements.txt
@@ -84,27 +79,22 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
-          echo "Installing numerical computation packages..."
-          # Install specific versions of numerical computation packages first
-          pip install numpy==1.23.5 scipy==1.9.0
-          pip install jax==0.4.13 jaxlib==0.4.13
-          pip install flax==0.6.10 optax==0.1.5
-          echo "Installing alphafold dependencies..."
-          # Install alphafold dependencies first
-          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
             echo "Failed to clone alphafold repository"
             exit 1
           fi
-          echo "Installing alphafold..."
+          echo "Installing alphafold and its dependencies..."
           cd alphafold
           if ! pip install -e .; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
+          echo "Installing additional numerical computation packages..."
+          # Install additional packages needed by our project
+          pip install optax==0.1.5
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
           pip install -r requirements.txt
@@ -130,27 +120,22 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
-          echo "Installing numerical computation packages..."
-          # Install specific versions of numerical computation packages first
-          pip install numpy==1.23.5 scipy==1.9.0
-          pip install jax==0.4.13 jaxlib==0.4.13
-          pip install flax==0.6.10 optax==0.1.5
-          echo "Installing alphafold dependencies..."
-          # Install alphafold dependencies first
-          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
             echo "Failed to clone alphafold repository"
             exit 1
           fi
-          echo "Installing alphafold..."
+          echo "Installing alphafold and its dependencies..."
           cd alphafold
           if ! pip install -e .; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
+          echo "Installing additional numerical computation packages..."
+          # Install additional packages needed by our project
+          pip install optax==0.1.5
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
           pip install -r requirements.txt
