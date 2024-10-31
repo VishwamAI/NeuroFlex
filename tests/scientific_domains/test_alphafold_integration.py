@@ -15,7 +15,6 @@ import importlib
 import copy
 import logging
 
-sys.path.append('/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages')
 from NeuroFlex.scientific_domains.mock_alphafold_integration import AlphaFoldIntegration
 
 # Mock AlphaFold dependencies
@@ -287,8 +286,8 @@ def test_setup_model(mock_np_load, mock_glob, mock_path_exists, mock_alphafold, 
         alphafold_integration.setup_model()
 
 @pytest.fixture
-@pytest.mark.skip(reason="AlphaFoldIntegration temporarily disabled")
 def alphafold_integration():
+    from NeuroFlex.scientific_domains.mock_alphafold_integration import AlphaFoldIntegration
     return AlphaFoldIntegration()
 
 @pytest.mark.parametrize("model,model_params,config,feature_dict,expected", [
@@ -333,7 +332,7 @@ def mock_environment():
         yield
 
 @pytest.mark.usefixtures("mock_environment")
-@patch('NeuroFlex.scientific_domains.alphafold_integration.pipeline')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.pipeline')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.SeqIO')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jackhmmer.Jackhmmer')
 @patch('NeuroFlex.scientific_domains.mock_alphafold_integration.features')
@@ -682,8 +681,8 @@ def mock_jnp_array():
     (np.array([[0.1, 0.2, 0.3, 0.4]]), (1,)),
     (np.array([[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8], [0.9, 1.0, 1.1, 1.2]]), (3,)),
 ])
-@patch('NeuroFlex.scientific_domains.alphafold_integration.confidence')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.jax')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.confidence')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jax')
 def test_get_plddt_scores(mock_jax, mock_confidence, mock_logits, expected_shape):
     # from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
 
@@ -748,7 +747,6 @@ def test_get_plddt_scores_edge_cases(alphafold_integration, mock_logits, error_m
     alphafold_integration.model.return_value = mock_prediction
     with pytest.raises(ValueError, match=error_message):
         alphafold_integration.get_plddt_scores()
-
 def test_get_plddt_scores_not_ready(alphafold_integration):
     alphafold_integration.model = None
     with pytest.raises(ValueError) as context:
