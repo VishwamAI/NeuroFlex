@@ -104,6 +104,22 @@ class AlphaFoldIntegration:
         if not sequence:
             raise ValueError("Input sequence cannot be empty")
 
+        # Write sequence to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
+            SeqIO.write(
+                SeqIO.SeqRecord(
+                    seq=sequence,
+                    id="query",
+                    description=""
+                ),
+                temp_fasta.name,
+                "fasta"
+            )
+            temp_fasta.flush()
+
+            # Run MSA using Jackhmmer
+            self.msa_runner.query(temp_fasta.name)
+
         # Prepare sequence features
         sequence_features = pipeline.make_sequence_features(
             sequence=sequence,
@@ -112,8 +128,9 @@ class AlphaFoldIntegration:
         )
 
         # Prepare MSA features
+        msa_result = [('query', sequence)]
         msa_features = pipeline.make_msa_features(
-            msas=[('query', sequence)]
+            msas=[msa_result]  # Use msa_result consistently as expected by test
         )
 
         # Get template features
