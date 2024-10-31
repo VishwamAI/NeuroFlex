@@ -30,7 +30,7 @@ class CustomDense(nn.Module):
             y = y + bias
         return y
 
-python
+
 class LongTermMemory(nn.Module):
     memory_size: int
     input_size: int
