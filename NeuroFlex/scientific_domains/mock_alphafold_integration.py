@@ -104,11 +104,26 @@ class AlphaFoldIntegration:
         if not sequence:
             raise ValueError("Input sequence cannot be empty")
 
+        # Prepare sequence features
+        sequence_features = pipeline.make_sequence_features(
+            sequence=sequence,
+            description="query",
+            num_res=len(sequence)
+        )
+
+        # Prepare MSA features
+        msa_features = pipeline.make_msa_features(
+            msas=[('query', sequence)]
+        )
+
+        # Get template features
+        template_features = self._search_templates(sequence)
+
+        # Combine all features
         self.feature_dict = {
-            'aatype': np.zeros((len(sequence), 21)),
-            'residue_index': np.arange(len(sequence)),
-            'seq_length': np.array([len(sequence)]),
-            'sequence': np.array(list(sequence))
+            **sequence_features,
+            **msa_features,
+            **template_features
         }
         return self.feature_dict
 
