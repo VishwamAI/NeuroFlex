@@ -55,10 +55,20 @@ class AlphaFoldIntegration:
         Returns:
             bool: True if model is ready, False otherwise
         """
-        if not all([self.model, self.model_params, self.config, self.feature_dict]):
-            logger.warning("Mock AlphaFold model not ready: missing components")
+        logger.info("Checking if AlphaFold model is ready")
+        if self.model is None:
+            logger.error("model is not initialized")
             return False
-        return self._is_ready
+        if self.model_params is None:
+            logger.error("model_params is not initialized")
+            return False
+        if self.config is None:
+            logger.error("config is not initialized")
+            return False
+        if self.feature_dict is None:
+            logger.error("feature_dict is not initialized")
+            return False
+        return True
 
     def prepare_features(self, sequence):
         """Prepare mock features for prediction.
@@ -80,20 +90,17 @@ class AlphaFoldIntegration:
         }
         return self.feature_dict
 
-    def predict_structure(self, sequence):
-        """Predict protein structure from sequence.
-
-        Args:
-            sequence (str): Input protein sequence
+    def predict_structure(self):
+        """Predict protein structure.
 
         Returns:
             dict: Mock prediction results
         """
         if not self.is_model_ready():
-            raise RuntimeError("Mock AlphaFold model not ready")
+            raise ValueError("Model or features not set up")
 
         # Return mock prediction results
-        seq_length = len(sequence)
+        seq_length = 100  # Mock sequence length
         return {
             'plddt': np.random.uniform(50, 90, size=(seq_length,)),
             'predicted_aligned_error': np.random.uniform(0, 10, size=(seq_length, seq_length)),
@@ -122,34 +129,51 @@ class AlphaFoldIntegration:
         # Return mock pLDDT scores
         return np.random.uniform(50, 90, size=logits.shape[:-1])
 
-    def get_predicted_aligned_error(self, prediction_result):
-        """Get predicted aligned error from results.
+    def get_predicted_aligned_error(self, pae):
+        """Get predicted aligned error.
 
         Args:
-            prediction_result (dict): Prediction results dictionary
+            pae (numpy.ndarray): Predicted aligned error array
 
         Returns:
             numpy.ndarray: Mock predicted aligned error matrix
         """
-        if not isinstance(prediction_result, dict):
-            raise TypeError("Prediction result must be a dictionary")
-
-        if 'predicted_aligned_error' not in prediction_result:
-            raise KeyError("Missing predicted_aligned_error in results")
-
-        pae = prediction_result['predicted_aligned_error']
-
         if not isinstance(pae, np.ndarray):
-            raise TypeError("Predicted aligned error must be a numpy array")
+            raise TypeError("PAE must be a numpy array")
 
-
-        if pae.ndim != 2:
-            raise ValueError("Predicted aligned error must be a 2D array")
-
-        if pae.shape[0] != pae.shape[1]:
-            raise ValueError("Predicted aligned error must be a square matrix")
+        if pae.ndim not in [2, 3]:
+            raise ValueError("PAE must be 2D or 3D array")
 
         return pae
+
+    def run_alphaproteo_analysis(self, sequence):
+        """Run AlphaProteo analysis.
+
+        Args:
+            sequence (str): Input protein sequence
+
+        Returns:
+            dict: Mock AlphaProteo results
+        """
+        if not sequence:
+            raise ValueError("Empty sequence")
+        return {"mock": "alphaproteo_results"}
+
+    def run_alphamissense_analysis(self, sequence, variant):
+        """Run AlphaMissense analysis.
+
+        Args:
+            sequence (str): Input protein sequence
+            variant (str): Variant information
+
+        Returns:
+            dict: Mock AlphaMissense results
+        """
+        if not sequence:
+            raise ValueError("Empty sequence")
+        if not variant:
+            raise ValueError("Invalid variant")
+        return {"mock": "alphamissense_results"}
 
     def setup_model(self, model=None, model_params=None, config=None):
         """Set up mock model with given parameters.
