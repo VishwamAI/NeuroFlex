@@ -90,6 +90,35 @@ class AlphaFoldIntegration:
         logging.info("AlphaFold model ready: True")
         return True
 
+    def _run_msa(self, sequence):
+        """Run multiple sequence alignment on input sequence.
+
+        Args:
+            sequence (str): Input protein sequence
+
+        Returns:
+            list: List of tuples containing MSA results
+        """
+        if len(sequence) > 1000:
+            error_msg = "Sequence length exceeds maximum allowed"
+            raise Exception(error_msg)
+
+        # Write sequence to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
+            record = SeqIO.SeqRecord(
+                seq=sequence,
+                id="query",
+                description=""
+            )
+            SeqIO.write(record, temp_fasta.name, "fasta")
+            temp_fasta.flush()
+
+            # Run MSA using Jackhmmer
+            self.msa_runner.query(temp_fasta.name)
+
+        # Return mock MSA results
+        return [('query', sequence)]
+
     def prepare_features(self, sequence):
         """Prepare mock features for prediction.
 
@@ -117,18 +146,8 @@ class AlphaFoldIntegration:
             logging.error(f"Error during feature preparation: {error_msg}")
             raise Exception(error_msg)
 
-        # Write sequence to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
-            record = SeqIO.SeqRecord(
-                seq=sequence,
-                id="query",
-                description=""
-            )
-            SeqIO.write(record, temp_fasta.name, "fasta")
-            temp_fasta.flush()
-
-            # Run MSA using Jackhmmer
-            self.msa_runner.query(temp_fasta.name)
+        # Run MSA and get results
+        msa_result = self._run_msa(sequence)
 
         # Prepare sequence features
         sequence_features = pipeline.make_sequence_features(
@@ -139,7 +158,6 @@ class AlphaFoldIntegration:
         logging.info("Sequence features prepared successfully")
 
         # Prepare MSA features
-        msa_result = [('query', sequence)]
         msa_features = pipeline.make_msa_features(
             msas=[msa_result]  # Use msa_result consistently as expected by test
         )
