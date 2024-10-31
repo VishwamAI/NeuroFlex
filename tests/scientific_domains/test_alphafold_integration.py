@@ -306,6 +306,10 @@ def test_is_model_ready(alphafold_integration, model, model_params, config, feat
     assert alphafold_integration.is_model_ready() == expected
 
 def test_is_model_ready_logging(alphafold_integration, caplog):
+    alphafold_integration.model = MagicMock()
+    alphafold_integration.model_params = MagicMock()
+    alphafold_integration.config = MagicMock()
+    alphafold_integration.feature_dict = MagicMock()
     with caplog.at_level(logging.INFO):
         alphafold_integration.is_model_ready()
     assert "Checking if AlphaFold model is ready" in caplog.text
