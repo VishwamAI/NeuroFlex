@@ -38,6 +38,11 @@ from unittest.mock import MagicMock
 jax = MagicMock()
 jax.numpy = MagicMock()
 confidence = MagicMock()
+features = MagicMock()
+pipeline = MagicMock()
+SeqIO = MagicMock()
+jackhmmer = MagicMock()
+jackhmmer.Jackhmmer = MagicMock()
 
 logger = logging.getLogger(__name__)
 
