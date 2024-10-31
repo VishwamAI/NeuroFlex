@@ -24,7 +24,7 @@ jobs:
           echo "Installing base dependencies..."
           pip install -v wheel setuptools
           echo "Installing core numerical packages..."
-          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 tensorflow-cpu==2.12.0 keras==2.12.0 tensorboard==2.12.3
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -79,7 +79,7 @@ jobs:
           echo "Installing base dependencies..."
           pip install -v wheel setuptools
           echo "Installing core numerical packages..."
-          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 tensorflow-cpu==2.12.0 keras==2.12.0 tensorboard==2.12.3
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -128,7 +128,7 @@ jobs:
           echo "Installing base dependencies..."
           pip install -v wheel setuptools
           echo "Installing core numerical packages..."
-          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 tensorflow-cpu==2.12.0 keras==2.12.0 tensorboard==2.12.3
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
