@@ -26,6 +26,8 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          echo "Installing base dependencies..."
+          pip install wheel setuptools
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -34,16 +36,18 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e .; then
+          if ! pip install -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
-          echo "Installing additional numerical computation packages..."
-          # Install additional packages needed by our project
-          pip install optax==0.1.5
+          echo "Installing alphafold dependencies..."
+          pip install -r alphafold/requirements.txt
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
+          pip install -r requirements.txt --no-deps
+          pip install --no-deps optax==0.1.5
+          # Finally, let pip resolve any remaining dependencies
           pip install -r requirements.txt
       - name: Create necessary directories
         run: |
@@ -79,6 +83,8 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          echo "Installing base dependencies..."
+          pip install wheel setuptools
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -87,16 +93,18 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e .; then
+          if ! pip install -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
-          echo "Installing additional numerical computation packages..."
-          # Install additional packages needed by our project
-          pip install optax==0.1.5
+          echo "Installing alphafold dependencies..."
+          pip install -r alphafold/requirements.txt
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
+          pip install -r requirements.txt --no-deps
+          pip install --no-deps optax==0.1.5
+          # Finally, let pip resolve any remaining dependencies
           pip install -r requirements.txt
       - name: Build package
         run: |
@@ -120,6 +128,8 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          echo "Installing base dependencies..."
+          pip install wheel setuptools
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -128,16 +138,18 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e .; then
+          if ! pip install -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
-          echo "Installing additional numerical computation packages..."
-          # Install additional packages needed by our project
-          pip install optax==0.1.5
+          echo "Installing alphafold dependencies..."
+          pip install -r alphafold/requirements.txt
           echo "Installing remaining dependencies..."
           # Install remaining dependencies
+          pip install -r requirements.txt --no-deps
+          pip install --no-deps optax==0.1.5
+          # Finally, let pip resolve any remaining dependencies
           pip install -r requirements.txt
           pip install build twine
       - name: Verify distribution files
