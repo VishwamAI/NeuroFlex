@@ -66,18 +66,16 @@ class AlphaFoldIntegration:
             bool: True if model is ready, False otherwise
         """
         logger.info("Checking if AlphaFold model is ready")
-        if self.model is None:
-            logger.error("model is not initialized")
-            return False
-        if self.model_params is None:
-            logger.error("model_params is not initialized")
-            return False
-        if self.config is None:
-            logger.error("config is not initialized")
-            return False
-        if self.feature_dict is None:
-            logger.error("feature_dict is not initialized")
-            return False
+        attributes = [
+            ('model', self.model),
+            ('model_params', self.model_params),
+            ('config', self.config),
+            ('feature_dict', self.feature_dict)
+        ]
+        for attr_name, attr_value in attributes:
+            if attr_value is None:
+                logger.error(f"{attr_name} is not initialized")
+                return False
         logger.info("AlphaFold model ready: True")
         return True
 
