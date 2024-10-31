@@ -31,6 +31,7 @@ import numpy as np
 import logging
 import re
 import os
+import tempfile
 from unittest.mock import MagicMock
 
 # Mock dependencies
