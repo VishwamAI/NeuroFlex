@@ -281,7 +281,7 @@ class AlphaFoldIntegration:
             pae = padded.reshape(size, size)
         elif pae.ndim == 2:
             if pae.shape[0] != pae.shape[1]:
-                raise ValueError("Invalid PAE shape. Expected square matrix.")
+                raise ValueError("Invalid PAE shape. Expected square array")
         elif pae.ndim > 2:
             raise ValueError("Invalid PAE shape. Expected 1D or 2D array.")
 
