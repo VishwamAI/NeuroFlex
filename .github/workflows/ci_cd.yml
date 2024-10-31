@@ -29,6 +29,11 @@ jobs:
           pip install numpy==1.23.5 scipy==1.9.0
           pip install jax==0.4.13 jaxlib==0.4.13
           pip install flax==0.6.10 optax==0.1.5
+          # Install alphafold dependencies first
+          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
+          # Clone and install alphafold
+          git clone https://github.com/google-deepmind/alphafold.git
+          cd alphafold && pip install -e . && cd ..
           # Install remaining dependencies
           pip install -r requirements.txt
       - name: Create necessary directories
@@ -68,6 +73,11 @@ jobs:
           pip install numpy==1.23.5 scipy==1.9.0
           pip install jax==0.4.13 jaxlib==0.4.13
           pip install flax==0.6.10 optax==0.1.5
+          # Install alphafold dependencies first
+          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
+          # Clone and install alphafold
+          git clone https://github.com/google-deepmind/alphafold.git
+          cd alphafold && pip install -e . && cd ..
           # Install remaining dependencies
           pip install -r requirements.txt
       - name: Build package
@@ -95,6 +105,11 @@ jobs:
           pip install numpy==1.23.5 scipy==1.9.0
           pip install jax==0.4.13 jaxlib==0.4.13
           pip install flax==0.6.10 optax==0.1.5
+          # Install alphafold dependencies first
+          pip install dm-haiku==0.0.9 dm-tree chex==0.1.6 ml-collections
+          # Clone and install alphafold
+          git clone https://github.com/google-deepmind/alphafold.git
+          cd alphafold && pip install -e . && cd ..
           # Install remaining dependencies
           pip install -r requirements.txt
           pip install build twine
