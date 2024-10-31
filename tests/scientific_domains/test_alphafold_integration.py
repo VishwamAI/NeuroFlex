@@ -16,8 +16,7 @@ import copy
 import logging
 
 sys.path.append('/home/ubuntu/NeuroFlex/neuroflex-env-3.8/lib/python3.8/site-packages')
-# Temporarily commented out to match __init__.py changes
-# from NeuroFlex.scientific_domains.alphafold_integration import AlphaFoldIntegration
+from NeuroFlex.scientific_domains.mock_alphafold_integration import AlphaFoldIntegration
 
 # Mock AlphaFold dependencies
 mock_alphafold = MagicMock()
@@ -331,11 +330,11 @@ def mock_environment():
 
 @pytest.mark.usefixtures("mock_environment")
 @patch('NeuroFlex.scientific_domains.alphafold_integration.pipeline')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.SeqIO')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.jackhmmer.Jackhmmer')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.features')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.logging')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.tempfile.NamedTemporaryFile')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.SeqIO')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jackhmmer.Jackhmmer')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.features')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.logging')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.tempfile.NamedTemporaryFile')
 def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, mock_jackhmmer, mock_seqio, mock_pipeline, alphafold_integration):
     valid_sequence = "MKFLKFSLLTAVLLSVVFAFSSCGDDDDTGYLPPSQAIQDLLKRMKV"
     mock_pipeline.make_sequence_features.return_value = {
@@ -443,11 +442,11 @@ def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, moc
     mock_logging.error.assert_called_with("Invalid amino acid sequence provided")
 
 @pytest.mark.skip(reason="Temporarily skipped due to failure")
-@patch('NeuroFlex.scientific_domains.alphafold_integration.protein')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.openmm')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.app')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.jax.random.PRNGKey')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.unit')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.protein')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.openmm')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.app')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.jax.random.PRNGKey')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.unit')
 def test_predict_structure(self, mock_unit, mock_prng_key, mock_app, mock_openmm, mock_protein):
     # Setup mocks
     self.alphafold_integration.model = MagicMock()
@@ -567,9 +566,9 @@ def test_predict_structure_not_ready(alphafold_integration):
     assert "Model or features not set up" in str(context.value)
 
 @pytest.mark.skip(reason="Temporarily skipped due to failure")
-@patch('NeuroFlex.scientific_domains.alphafold_integration.openmm')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.app')
-@patch('NeuroFlex.scientific_domains.alphafold_integration.unit')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.openmm')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.app')
+@patch('NeuroFlex.scientific_domains.mock_alphafold_integration.unit')
 def test_setup_openmm_simulation(alphafold_integration, mock_unit, mock_app, mock_openmm):
     mock_protein = MagicMock()
     mock_protein.residue_index = range(10)
