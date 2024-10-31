@@ -26,8 +26,11 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          pip -v --version
           echo "Installing base dependencies..."
-          pip install wheel setuptools
+          pip install -v wheel setuptools
+          echo "Installing core numerical packages..."
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -36,19 +39,20 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e . --no-deps; then
+          if ! pip install -v -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
           echo "Installing alphafold dependencies..."
-          pip install -r alphafold/requirements.txt
-          echo "Installing remaining dependencies..."
-          # Install remaining dependencies
-          pip install -r requirements.txt --no-deps
-          pip install --no-deps optax==0.1.5
+          pip install -v -r alphafold/requirements.txt
+          echo "Installing project dependencies in batches..."
+          # Install dependencies in smaller batches
+          pip install -v pytest mne gymnasium
+          pip install -v Bio ml_collections
+          pip install -v --no-deps optax==0.1.5
           # Finally, let pip resolve any remaining dependencies
-          pip install -r requirements.txt
+          pip install -v -r requirements.txt
       - name: Create necessary directories
         run: |
           mkdir -p ${{ github.workspace }}/data
@@ -83,8 +87,11 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          pip -v --version
           echo "Installing base dependencies..."
-          pip install wheel setuptools
+          pip install -v wheel setuptools
+          echo "Installing core numerical packages..."
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -93,19 +100,20 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e . --no-deps; then
+          if ! pip install -v -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
           echo "Installing alphafold dependencies..."
-          pip install -r alphafold/requirements.txt
-          echo "Installing remaining dependencies..."
-          # Install remaining dependencies
-          pip install -r requirements.txt --no-deps
-          pip install --no-deps optax==0.1.5
+          pip install -v -r alphafold/requirements.txt
+          echo "Installing project dependencies in batches..."
+          # Install dependencies in smaller batches
+          pip install -v pytest mne gymnasium
+          pip install -v Bio ml_collections
+          pip install -v --no-deps optax==0.1.5
           # Finally, let pip resolve any remaining dependencies
-          pip install -r requirements.txt
+          pip install -v -r requirements.txt
       - name: Build package
         run: |
           pip install build
@@ -128,8 +136,11 @@ jobs:
         run: |
           set -ex
           python -m pip install --upgrade pip
+          pip -v --version
           echo "Installing base dependencies..."
-          pip install wheel setuptools
+          pip install -v wheel setuptools
+          echo "Installing core numerical packages..."
+          pip install -v numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13
           echo "Cloning alphafold repository..."
           # Clone and install alphafold with error handling
           if ! git clone --depth 1 https://github.com/google-deepmind/alphafold.git; then
@@ -138,20 +149,21 @@ jobs:
           fi
           echo "Installing alphafold and its dependencies..."
           cd alphafold
-          if ! pip install -e . --no-deps; then
+          if ! pip install -v -e . --no-deps; then
             echo "Failed to install alphafold"
             exit 1
           fi
           cd ..
           echo "Installing alphafold dependencies..."
-          pip install -r alphafold/requirements.txt
-          echo "Installing remaining dependencies..."
-          # Install remaining dependencies
-          pip install -r requirements.txt --no-deps
-          pip install --no-deps optax==0.1.5
+          pip install -v -r alphafold/requirements.txt
+          echo "Installing project dependencies in batches..."
+          # Install dependencies in smaller batches
+          pip install -v pytest mne gymnasium
+          pip install -v Bio ml_collections
+          pip install -v --no-deps optax==0.1.5
           # Finally, let pip resolve any remaining dependencies
-          pip install -r requirements.txt
-          pip install build twine
+          pip install -v -r requirements.txt
+          pip install -v build twine
       - name: Verify distribution files
         run: |
           ls -l dist/
