@@ -183,17 +183,28 @@ class AlphaFoldIntegration:
             dict: Mock prediction results
         """
         if not self.is_model_ready():
-            raise ValueError("Model or features not set up")
+            raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
 
-        # Return mock prediction results
-        seq_length = 100  # Mock sequence length
-        self._prediction_result = {
-            'predicted_lddt': {'logits': np.random.uniform(0, 1, size=(seq_length, 50))},
-            'predicted_aligned_error': np.random.uniform(0, 10, size=(seq_length, seq_length)),
-            'ptm': np.random.uniform(0.7, 0.9),
-            'max_predicted_aligned_error': 10.0
-        }
-        return self._prediction_result
+        try:
+            # Mock prediction with realistic structure
+            seq_length = len(self.feature_dict['aatype']) if self.feature_dict and 'aatype' in self.feature_dict else 100
+            self._prediction_result = {
+                'predicted_lddt': {
+                    'logits': np.random.uniform(0, 1, size=(seq_length, 50)),
+                    'aligned_confidence': np.random.uniform(0.7, 0.9, size=(seq_length,))
+                },
+                'predicted_aligned_error': np.random.uniform(0, 10, size=(seq_length, seq_length)),
+                'ptm': float(np.random.uniform(0.7, 0.9)),
+                'max_predicted_aligned_error': 10.0,
+                'plddt': np.random.uniform(70, 90, size=(seq_length,)),
+                'structure_module': {
+                    'final_atom_positions': np.random.uniform(-50, 50, size=(seq_length, 37, 3)),
+                    'final_atom_mask': np.ones((seq_length, 37))
+                }
+            }
+            return self._prediction_result
+        except Exception as e:
+            raise ValueError(f"Error during structure prediction: {str(e)}")
     def get_plddt_scores(self, logits=None):
         """Get pLDDT scores from logits.
 
@@ -232,43 +243,50 @@ class AlphaFoldIntegration:
         return confidence.compute_plddt(logits)
 
     def get_predicted_aligned_error(self, pae=None):
-        """Get predicted aligned error.
+        """Get predicted aligned error from the model.
 
         Args:
             pae (numpy.ndarray, optional): Predicted aligned error array. If None, uses model prediction.
 
         Returns:
-            numpy.ndarray: Mock predicted aligned error matrix
+            numpy.ndarray: The predicted aligned error matrix.
+
+        Raises:
+            ValueError: If the model or features are not set up, or if the input is invalid.
         """
         if pae is None:
-            if not hasattr(self, 'model') or self.model is None:
-                raise ValueError("Model or features not set up")
+            if not self.is_model_ready():
+                raise ValueError("Model or features not set up. Call setup_model() and prepare_features() first.")
             try:
-                prediction = self.model({'params': self.model_params}, None, self.config)
-            except Exception:
-                raise ValueError("Model or features not set up")
-            if 'predicted_aligned_error' not in prediction:
-                raise ValueError("Predicted aligned error not found in model output")
-            pae = prediction['predicted_aligned_error']
+                prediction = self.model({'params': self.model_params}, jax.random.PRNGKey(0), self.config, **self.feature_dict)
+                if 'predicted_aligned_error' not in prediction:
+                    raise ValueError("Predicted aligned error not found in model output")
+                pae = prediction['predicted_aligned_error']
+            except Exception as e:
+                raise ValueError(f"Error during prediction: {str(e)}")
 
+        # Input validation and conversion
         if not isinstance(pae, np.ndarray):
             try:
                 pae = np.array(pae, dtype=float)
-            except:
-                raise ValueError("Invalid type for predicted aligned error")
+            except Exception:
+                raise ValueError("Invalid type for predicted aligned error. Must be convertible to numpy array.")
 
+        # Handle different input shapes
         if pae.ndim == 1:
             # Reshape 1D array into square matrix with NaN padding
             size = int(np.ceil(np.sqrt(pae.size)))
             padded = np.full(size * size, np.nan)
             padded[:pae.size] = pae
             pae = padded.reshape(size, size)
-        elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
-            raise ValueError("Invalid PAE shape. Expected square array")
-        elif pae.ndim == 3:
-            raise ValueError("Invalid PAE shape")
-        elif pae.ndim > 3:
-            raise ValueError("PAE must be 2D or 3D array")
+        elif pae.ndim == 2:
+            if pae.shape[0] != pae.shape[1]:
+                raise ValueError("Invalid PAE shape. Expected square matrix.")
+        elif pae.ndim > 2:
+            raise ValueError("Invalid PAE shape. Expected 1D or 2D array.")
+
+        if np.any(np.isnan(pae)):
+            logging.warning("PAE matrix contains NaN values")
 
         return pae
 
@@ -281,14 +299,17 @@ class AlphaFoldIntegration:
         Returns:
             dict: Mock AlphaProteo results
         """
+        # Input validation
+        if not isinstance(sequence, str):
+            raise ValueError("Invalid input type. Sequence must be a string.")
         if not sequence:
-            raise ValueError("Empty sequence")
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid(s) found in sequence.")
         if len(sequence) < 10:
-            raise ValueError("Sequence too short")
-        if len(sequence) > 1000:
-            raise ValueError("Sequence too long")
-        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence):
-            raise ValueError("Invalid amino acid(s) found in sequence")
+            raise ValueError("Sequence is too short. Minimum length is 10 amino acids.")
+        if len(sequence) > 2000:
+            raise ValueError("Sequence is too long. Maximum length is 2000 amino acids.")
 
         class SequenceWrapper(str):
             def __new__(cls, sequence, metadata):
@@ -325,40 +346,32 @@ class AlphaFoldIntegration:
         Returns:
             dict: Mock AlphaMissense results
         """
+        # Input validation
         if not isinstance(sequence, str):
-            raise ValueError("Invalid input type")
+            raise ValueError(f"Invalid input type for sequence. Expected str, got {type(sequence).__name__}.")
         if not isinstance(variant, str):
-            raise ValueError("Invalid input type")
+            raise ValueError(f"Invalid input type for variant. Expected str, got {type(variant).__name__}.")
         if not sequence:
-            raise ValueError("Empty sequence provided")
+            raise ValueError("Empty sequence provided. Please provide a valid amino acid sequence.")
+        if len(sequence) < 2:
+            raise ValueError("Sequence is too short. Please provide a sequence with at least 2 amino acids.")
         if len(sequence) > 1000:
             raise ValueError("Sequence is too long. Please provide a sequence with at most 1000 amino acids.")
-        if len(sequence) < 2:
-            raise ValueError("Sequence too short")
-        if not variant:
-            raise ValueError("Invalid variant")
-        if not all(c in 'ACDEFGHIKLMNPQRSTVWY' for c in sequence):
-            raise ValueError("Invalid amino acid(s) found in sequence")
+        if not all(aa in 'ACDEFGHIKLMNPQRSTVWY' for aa in sequence.upper()):
+            raise ValueError("Invalid amino acid(s) found in sequence.")
+
+        # Validate variant format
         if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
-            raise ValueError("Invalid variant format")
+            raise ValueError("Invalid variant format. Use 'OriginalAA{Position}NewAA' (e.g., 'G56A').")
 
         # Extract position and amino acids from variant and validate
-        try:
-            orig_aa = variant[0]
-            new_aa = variant[-1]
-            pos = int(re.search(r'\d+', variant).group())
-            if pos > len(sequence):
-                raise ValueError("Invalid variant position")
-            if pos <= 0:
-                raise ValueError("Invalid variant position")
-            if orig_aa != sequence[pos-1]:
-                raise ValueError(f"Original amino acid in variant {variant} does not match sequence")
-            if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
-                raise ValueError("Invalid new amino acid in variant")
-        except (AttributeError, ValueError, IndexError) as e:
-            if "does not match sequence" in str(e) or "Invalid new amino acid" in str(e):
-                raise
-            raise ValueError("Invalid variant position")
+        original_aa, position, new_aa = variant[0], int(variant[1:-1]), variant[-1]
+        if position < 1 or position > len(sequence):
+            raise ValueError("Invalid variant position.")
+        if sequence[position - 1] != original_aa:
+            raise ValueError(f"Original amino acid in variant ({original_aa}) does not match sequence at position {position} ({sequence[position - 1]}).")
+        if new_aa not in 'ACDEFGHIKLMNPQRSTVWY':
+            raise ValueError(f"Invalid new amino acid in variant: {new_aa}")
 
         return {
             "pathogenic_score": 0.85,
@@ -386,7 +399,39 @@ class AlphaFoldIntegration:
             model_params: Mock model parameters
             config: Mock configuration
         """
-        self.model = model or self.model
-        self.model_params = model_params or self.model_params
-        self.config = config or self.config
-        self._is_ready = all([self.model, self.model_params, self.config])
+        try:
+            # Initialize or update model components
+            self.model = model or self.model
+            self.model_params = model_params or self.model_params
+            self.config = config or self.config
+
+            # Initialize feature modules
+            self.features_module = features
+            self.templates_module = MagicMock()
+            self.hhblits_module = MagicMock()
+            self.hhsearch_module = MagicMock()
+            self.hmmsearch_module = MagicMock()
+            self.jackhmmer_module = MagicMock()
+            self.msa_runner = jackhmmer.Jackhmmer()
+
+            # Set up environment variables
+            os.environ.setdefault('ALPHAFOLD_PATH', '/tmp/mock_alphafold')
+            os.environ.setdefault('HHBLITS_BINARY_PATH', '/mock/hhblits')
+            os.environ.setdefault('JACKHMMER_BINARY_PATH', '/mock/jackhmmer')
+
+            # Verify initialization
+            self._is_ready = all([
+                self.model,
+                self.model_params,
+                self.config,
+                self.features_module,
+                self.templates_module,
+                self.msa_runner
+            ])
+
+            if not self._is_ready:
+                raise ValueError("Failed to initialize all required components")
+
+            logging.info("Model setup completed successfully")
+        except Exception as e:
+            raise ValueError(f"Error during model setup: {str(e)}")
