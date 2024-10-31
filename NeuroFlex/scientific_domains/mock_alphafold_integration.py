@@ -39,13 +39,13 @@ from unittest.mock import MagicMock
 logger = logging.getLogger(__name__)
 
 # Mock dependencies will be configured by tests
-confidence = None
-features = None
-jackhmmer = None
-jax = None
-pipeline = None
-SeqIO = None
-Seq = None
+confidence = MagicMock()
+features = MagicMock()
+jackhmmer = MagicMock()
+jax = MagicMock()
+pipeline = MagicMock()
+SeqIO = MagicMock()
+Seq = MagicMock()
 
 class AlphaFoldIntegration:
     """Mock implementation of AlphaFold integration."""
