@@ -54,6 +54,7 @@ class AlphaFoldIntegration:
         self.model = model
         self.model_params = model_params
         self.config = config
+        self.confidence_module = confidence
         self.feature_dict = None
         self._is_ready = False
         os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
@@ -151,8 +152,8 @@ class AlphaFoldIntegration:
         if np.any(np.isnan(logits)):
             raise ValueError("NaN values in logits")
 
-        # Calculate mean across last dimension to match test expectations
-        return np.mean(logits, axis=-1).flatten()
+        # Use confidence module to compute pLDDT scores
+        return confidence.compute_plddt(logits)
 
     def get_predicted_aligned_error(self, pae=None):
         """Get predicted aligned error.
