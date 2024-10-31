@@ -131,10 +131,11 @@ class AlphaFoldIntegration:
 
         # Write sequence to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
-            # Create SeqRecord directly with the sequence
-            record = SeqIO.SeqRecord(sequence, id="query", description="")
-            # Set the sequence directly on the record
-            record.seq = sequence
+            record = SeqIO.SeqRecord(
+                seq=sequence,
+                id="query",
+                description=""
+            )
             SeqIO.write(record, temp_fasta.name, "fasta")
             temp_fasta.flush()
 

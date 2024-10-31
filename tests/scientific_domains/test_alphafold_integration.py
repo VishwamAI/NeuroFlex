@@ -362,6 +362,13 @@ def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, moc
     mock_jackhmmer.return_value = mock_jackhmmer_instance
     mock_jackhmmer_instance.query.return_value = MagicMock(hits=[])
 
+    # Configure SeqRecord mock
+    mock_record = MagicMock()
+    mock_record.seq = valid_sequence
+    mock_record.id = "query"
+    mock_record.description = ""
+    mock_seqio.SeqRecord.return_value = mock_record
+
     # Ensure the features_module attribute is set correctly
     alphafold_integration.features_module = mock_pipeline
     alphafold_integration.msa_runner = mock_jackhmmer_instance
@@ -377,7 +384,6 @@ def test_prepare_features(mock_named_temp_file, mock_logging, mock_features, moc
         print("DEBUG: Before calling prepare_features")  # Debug log
         alphafold_integration.prepare_features(valid_sequence)
         print("DEBUG: After calling prepare_features")  # Debug log
-
     assert alphafold_integration.feature_dict is not None
     assert isinstance(alphafold_integration.feature_dict, dict)
     assert 'aatype' in alphafold_integration.feature_dict
