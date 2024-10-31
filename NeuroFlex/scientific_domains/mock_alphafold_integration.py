@@ -101,22 +101,29 @@ class AlphaFoldIntegration:
 
         # Return mock prediction results
         seq_length = 100  # Mock sequence length
-        return {
-            'plddt': np.random.uniform(50, 90, size=(seq_length,)),
+        self._prediction_result = {
+            'plddt': {'logits': np.random.uniform(0, 1, size=(seq_length, 50))},
             'predicted_aligned_error': np.random.uniform(0, 10, size=(seq_length, seq_length)),
             'ptm': np.random.uniform(0.7, 0.9),
             'max_predicted_aligned_error': 10.0
         }
+        return self._prediction_result
 
-    def get_plddt_scores(self, logits):
+    def get_plddt_scores(self, logits=None):
         """Get pLDDT scores from logits.
 
         Args:
-            logits (numpy.ndarray): Input logits array
+            logits (numpy.ndarray, optional): Input logits array. If None, uses model prediction.
 
         Returns:
             numpy.ndarray: Mock pLDDT scores
         """
+        if not hasattr(self, '_prediction_result'):
+            if logits is None:
+                raise ValueError("Model or features not set up")
+        else:
+            logits = logits or self._prediction_result['plddt']['logits']
+
         if not isinstance(logits, np.ndarray):
             raise TypeError("Logits must be a numpy array")
 
@@ -129,15 +136,21 @@ class AlphaFoldIntegration:
         # Return mock pLDDT scores
         return np.random.uniform(50, 90, size=logits.shape[:-1])
 
-    def get_predicted_aligned_error(self, pae):
+    def get_predicted_aligned_error(self, pae=None):
         """Get predicted aligned error.
 
         Args:
-            pae (numpy.ndarray): Predicted aligned error array
+            pae (numpy.ndarray, optional): Predicted aligned error array. If None, uses model prediction.
 
         Returns:
             numpy.ndarray: Mock predicted aligned error matrix
         """
+        if not hasattr(self, '_prediction_result'):
+            if pae is None:
+                raise ValueError("Model or features not set up")
+        else:
+            pae = pae or self._prediction_result['predicted_aligned_error']
+
         if not isinstance(pae, np.ndarray):
             raise TypeError("PAE must be a numpy array")
 
@@ -157,7 +170,13 @@ class AlphaFoldIntegration:
         """
         if not sequence:
             raise ValueError("Empty sequence")
-        return {"mock": "alphaproteo_results"}
+        return {
+            "novel_proteins": [
+                {"id": "mock_protein_1", "sequence": sequence, "confidence": 0.85},
+                {"id": "mock_protein_2", "sequence": sequence, "confidence": 0.75}
+            ],
+            "analysis_summary": "Mock analysis completed successfully"
+        }
 
     def run_alphamissense_analysis(self, sequence, variant):
         """Run AlphaMissense analysis.
@@ -173,7 +192,11 @@ class AlphaFoldIntegration:
             raise ValueError("Empty sequence")
         if not variant:
             raise ValueError("Invalid variant")
-        return {"mock": "alphamissense_results"}
+        return {
+            "pathogenic_score": 0.85,
+            "variant_effect": "likely_pathogenic",
+            "confidence": "high"
+        }
 
     def setup_model(self, model=None, model_params=None, config=None):
         """Set up mock model with given parameters.
