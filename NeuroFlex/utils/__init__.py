@@ -45,6 +45,8 @@ from .utils import (
     get_activation_function
 )
 
+from .config import Config
+
 from .descriptive_statistics import (
     calculate_descriptive_statistics,
     preprocess_data,
@@ -67,7 +69,8 @@ __all__ = [
     'SUPPORTED_UTILS',
     'initialize_utils',
     'create_util_function',
-    'validate_util_config'
+    'validate_util_config',
+    'Config'
 ]
 
 def get_utils_version():
