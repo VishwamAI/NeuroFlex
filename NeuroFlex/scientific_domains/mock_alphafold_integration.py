@@ -258,7 +258,11 @@ class AlphaFoldIntegration:
                 raise ValueError("Invalid type for predicted aligned error")
 
         if pae.ndim == 1:
-            raise ValueError("PAE must be 2D or 3D array")
+            # Reshape 1D array into square matrix with NaN padding
+            size = int(np.ceil(np.sqrt(pae.size)))
+            padded = np.full(size * size, np.nan)
+            padded[:pae.size] = pae
+            pae = padded.reshape(size, size)
         elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
             raise ValueError("Invalid PAE shape. Expected square array")
         elif pae.ndim == 3:
@@ -327,6 +331,8 @@ class AlphaFoldIntegration:
             raise ValueError("Invalid input type")
         if not sequence:
             raise ValueError("Empty sequence provided")
+        if len(sequence) > 1000:
+            raise ValueError("Sequence is too long. Please provide a sequence with at most 1000 amino acids.")
         if len(sequence) < 2:
             raise ValueError("Sequence too short")
         if not variant:
