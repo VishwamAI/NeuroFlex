@@ -29,6 +29,7 @@ It maintains the same interface as the real AlphaFold integration but returns mo
 
 import numpy as np
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,6 @@ class AlphaFoldIntegration:
         self.config = config
         self.feature_dict = None
         self._is_ready = False
-
     def is_model_ready(self):
         """Check if mock model is ready.
 
@@ -57,16 +57,16 @@ class AlphaFoldIntegration:
         """
         logger.info("Checking if AlphaFold model is ready")
         if self.model is None:
-            logger.error("model is not initialized")
+            logger.error("Model is not initialized")
             return False
         if self.model_params is None:
-            logger.error("model_params is not initialized")
+            logger.error("Model params is not initialized")
             return False
         if self.config is None:
-            logger.error("config is not initialized")
+            logger.error("Config is not initialized")
             return False
         if self.feature_dict is None:
-            logger.error("feature_dict is not initialized")
+            logger.error("Feature dict is not initialized")
             return False
         logger.info("AlphaFold model ready: True")
         return True
@@ -103,7 +103,7 @@ class AlphaFoldIntegration:
         # Return mock prediction results
         seq_length = 100  # Mock sequence length
         self._prediction_result = {
-            'plddt': {'logits': np.random.uniform(0, 1, size=(seq_length, 50))},
+            'predicted_lddt': {'logits': np.random.uniform(0, 1, size=(seq_length, 50))},
             'predicted_aligned_error': np.random.uniform(0, 10, size=(seq_length, seq_length)),
             'ptm': np.random.uniform(0.7, 0.9),
             'max_predicted_aligned_error': 10.0
@@ -121,20 +121,27 @@ class AlphaFoldIntegration:
         """
         if logits is None:
             if not hasattr(self, 'model') or self.model is None:
-                raise ValueError("Model not initialized")
-            prediction = self.model({'params': self.model_params}, None, self.config)
-            if 'plddt' not in prediction or 'logits' not in prediction['plddt']:
-                raise ValueError("pLDDT logits not found in model output")
-            logits = prediction['plddt']['logits']
+                raise ValueError("Model or features not set up")
+            try:
+                prediction = self.model({'params': self.model_params}, None, self.config)
+            except Exception:
+                raise ValueError("Model or features not set up")
+            if not isinstance(prediction, dict):
+                raise ValueError("Model or features not set up")
+            if 'predicted_lddt' not in prediction:
+                raise ValueError("Model or features not set up")
+            if 'logits' not in prediction['predicted_lddt']:
+                raise ValueError("Model or features not set up")
+            logits = prediction['predicted_lddt']['logits']
 
         if not isinstance(logits, np.ndarray):
-            raise ValueError("Logits must be a numpy array")
+            raise ValueError("Empty logits array")
 
         if logits.size == 0:
-            raise ValueError("Empty logits array provided")
+            raise ValueError("Empty logits array")
 
         if np.any(np.isnan(logits)):
-            raise ValueError("NaN values found in logits")
+            raise ValueError("NaN values in logits")
 
         return np.random.uniform(50, 90, size=logits.shape[:-1])
 
@@ -150,7 +157,10 @@ class AlphaFoldIntegration:
         if pae is None:
             if not hasattr(self, 'model') or self.model is None:
                 raise ValueError("Model or features not set up")
-            prediction = self.model({'params': self.model_params}, None, self.config)
+            try:
+                prediction = self.model({'params': self.model_params}, None, self.config)
+            except Exception:
+                raise ValueError("Model or features not set up")
             if 'predicted_aligned_error' not in prediction:
                 raise ValueError("Predicted aligned error not found in model output")
             pae = prediction['predicted_aligned_error']
@@ -162,6 +172,8 @@ class AlphaFoldIntegration:
             raise ValueError("PAE must be 2D or 3D array")
         elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
             raise ValueError("Invalid PAE shape. Expected square array")
+        elif pae.ndim == 3 and (pae.shape[1] != pae.shape[2]):
+            raise ValueError("Invalid PAE shape")
         elif pae.ndim > 3:
             raise ValueError("PAE must be 2D or 3D array")
 
@@ -178,12 +190,17 @@ class AlphaFoldIntegration:
         """
         if not sequence:
             raise ValueError("Empty sequence")
+        mock_proteins = []
+        for i, conf in enumerate([0.85, 0.75, 0.65]):
+            mock_protein = {
+                "id": f"mock_protein_{i+1}",
+                "sequence": sequence,
+                "confidence": conf,
+                "predicted_sequence": sequence
+            }
+            mock_proteins.append(mock_protein)
         return {
-            "novel_proteins": [
-                {"id": "mock_protein_1", "sequence": sequence, "confidence": 0.85},
-                {"id": "mock_protein_2", "sequence": sequence, "confidence": 0.75},
-                {"id": "mock_protein_3", "sequence": sequence, "confidence": 0.65}
-            ],
+            "novel_proteins": mock_proteins,
             "binding_affinities": [
                 {"protein1": "mock_protein_1", "protein2": "mock_protein_2", "affinity": 0.9},
                 {"protein1": "mock_protein_2", "protein2": "mock_protein_3", "affinity": 0.8},
@@ -208,6 +225,8 @@ class AlphaFoldIntegration:
             raise ValueError("Invalid variant")
         if not all(c in 'ACDEFGHIKLMNPQRSTVWY' for c in sequence):
             raise ValueError("Invalid amino acid(s) found in sequence")
+        if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
+            raise ValueError("Invalid variant format")
         return {
             "pathogenic_score": 0.85,
             "benign_score": 0.15,
