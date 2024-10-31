@@ -111,24 +111,31 @@ class AlphaFoldIntegration:
         Returns:
             dict: Mock feature dictionary
         """
-        if not sequence:
-            raise ValueError("Input sequence cannot be empty")
+        logger.info(f"Preparing features for sequence of length {len(sequence)}")
 
-        # Create proper sequence object
-        from Bio.Seq import Seq
-        seq_obj = Seq(sequence)
+        # Input validation
+        if not sequence:
+            logger.error("Invalid amino acid sequence provided")
+            raise ValueError("Invalid amino acid sequence provided.")
+
+        # Check for invalid characters
+        if not all(c.isalpha() for c in sequence):
+            logger.error("Invalid amino acid sequence provided")
+            raise ValueError("Invalid amino acid sequence provided.")
+
+        # Check sequence length
+        if len(sequence) > 1000:
+            error_msg = "Sequence length exceeds maximum allowed"
+            logger.error(f"Error during feature preparation: {error_msg}")
+            raise Exception(error_msg)
 
         # Write sequence to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
-            SeqIO.write(
-                SeqIO.SeqRecord(
-                    seq=seq_obj,
-                    id="query",
-                    description=""
-                ),
-                temp_fasta.name,
-                "fasta"
-            )
+            # Create SeqRecord directly with the sequence
+            record = SeqIO.SeqRecord(sequence, id="query", description="")
+            # Set the sequence directly on the record
+            record.seq = sequence
+            SeqIO.write(record, temp_fasta.name, "fasta")
             temp_fasta.flush()
 
             # Run MSA using Jackhmmer
@@ -140,15 +147,18 @@ class AlphaFoldIntegration:
             description="query",
             num_res=len(sequence)
         )
+        logger.info("Sequence features prepared successfully")
 
         # Prepare MSA features
         msa_result = [('query', sequence)]
         msa_features = pipeline.make_msa_features(
             msas=[msa_result]  # Use msa_result consistently as expected by test
         )
+        logger.info("MSA features prepared successfully")
 
         # Get template features
         template_features = self._search_templates(sequence)
+        logger.info("Template features prepared successfully")
 
         # Combine all features
         self.feature_dict = {
@@ -156,6 +166,7 @@ class AlphaFoldIntegration:
             **msa_features,
             **template_features
         }
+        logger.info("All features combined into feature dictionary")
         return self.feature_dict
 
     def predict_structure(self):
