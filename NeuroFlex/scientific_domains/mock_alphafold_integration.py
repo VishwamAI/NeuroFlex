@@ -27,22 +27,25 @@ This module provides a mock implementation of the AlphaFold integration for test
 It maintains the same interface as the real AlphaFold integration but returns mock data.
 """
 
-import numpy as np
 import logging
-import re
+import numpy as np
 import os
+import re
 import tempfile
+from Bio import Seq, SeqIO
 from unittest.mock import MagicMock
 
 # Mock dependencies
-jax = MagicMock()
-jax.numpy = MagicMock()
 confidence = MagicMock()
 features = MagicMock()
-pipeline = MagicMock()
-SeqIO = MagicMock()
 jackhmmer = MagicMock()
 jackhmmer.Jackhmmer = MagicMock()
+jax = MagicMock()
+jax.numpy = MagicMock()
+pipeline = MagicMock()
+SeqIO = MagicMock()
+Seq = MagicMock()
+Seq.Seq = MagicMock(side_effect=lambda x: x)  # Return input sequence as-is
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +107,15 @@ class AlphaFoldIntegration:
         if not sequence:
             raise ValueError("Input sequence cannot be empty")
 
+        # Create proper sequence object
+        from Bio.Seq import Seq
+        seq_obj = Seq(sequence)
+
         # Write sequence to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta') as temp_fasta:
             SeqIO.write(
                 SeqIO.SeqRecord(
-                    seq=sequence,
+                    seq=seq_obj,
                     id="query",
                     description=""
                 ),
