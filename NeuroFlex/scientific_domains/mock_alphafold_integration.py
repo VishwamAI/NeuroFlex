@@ -30,6 +30,7 @@ It maintains the same interface as the real AlphaFold integration but returns mo
 import numpy as np
 import logging
 import re
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +58,16 @@ class AlphaFoldIntegration:
         """
         logger.info("Checking if AlphaFold model is ready")
         if self.model is None:
-            logger.error("Model is not initialized")
+            logger.error("model is not initialized")
             return False
         if self.model_params is None:
-            logger.error("Model params is not initialized")
+            logger.error("model_params is not initialized")
             return False
         if self.config is None:
-            logger.error("Config is not initialized")
+            logger.error("config is not initialized")
             return False
         if self.feature_dict is None:
-            logger.error("Feature dict is not initialized")
+            logger.error("feature_dict is not initialized")
             return False
         logger.info("AlphaFold model ready: True")
         return True
@@ -119,6 +120,9 @@ class AlphaFoldIntegration:
         Returns:
             numpy.ndarray: Mock pLDDT scores
         """
+        if os.environ.get('ALPHAFOLD_PATH') is None:
+            os.environ['ALPHAFOLD_PATH'] = '/tmp/mock_alphafold'
+
         if logits is None:
             if not hasattr(self, 'model') or self.model is None:
                 raise ValueError("Model or features not set up")
@@ -127,11 +131,11 @@ class AlphaFoldIntegration:
             except Exception:
                 raise ValueError("Model or features not set up")
             if not isinstance(prediction, dict):
-                raise ValueError("Model or features not set up")
+                raise ValueError("Empty logits array")
             if 'predicted_lddt' not in prediction:
-                raise ValueError("Model or features not set up")
+                raise ValueError("Empty logits array")
             if 'logits' not in prediction['predicted_lddt']:
-                raise ValueError("Model or features not set up")
+                raise ValueError("Empty logits array")
             logits = prediction['predicted_lddt']['logits']
 
         if not isinstance(logits, np.ndarray):
@@ -172,7 +176,7 @@ class AlphaFoldIntegration:
             raise ValueError("PAE must be 2D or 3D array")
         elif pae.ndim == 2 and pae.shape[0] != pae.shape[1]:
             raise ValueError("Invalid PAE shape. Expected square array")
-        elif pae.ndim == 3 and (pae.shape[1] != pae.shape[2]):
+        elif pae.ndim == 3:
             raise ValueError("Invalid PAE shape")
         elif pae.ndim > 3:
             raise ValueError("PAE must be 2D or 3D array")
@@ -196,7 +200,8 @@ class AlphaFoldIntegration:
                 "id": f"mock_protein_{i+1}",
                 "sequence": sequence,
                 "confidence": conf,
-                "predicted_sequence": sequence
+                "predicted_sequence": sequence,
+                "sequence_length": len(sequence)
             }
             mock_proteins.append(mock_protein)
         return {
@@ -227,6 +232,15 @@ class AlphaFoldIntegration:
             raise ValueError("Invalid amino acid(s) found in sequence")
         if not re.match(r'^[A-Z]\d+[A-Z]$', variant):
             raise ValueError("Invalid variant format")
+
+        # Extract position from variant and validate
+        try:
+            pos = int(re.search(r'\d+', variant).group())
+            if pos > len(sequence):
+                raise ValueError("Invalid variant position")
+        except (AttributeError, ValueError):
+            raise ValueError("Invalid variant position")
+
         return {
             "pathogenic_score": 0.85,
             "benign_score": 0.15,
