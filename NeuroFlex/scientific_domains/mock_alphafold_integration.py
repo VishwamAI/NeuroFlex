@@ -132,7 +132,8 @@ class AlphaFoldIntegration:
             if not hasattr(self, 'model') or self.model is None:
                 raise ValueError("Model or features not set up")
             try:
-                prediction = self.model({'params': self.model_params}, None, self.config)
+                prng_key = jax.random.PRNGKey()
+                prediction = self.model({'params': self.model_params}, prng_key, self.config, **self.feature_dict)
             except Exception:
                 raise ValueError("Model or features not set up")
             if not isinstance(prediction, dict):
