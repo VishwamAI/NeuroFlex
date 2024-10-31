@@ -38,7 +38,7 @@ from .art_integration import ARTIntegration
 from .biology.synthetic_biology_insights import SyntheticBiologyInsights
 from .google_integration import GoogleIntegration
 from .ibm_integration import IBMIntegration
-# from .alphafold_integration import AlphaFoldIntegration  # Temporarily commented out
+from .mock_alphafold_integration import AlphaFoldIntegration
 from .xarray_integration import XarrayIntegration
 
 __all__ = [
@@ -67,7 +67,8 @@ SUPPORTED_SCIENTIFIC_DOMAINS = [
     "Synthetic Biology",
     "Google AI",
     "IBM AI",
-    "Xarray"
+    "Xarray",
+    "AlphaFold"
 ]
 
 def initialize_scientific_domains():
@@ -92,6 +93,8 @@ def create_scientific_domain_model(domain, *args, **kwargs):
         return IBMIntegration(*args, **kwargs)
     elif domain == "Xarray":
         return XarrayIntegration(*args, **kwargs)
+    elif domain == "AlphaFold":
+        return AlphaFoldIntegration(*args, **kwargs)
 
 def validate_scientific_domain_config(config):
     """
