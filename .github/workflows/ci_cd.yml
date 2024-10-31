@@ -25,9 +25,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install specific versions of numerical computation packages first
+          pip install numpy==1.23.5 scipy==1.9.0
+          pip install jax==0.4.13 jaxlib==0.4.13
+          pip install flax==0.6.10 optax==0.1.5
+          # Install remaining dependencies
           pip install -r requirements.txt
-          # Install specific versions of numerical computation packages
-          pip install --no-deps numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 flax==0.6.10 optax==0.1.5
       - name: Create necessary directories
         run: |
           mkdir -p ${{ github.workspace }}/data
@@ -61,9 +64,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install specific versions of numerical computation packages first
+          pip install numpy==1.23.5 scipy==1.9.0
+          pip install jax==0.4.13 jaxlib==0.4.13
+          pip install flax==0.6.10 optax==0.1.5
+          # Install remaining dependencies
           pip install -r requirements.txt
-          # Install specific versions of numerical computation packages
-          pip install --no-deps numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 flax==0.6.10 optax==0.1.5
       - name: Build package
         run: |
           pip install build
@@ -85,9 +91,12 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
+          # Install specific versions of numerical computation packages first
+          pip install numpy==1.23.5 scipy==1.9.0
+          pip install jax==0.4.13 jaxlib==0.4.13
+          pip install flax==0.6.10 optax==0.1.5
+          # Install remaining dependencies
           pip install -r requirements.txt
-          # Install specific versions of numerical computation packages
-          pip install --no-deps numpy==1.23.5 scipy==1.9.0 jax==0.4.13 jaxlib==0.4.13 flax==0.6.10 optax==0.1.5
           pip install build twine
       - name: Verify distribution files
         run: |
