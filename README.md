@@ -219,7 +219,7 @@ If you use NeuroFlex in your research, please cite:
 
 ```bibtex
 @software{neuroflex2024,
-  author = {kasinadhsarma},
+  authors = {kasinadhsarma, Pandiripalli Naga Chandra Ramu},
   title = {NeuroFlex: Advanced Neural Network Framework},
   year = {2024},
   url = {https://github.com/VishwamAI/NeuroFlex}
