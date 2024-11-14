@@ -1,4 +1,4 @@
-![adjusted_combined_logo](https://github.com/user-attachments/assets/4a664a66-8da3-43ec-ba3e-db42db6946a4)
+
 
 # NeuroFlex: Advanced Neural Network Framework
 
@@ -10,6 +10,7 @@
 [![Dependencies](https://img.shields.io/librariesio/release/pypi/neuroflex)](https://libraries.io/pypi/neuroflex)
 [![GitHub issues](https://img.shields.io/github/issues/VishwamAI/NeuroFlex.svg)](https://GitHub.com/VishwamAI/NeuroFlex/issues/)
 
+![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2FVishwamAI%2FNeuroFlex&countColor=%232ccce4)
 
 NeuroFlex is a cutting-edge neural network framework built on JAX, Flax, and TensorFlow, designed to address key challenges in modern machine learning: interpretability, generalization, robustness, and fairness. This project integrates state-of-the-art techniques and methodologies for creating more transparent, reliable, and ethical AI systems.
 
